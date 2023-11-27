@@ -1,7 +1,7 @@
 --mode train
 --model_name iebins_kittieigen
---encoder large07
---pretrain /home/petropoulakis/Desktop/thesis/code/models/swin_large_patch4_window7_224_22k.pth
+--encoder tiny07
+--pretrain /home/petropoulakis/Desktop/thesis/code/models/swin_tiny_patch4_window7_224_22k.pth
 --dataset kitti
 --data_path /home/petropoulakis/Desktop/thesis/code/datasets/kitti/data_depth_annotated/val/
 --gt_path /home/petropoulakis/Desktop/thesis/code/datasets/kitti/data_depth_annotated/val/
