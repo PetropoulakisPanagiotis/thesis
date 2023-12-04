@@ -85,6 +85,7 @@ class DataLoadPreprocess(Dataset):
             if self.args.dataset == 'kitti':
                 rgb_file = sample_path.split()[0]
                 depth_file = os.path.join(sample_path.split()[0].split('/')[0], sample_path.split()[1])
+                print(depth_file)
                 if self.args.use_right is True and random.random() > 0.5:
                     rgb_file.replace('image_02', 'image_03')
                     depth_file.replace('image_02', 'image_03')
@@ -94,7 +95,6 @@ class DataLoadPreprocess(Dataset):
 
             image_path = os.path.join(self.args.data_path, rgb_file)
             depth_path = os.path.join(self.args.gt_path, depth_file)
-    
             image = Image.open(image_path)
             depth_gt = Image.open(depth_path)
             

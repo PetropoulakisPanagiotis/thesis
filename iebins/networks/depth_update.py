@@ -33,7 +33,6 @@ def get_label(gt_depth_img, bin_edges, depth_num):
             bin_mask = torch.logical_and(bin_mask, 
                 torch.lt(gt_depth_img, bin_edges[:, i + 1]))
             gt_label[bin_mask] = i
-        
         return gt_label
 
 

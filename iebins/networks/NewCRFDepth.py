@@ -153,7 +153,6 @@ class NewCRFDepth(nn.Module):
         context = feats[0]
         gru_hidden = torch.tanh(self.project(e1))
         pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = self.update(depth, context, gru_hidden, max_tree_depth, self.depth_num, self.min_depth, self.max_depth)
-        
         if self.up_mode == 'mask':
             for i in range(len(pred_depths_r_list)):
                 pred_depths_r_list[i] = self.upsample_mask(pred_depths_r_list[i], mask)  

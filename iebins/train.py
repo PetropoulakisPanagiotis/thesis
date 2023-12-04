@@ -175,7 +175,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     if args.gpu is not None:
         print("== Use GPU: {} for training".format(args.gpu))
-
+    
     if args.distributed:
         if args.dist_url == "env://" and args.rank == -1:
             args.rank = int(os.environ["RANK"])
@@ -297,7 +297,6 @@ def main_worker(gpu, ngpus_per_node, args):
 
             image = torch.autograd.Variable(sample_batched['image'].cuda(args.gpu, non_blocking=True))
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
-
             pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
             
             if args.dataset == 'nyu':
@@ -307,7 +306,6 @@ def main_worker(gpu, ngpus_per_node, args):
             
             max_tree_depth = len(pred_depths_r_list)         
             for curr_tree_depth in range(max_tree_depth):
-
                 si_loss += silog_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
 
             loss = si_loss
@@ -442,7 +440,6 @@ def main_worker(gpu, ngpus_per_node, args):
             global_step += 1
 
         epoch += 1
-       
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
         writer.close()
         if args.do_online_eval:
@@ -456,7 +453,7 @@ def main():
 
     exp_name = '%s'%(datetime.now().strftime('%m%d'))  
     args.log_directory = os.path.join(args.log_directory,exp_name)  
-    command = 'mkdir ' + os.path.join(args.log_directory, args.model_name)
+    command = 'mkdir -p ' + os.path.join(args.log_directory, args.model_name)
     os.system(command)
 
     args_out_path = os.path.join(args.log_directory, args.model_name)
