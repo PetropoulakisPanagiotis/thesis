@@ -1,7 +1,7 @@
 --mode train
 --model_name iebins_kittieigen
---encoder tiny07
---pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
+--encoder large07
+--pretrain /usr/stud/petp/code/models/swin_large_patch4_window7_224_22k.pth
 --dataset kitti
 --data_path /usr/stud/petp/code/datasets/kitti/data_depth_annotated/val/
 --gt_path /usr/stud/petp/code/datasets/kitti/data_depth_annotated/val/
@@ -19,11 +19,13 @@
 --do_random_rotate
 --degree 1.0
 --log_directory /usr/stud/petp/code/thesis/tmp/
---gpu 0
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2347
 
---log_freq 100
+--checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_L.pth
+--retrain
+
+--log_freq 20
 --do_online_eval
 --eval_freq 100
 --data_path_eval /usr/stud/petp/code/datasets/kitti/data_depth_annotated/val/

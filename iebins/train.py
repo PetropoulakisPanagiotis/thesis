@@ -272,7 +272,6 @@ def main_worker(gpu, ngpus_per_node, args):
     start_time = time.time()
     duration = 0
 
-    num_log_images = args.batch_size
     end_learning_rate = args.end_learning_rate if args.end_learning_rate != -1 else 0.1 * args.learning_rate
 
     var_sum = [var.sum().item() for var in model.parameters() if var.requires_grad]
@@ -284,7 +283,7 @@ def main_worker(gpu, ngpus_per_node, args):
     steps_per_epoch = len(dataloader.data)
     num_total_steps = args.num_epochs * steps_per_epoch
     epoch = global_step // steps_per_epoch
-    
+    ii = 0
     group = dist.new_group([i for i in range(ngpus_per_node)])
     while epoch < args.num_epochs:
         if args.distributed:
@@ -294,11 +293,13 @@ def main_worker(gpu, ngpus_per_node, args):
             optimizer.zero_grad()
             before_op_time = time.time()
             si_loss = 0
-
             image = torch.autograd.Variable(sample_batched['image'].cuda(args.gpu, non_blocking=True))
+            num_log_images = image.shape[0]
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
             pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
-            
+            if(ii == 0):
+                print(image.shape)
+                ii += 1
             if args.dataset == 'nyu':
                 mask = depth_gt > 0.1
             else:
@@ -322,7 +323,6 @@ def main_worker(gpu, ngpus_per_node, args):
                 # if np.isnan(loss.cpu().item()):
                 #     print('NaN in loss occurred. Aborting training.')
                 #     return -1
-
             duration += time.time() - before_op_time
             if global_step and global_step % args.log_freq == 0 and not model_just_loaded:
                 var_sum = [var.sum().item() for var in model.parameters() if var.requires_grad]
@@ -362,7 +362,7 @@ def main_worker(gpu, ngpus_per_node, args):
                             writer.add_image('depth_c_est5/image/{}'.format(i), colormap(pred_depths_c_list[5][i, :, :, :].data), global_step)
                         else:
                             writer.add_image('depth_gt/image/{}'.format(i), colormap_magma(torch.log10(depth_gt[i, :, :, :].data)), global_step)
-                            writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)                            
+                            writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)      
                             writer.add_image('depth_r_est0/image/{}'.format(i), colormap_magma(torch.log10(pred_depths_r_list[0][i, :, :, :].data)), global_step)
                             writer.add_image('depth_r_est1/image/{}'.format(i), colormap_magma(torch.log10(pred_depths_r_list[1][i, :, :, :].data)), global_step)
                             writer.add_image('depth_r_est2/image/{}'.format(i), colormap_magma(torch.log10(pred_depths_r_list[2][i, :, :, :].data)), global_step)
@@ -444,7 +444,7 @@ def main_worker(gpu, ngpus_per_node, args):
         writer.close()
         if args.do_online_eval:
             eval_summary_writer.close()
-
+    print("training ended\n")
 
 def main():
     if args.mode != 'train':

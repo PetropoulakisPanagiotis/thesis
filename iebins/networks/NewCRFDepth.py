@@ -20,7 +20,7 @@ class NewCRFDepth(nn.Module):
         self.inv_depth = inv_depth
         self.with_auxiliary_head = False
         self.with_neck = False
-
+        self.freeze_backbone = False
         norm_cfg = dict(type='BN', requires_grad=True)
 
         window_size = int(version[-2:])
@@ -94,6 +94,19 @@ class NewCRFDepth(nn.Module):
         self.project = Projection(v_dims[0], self.hidden_dim)
 
         self.init_weights(pretrained=pretrained)
+
+	# Freeze some weights #
+        if self.freeze_backbone:
+            for param in self.backbone.parameters():
+                param.requires_grad = False
+            for param in self.decoder.parameters():
+                param.requires_grad = False
+            for param in self.crf3.parameters():
+                param.requires_grad = False
+            for param in self.crf2.parameters():
+                param.requires_grad = False
+            for param in self.crf1.parameters():
+                param.requires_grad = False
 
     def init_weights(self, pretrained=None):
         """Initialize the weights in backbone and heads.
@@ -209,7 +222,6 @@ class BasicUpdateBlockDepth(nn.Module):
         bin_edges = torch.cumsum(interval, 1)
         current_depths = 0.5 * (bin_edges[:, :-1] + bin_edges[:, 1:])
         index_iter = 0
-
         for i in range(seq_len):
             input_features = self.encoder(current_depths.detach())
             input_c = torch.cat([input_features, context], dim=1)
