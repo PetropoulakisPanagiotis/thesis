@@ -20,7 +20,7 @@ class NewCRFDepth(nn.Module):
         self.inv_depth = inv_depth
         self.with_auxiliary_head = False
         self.with_neck = False
-        self.freeze_backbone = False
+        self.freeze_backbone = True
         norm_cfg = dict(type='BN', requires_grad=True)
 
         window_size = int(version[-2:])
