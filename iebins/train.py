@@ -192,7 +192,7 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
     canonical = True
-    max_tree_depth = 3
+    max_tree_depth = 5
     # model
     model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=max_tree_depth, pretrained=args.pretrain)
     model.train()

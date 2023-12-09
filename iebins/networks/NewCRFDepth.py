@@ -160,7 +160,7 @@ class NewCRFDepth(nn.Module):
         e1 = nn.PixelShuffle(2)(e1)
 
         # iterative bins
-        max_tree_depth = 3
+        max_tree_depth = 5
         #if epoch == 0 and step < 80:
         #    max_tree_depth = 3
         #else:
@@ -179,7 +179,7 @@ class NewCRFDepth(nn.Module):
         if self.canonical:
             pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list = self.update(depth, context, gru_hidden, max_tree_depth, self.depth_num, self.min_depth, self.max_depth)
         else:
-            pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = self.update(depth, context, gru_hidden, max_tree_depth, self.depth_num, self.min_depth, self.max_depth)
+            pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = self.update(depth, context, gru_hidden, max_tree_depth, 5, 0, 1)
         if self.up_mode == 'mask':
             for i in range(len(pred_depths_r_list)):
                 pred_depths_r_list[i] = self.upsample_mask(pred_depths_r_list[i], mask)  
