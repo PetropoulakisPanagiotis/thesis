@@ -96,10 +96,7 @@ if args.dataset == 'kitti' or args.dataset == 'nyu':
 
 
 def online_eval(model, canonical, dataloader_eval, gpu, epoch, ngpus, group, post_process=False):
-    if canonical:
-        measures_size = 6
-    else:
-        measures_size = 10
+    measures_size = 10
     eval_measures = torch.zeros(measures_size).cuda(device=gpu)
 
     for _, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
@@ -155,10 +152,7 @@ def online_eval(model, canonical, dataloader_eval, gpu, epoch, ngpus, group, pos
                     eval_mask[45:471, 41:601] = 1
 
             valid_mask = np.logical_and(valid_mask, eval_mask)
-        if canonical:
-            measures = compute_errors_canonical(gt_depth[valid_mask], pred_depth[valid_mask])
-        else:
-            measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
+        measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
 
         eval_measures[:measures_size - 1] += torch.tensor(measures).cuda(device=gpu)
         eval_measures[measures_size - 1] += 1
@@ -171,14 +165,8 @@ def online_eval(model, canonical, dataloader_eval, gpu, epoch, ngpus, group, pos
         eval_measures_cpu = eval_measures.cpu()
         cnt = eval_measures_cpu[measures_size - 1].item()
         eval_measures_cpu /= cnt
-        if canonical:
-            print('Computing errors for {} eval samples'.format(int(cnt)), ', post_process: ', post_process)
-            print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format('rms',
-                                                                                     'sq_rel', 'd1', 'd2',
-                                                                                 'd3'))
-        else:
-            print('Computing errors for {} eval samples'.format(int(cnt)), ', post_process: ', post_process)
-            print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format('silog', 'abs_rel', 'log10', 'rms',
+        print('Computing errors for {} eval samples'.format(int(cnt)), ', post_process: ', post_process)
+        print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format('silog', 'abs_rel', 'log10', 'rms',
                                                                                      'sq_rel', 'log_rms', 'd1', 'd2',
                                                                                      'd3'))
         for i in range(measures_size - 2):
@@ -234,14 +222,9 @@ def main_worker(gpu, ngpus_per_node, args):
         print("== Model Initialized")
 
     global_step = 0
-    if canonical:
-        best_eval_measures_lower_better = torch.zeros(2).cpu() + 1e3
-        best_eval_measures_higher_better = torch.zeros(3).cpu()
-        best_eval_steps = np.zeros(5, dtype=np.int32)
-    else:
-        best_eval_measures_lower_better = torch.zeros(6).cpu() + 1e3
-        best_eval_measures_higher_better = torch.zeros(3).cpu()
-        best_eval_steps = np.zeros(9, dtype=np.int32)
+    best_eval_measures_lower_better = torch.zeros(6).cpu() + 1e3
+    best_eval_measures_higher_better = torch.zeros(3).cpu()
+    best_eval_steps = np.zeros(9, dtype=np.int32)
 
     # Training parameters
     optimizer = torch.optim.Adam([{'params': model.module.parameters()}],
@@ -328,7 +311,6 @@ def main_worker(gpu, ngpus_per_node, args):
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
             if canonical:
                 pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
-                print(pred_depths_r_list[0].shape)
             else:
                 pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
             if args.dataset == 'nyu':
@@ -338,10 +320,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
             max_tree_depth = len(pred_depths_r_list)
             for curr_tree_depth in range(max_tree_depth):
-                if canonical:
-                    current_loss += rmse_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
-                else:
-                    current_loss += silog_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
+                current_loss += silog_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
 
             loss = current_loss
 
@@ -418,87 +397,45 @@ def main_worker(gpu, ngpus_per_node, args):
                     exp_name = '%s'%(datetime.now().strftime('%m%d'))
                     log_txt = os.path.join(args.log_directory + '/' + args.model_name, exp_name+'_logs.txt')
                     with open(log_txt, 'a') as txtfile:
-                        if canonical:
-                            txtfile.write(">>>>>>>>>>>>>>>>>>>>>>>>>Step:%d>>>>>>>>>>>>>>>>>>>>>>>>>\n"%(int(global_step)))
-                            txtfile.write(" {:>7}, {:>7}, {:>7}, {:>7}, {:>7}\n".format('silog', 
-                                            'rms', 'sq_rel', 'd1', 'd2','d3'))
-                            txtfile.write("depth estimation\n")
-                            line = ''
-                            for i in range(6):
-                                line +='{:7.4f}, '.format(eval_measures[i])
-                            txtfile.write(line+'\n')
-                        else:
-                            txtfile.write(">>>>>>>>>>>>>>>>>>>>>>>>>Step:%d>>>>>>>>>>>>>>>>>>>>>>>>>\n"%(int(global_step)))
-                            txtfile.write("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}\n".format('silog', 
-                                            'abs_rel', 'log10', 'rms', 'sq_rel', 'log_rms', 'd1', 'd2','d3'))
-                            txtfile.write("depth estimation\n")
-                            line = ''
-                            for i in range(9):
-                                line +='{:7.4f}, '.format(eval_measures[i])
-                            txtfile.write(line+'\n')
-
-                    if canonical:
-                        for i in range(5):
-                            eval_summary_writer.add_scalar(eval_metrics[i], eval_measures[i].cpu(), int(global_step))
-                            measure = eval_measures[i]
-                            is_best = False
-                            if i < 2 and measure < best_eval_measures_lower_better[i]:
-                                old_best = best_eval_measures_lower_better[i].item()
-                                best_eval_measures_lower_better[i] = measure.item()
-                                is_best = True
-                            elif i >= 2 and measure > best_eval_measures_higher_better[i-2]:
-                                old_best = best_eval_measures_higher_better[i-2].item()
-                                best_eval_measures_higher_better[i-2] = measure.item()
-                                is_best = True
-                            if is_best:
-                                old_best_step = best_eval_steps[i]
-                                old_best_name = '/model-{}-best_{}_{:.5f}'.format(old_best_step, eval_metrics[i], old_best)
-                                model_path = args.log_directory + '/' + args.model_name + old_best_name
-                                if os.path.exists(model_path):
-                                    command = 'rm {}'.format(model_path)
-                                    os.system(command)
-                                best_eval_steps[i] = global_step
-                                model_save_name = '/model-{}-best_{}_{:.5f}'.format(global_step, eval_metrics[i], measure)
-                                print('New best for {}. Saving model: {}'.format(eval_metrics[i], model_save_name))
-                                checkpoint = {'global_step': global_step,
-                                              'model': model.state_dict(),
-                                              'optimizer': optimizer.state_dict(),
-                                              'best_eval_measures_higher_better': best_eval_measures_higher_better,
-                                              'best_eval_measures_lower_better': best_eval_measures_lower_better,
-                                              'best_eval_steps': best_eval_steps
-                                              }
-                                torch.save(checkpoint, args.log_directory + '/' + args.model_name + model_save_name)
-                    else:
+                        txtfile.write(">>>>>>>>>>>>>>>>>>>>>>>>>Step:%d>>>>>>>>>>>>>>>>>>>>>>>>>\n"%(int(global_step)))
+                        txtfile.write("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}\n".format('silog', 
+                                        'abs_rel', 'log10', 'rms', 'sq_rel', 'log_rms', 'd1', 'd2','d3'))
+                        txtfile.write("depth estimation\n")
+                        line = ''
                         for i in range(9):
-                            eval_summary_writer.add_scalar(eval_metrics[i], eval_measures[i].cpu(), int(global_step))
-                            measure = eval_measures[i]
-                            is_best = False
-                            if i < 6 and measure < best_eval_measures_lower_better[i]:
-                                old_best = best_eval_measures_lower_better[i].item()
-                                best_eval_measures_lower_better[i] = measure.item()
-                                is_best = True
-                            elif i >= 6 and measure > best_eval_measures_higher_better[i-6]:
-                                old_best = best_eval_measures_higher_better[i-6].item()
-                                best_eval_measures_higher_better[i-6] = measure.item()
-                                is_best = True
-                            if is_best:
-                                old_best_step = best_eval_steps[i]
-                                old_best_name = '/model-{}-best_{}_{:.5f}'.format(old_best_step, eval_metrics[i], old_best)
-                                model_path = args.log_directory + '/' + args.model_name + old_best_name
-                                if os.path.exists(model_path):
-                                    command = 'rm {}'.format(model_path)
-                                    os.system(command)
-                                best_eval_steps[i] = global_step
-                                model_save_name = '/model-{}-best_{}_{:.5f}'.format(global_step, eval_metrics[i], measure)
-                                print('New best for {}. Saving model: {}'.format(eval_metrics[i], model_save_name))
-                                checkpoint = {'global_step': global_step,
-                                              'model': model.state_dict(),
-                                              'optimizer': optimizer.state_dict(),
-                                              'best_eval_measures_higher_better': best_eval_measures_higher_better,
-                                              'best_eval_measures_lower_better': best_eval_measures_lower_better,
-                                              'best_eval_steps': best_eval_steps
-                                              }
-                                torch.save(checkpoint, args.log_directory + '/' + args.model_name + model_save_name)
+                            line +='{:7.4f}, '.format(eval_measures[i])
+                        txtfile.write(line+'\n')
+
+                    for i in range(9):
+                        eval_summary_writer.add_scalar(eval_metrics[i], eval_measures[i].cpu(), int(global_step))
+                        measure = eval_measures[i]
+                        is_best = False
+                        if i < 6 and measure < best_eval_measures_lower_better[i]:
+                            old_best = best_eval_measures_lower_better[i].item()
+                            best_eval_measures_lower_better[i] = measure.item()
+                            is_best = True
+                        elif i >= 6 and measure > best_eval_measures_higher_better[i-6]:
+                            old_best = best_eval_measures_higher_better[i-6].item()
+                            best_eval_measures_higher_better[i-6] = measure.item()
+                            is_best = True
+                        if is_best:
+                            old_best_step = best_eval_steps[i]
+                            old_best_name = '/model-{}-best_{}_{:.5f}'.format(old_best_step, eval_metrics[i], old_best)
+                            model_path = args.log_directory + '/' + args.model_name + old_best_name
+                            if os.path.exists(model_path):
+                                command = 'rm {}'.format(model_path)
+                                os.system(command)
+                            best_eval_steps[i] = global_step
+                            model_save_name = '/model-{}-best_{}_{:.5f}'.format(global_step, eval_metrics[i], measure)
+                            print('New best for {}. Saving model: {}'.format(eval_metrics[i], model_save_name))
+                            checkpoint = {'global_step': global_step,
+                                          'model': model.state_dict(),
+                                          'optimizer': optimizer.state_dict(),
+                                          'best_eval_measures_higher_better': best_eval_measures_higher_better,
+                                          'best_eval_measures_lower_better': best_eval_measures_lower_better,
+                                          'best_eval_steps': best_eval_steps
+                                          }
+                            torch.save(checkpoint, args.log_directory + '/' + args.model_name + model_save_name)
                     eval_summary_writer.flush()
                 model.train()
                 block_print()

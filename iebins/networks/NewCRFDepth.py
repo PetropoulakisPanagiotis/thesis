@@ -274,6 +274,7 @@ class BasicUpdateBlockCDepth(nn.Module):
         self.gru = SepConvGRU(hidden_dim=hidden_dim, input_dim=self.encoder.out_chs+context_dim)
         self.p_head = CPHead(hidden_dim, hidden_dim)
         self.s_head = SPHead(hidden_dim, hidden_dim)
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, depth, context, gru_hidden, seq_len, depth_num, min_depth, max_depth):
 
@@ -307,7 +308,7 @@ class BasicUpdateBlockCDepth(nn.Module):
             depth_rc = (pred_prob * current_depths.detach()).sum(1, keepdim=True)
             pred_depths_rc_list.append(depth_rc)
             # Predict depth
-            depth_r = depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :]
+            depth_r = (self.relu(depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :])).clamp(min=1e-3)
             pred_depths_r_list.append(depth_r)
             uncertainty_map = torch.sqrt((pred_prob * ((current_depths.detach() - depth_rc.repeat(1, depth_num, 1, 1))**2)).sum(1, keepdim=True))
             uncertainty_maps_list.append(uncertainty_map)
