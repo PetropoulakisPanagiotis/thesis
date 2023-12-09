@@ -110,11 +110,17 @@ def online_eval(model, canonical, dataloader_eval, gpu, epoch, ngpus, group, pos
             if not has_valid_depth:
                 # print('Invalid depth. continue.')
                 continue
-           
-            pred_depths_r_list, _, _ = model(image)
+            if canonical:
+                pred_depths_r_list, _, _, _ = model(image)
+            else: 
+                pred_depths_r_list, _, _ = model(image)
             if post_process:
                 image_flipped = flip_lr(image)
-                pred_depths_r_list_flipped, _, _ = model(image_flipped)
+                if canonical:
+                    pred_depths_r_list_flipped, _, _, _ = model(image_flipped)
+                else:
+                    pred_depths_r_list_flipped, _, _ = model(image_flipped)
+
                 pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
 
             pred_depth = pred_depth.cpu().numpy().squeeze()
@@ -149,8 +155,10 @@ def online_eval(model, canonical, dataloader_eval, gpu, epoch, ngpus, group, pos
                     eval_mask[45:471, 41:601] = 1
 
             valid_mask = np.logical_and(valid_mask, eval_mask)
-
-        measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
+        if canonical:
+            measures = compute_errors_canonical(gt_depth[valid_mask], pred_depth[valid_mask])
+        else:
+            measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
 
         eval_measures[:measures_size - 1] += torch.tensor(measures).cuda(device=gpu)
         eval_measures[measures_size - 1] += 1
@@ -195,6 +203,7 @@ def main_worker(gpu, ngpus_per_node, args):
             args.rank = args.rank * ngpus_per_node + gpu
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
+    canonical = True
     max_tree_depth = 3
     # model
     model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=max_tree_depth, pretrained=args.pretrain)
@@ -224,11 +233,15 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         print("== Model Initialized")
 
-    canonical = True
     global_step = 0
-    best_eval_measures_lower_better = torch.zeros(6).cpu() + 1e3
-    best_eval_measures_higher_better = torch.zeros(3).cpu()
-    best_eval_steps = np.zeros(9, dtype=np.int32)
+    if canonical:
+        best_eval_measures_lower_better = torch.zeros(2).cpu() + 1e3
+        best_eval_measures_higher_better = torch.zeros(3).cpu()
+        best_eval_steps = np.zeros(5, dtype=np.int32)
+    else:
+        best_eval_measures_lower_better = torch.zeros(6).cpu() + 1e3
+        best_eval_measures_higher_better = torch.zeros(3).cpu()
+        best_eval_steps = np.zeros(9, dtype=np.int32)
 
     # Training parameters
     optimizer = torch.optim.Adam([{'params': model.module.parameters()}],
@@ -315,6 +328,7 @@ def main_worker(gpu, ngpus_per_node, args):
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
             if canonical:
                 pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
+                print(pred_depths_r_list[0].shape)
             else:
                 pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
             if args.dataset == 'nyu':
@@ -359,7 +373,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
                 if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                             and args.rank % ngpus_per_node == 0):
-                    writer.add_scalar('silog_loss', si_loss, global_step)
+                    writer.add_scalar('silog_loss', current_loss, global_step)
                     # writer.add_scalar('var_loss', var_loss, global_step)
                     writer.add_scalar('learning_rate', current_lr, global_step)
                     writer.add_scalar('var average', var_sum.item()/var_cnt, global_step)
@@ -424,7 +438,7 @@ def main_worker(gpu, ngpus_per_node, args):
                             txtfile.write(line+'\n')
 
                     if canonical:
-                        for i in range(6):
+                        for i in range(5):
                             eval_summary_writer.add_scalar(eval_metrics[i], eval_measures[i].cpu(), int(global_step))
                             measure = eval_measures[i]
                             is_best = False

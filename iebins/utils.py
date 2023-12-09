@@ -127,7 +127,7 @@ class rmse_loss(nn.Module):
         super(rmse_loss, self).__init__()
 
     def forward(self, depth_est, depth_gt, mask):
-        return np.mean(np.abs(depth_est[mask] - depth_gt[mask]))
+        return torch.mean(torch.abs(depth_est[mask] - depth_gt[mask]))
 
 def entropy_loss(preds, gt_label, mask):
     # preds: B, C, H, W

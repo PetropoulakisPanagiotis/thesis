@@ -297,25 +297,18 @@ class BasicUpdateBlockCDepth(nn.Module):
             # current_depths --> 16, 88, 280
             input_features = self.encoder(current_depths.detach())
             input_c = torch.cat([input_features, context], dim=1)
-            #print(input_features)
-            # hidden 128, 88, 280
             # input_c 352, 88, 280
             # pred_prob 16, 88, 280
             gru_hidden = self.gru(gru_hidden, input_c)
             pred_prob = self.p_head(gru_hidden)
-            #print(gru_hidden)
-            #print(pred_prob)
             # pred_scale 2, 88, 280
             pred_scale = self.s_head(gru_hidden)
-            #print(pred_scale)
             # 1,  88, 280
             depth_rc = (pred_prob * current_depths.detach()).sum(1, keepdim=True)
             pred_depths_rc_list.append(depth_rc)
-            #print(depth_rc)
             # Predict depth
-            depth_r = depth_rc * pred_scale[:, 0, :, :] + pred_scale[:, 1, :, :]
+            depth_r = depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :]
             pred_depths_r_list.append(depth_r)
-            #print(depth_r)
             uncertainty_map = torch.sqrt((pred_prob * ((current_depths.detach() - depth_rc.repeat(1, depth_num, 1, 1))**2)).sum(1, keepdim=True))
             uncertainty_maps_list.append(uncertainty_map)
 
