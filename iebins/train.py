@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from tensorboardX import SummaryWriter
 
-from utils import post_process_depth, flip_lr, silog_loss, rmse_loss, compute_errors, compute_errors_canonical, eval_metrics, entropy_loss, colormap, \
+from utils import post_process_depth, flip_lr, silog_loss, rmse_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
                        block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args, colormap_magma
 from networks.NewCRFDepth import NewCRFDepth
 from networks.depth_update import *
@@ -95,7 +95,7 @@ if args.dataset == 'kitti' or args.dataset == 'nyu':
     from dataloaders.dataloader import NewDataLoader
 
 
-def online_eval(model, canonical, dataloader_eval, gpu, epoch, ngpus, group, post_process=False):
+def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, post_process=False):
     measures_size = 10
     eval_measures = torch.zeros(measures_size).cuda(device=gpu)
 
@@ -107,16 +107,21 @@ def online_eval(model, canonical, dataloader_eval, gpu, epoch, ngpus, group, pos
             if not has_valid_depth:
                 # print('Invalid depth. continue.')
                 continue
-            if canonical:
-                pred_depths_r_list, _, _, _ = model(image)
-            else: 
+            if update_block == 0:
                 pred_depths_r_list, _, _ = model(image)
+            elif update_block == 1:
+                pred_depths_r_list, _, _, _ = model(image)
+            else:
+                pred_depths_r_list, _, _, _, _ = model(image)
+
             if post_process:
                 image_flipped = flip_lr(image)
-                if canonical:
+                if update_block == 0:
+                    pred_depths_r_list_flipped, _, _ = model(image_flipped)
+                elif update_block == 1:
                     pred_depths_r_list_flipped, _, _, _ = model(image_flipped)
                 else:
-                    pred_depths_r_list_flipped, _, _ = model(image_flipped)
+                    pred_depths_r_list_flipped, _, _, _, _ = model(image_flipped)
 
                 pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
 
@@ -191,10 +196,10 @@ def main_worker(gpu, ngpus_per_node, args):
             args.rank = args.rank * ngpus_per_node + gpu
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
-    canonical = True
+    update_block = 1
     max_tree_depth = 5
     # model
-    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=max_tree_depth, pretrained=args.pretrain)
+    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=max_tree_depth, update_block=update_block, pretrained=args.pretrain)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -239,7 +244,7 @@ def main_worker(gpu, ngpus_per_node, args):
             else:
                 loc = 'cuda:{}'.format(args.gpu)
                 checkpoint = torch.load(args.checkpoint_path, map_location=loc)
-            if canonical:
+            if update_block != 0:
                 model.load_state_dict(checkpoint['model'], strict=False)
             else:
                 model.load_state_dict(checkpoint['model'])
@@ -267,7 +272,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # ===== Evaluation before training ======
     # model.eval()
     # with torch.no_grad():
-    #     eval_measures = online_eval(model, canonical, dataloader_eval, gpu, ngpus_per_node, post_process=True)
+    #     eval_measures = online_eval(model, update_block, dataloader_eval, gpu, ngpus_per_node, post_process=True)
 
     # Logging
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
@@ -309,10 +314,13 @@ def main_worker(gpu, ngpus_per_node, args):
             image = torch.autograd.Variable(sample_batched['image'].cuda(args.gpu, non_blocking=True))
             num_log_images = image.shape[0]
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
-            if canonical:
+            if update_block == 0:
+                pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
+            elif update_block == 1:
                 pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
             else:
-                pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
+                pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list, uncertainty_maps_depth_list = model(image, epoch, step)
+   
             if args.dataset == 'nyu':
                 mask = depth_gt > 0.1
             else:
@@ -381,7 +389,7 @@ def main_worker(gpu, ngpus_per_node, args):
                             for ii in range(max_tree_depth):
                                 writer.add_image('depth_c_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_c_list[ii][i, :, :, :].data)), global_step)
 
-                            if canonical:
+                            if update_block != 0:
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data)), global_step)
 
@@ -392,7 +400,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 time.sleep(0.1)
                 model.eval()
                 with torch.no_grad():
-                    eval_measures = online_eval(model, canonical, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=True)
+                    eval_measures = online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=True)
                 if eval_measures is not None:
                     exp_name = '%s'%(datetime.now().strftime('%m%d'))
                     log_txt = os.path.join(args.log_directory + '/' + args.model_name, exp_name+'_logs.txt')

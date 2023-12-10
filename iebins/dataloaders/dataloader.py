@@ -84,8 +84,10 @@ class DataLoadPreprocess(Dataset):
         if self.mode == 'train':
             if self.args.dataset == 'kitti':
                 rgb_file = sample_path.split()[0]
-                depth_file = os.path.join(sample_path.split()[0].split('/')[0], sample_path.split()[1])
-                print(depth_file)
+                #depth_file = os.path.join(sample_path.split()[0].split('/')[0], sample_path.split()[1])
+                depth_file = os.path.join(sample_path.split()[1])
+                #print(sample_path)
+                #print(depth_file)
                 if self.args.use_right is True and random.random() > 0.5:
                     rgb_file.replace('image_02', 'image_03')
                     depth_file.replace('image_02', 'image_03')
@@ -153,14 +155,15 @@ class DataLoadPreprocess(Dataset):
                 #depth_path = os.path.join(gt_path, "./" + sample_path.split()[1])
                 depth_path = os.path.join(gt_path, sample_path.split()[1])
                 if self.args.dataset == 'kitti':
-                    depth_path = os.path.join(gt_path, sample_path.split()[0].split('/')[0], sample_path.split()[1])
+                    #depth_path = os.path.join(gt_path, sample_path.split()[0].split('/')[0], sample_path.split()[1])
+                    depth_path = os.path.join(gt_path, sample_path.split()[1])
                 has_valid_depth = False
                 try:
                     depth_gt = Image.open(depth_path)
                     has_valid_depth = True
                 except IOError:
                     depth_gt = False
-                    # print('Missing gt for {}'.format(image_path))
+                    #print('Missing gt for {}'.format(image_path))
 
                 if has_valid_depth:
                     depth_gt = np.asarray(depth_gt, dtype=np.float32)
