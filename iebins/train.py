@@ -39,6 +39,13 @@ parser.add_argument('--input_width',               type=int,   help='input width
 parser.add_argument('--max_depth',                 type=float, help='maximum depth in estimation', default=10)
 parser.add_argument('--min_depth',                 type=float, help='minimum depth in estimation', default=0.1)
 
+# Bins 
+parser.add_argument('--update_block',              type=int,   help='pdate block: iebins (0), canonical(1)', default='1')
+parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
+parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='1')
+parser.add_argument('--bin_min',                   type=float, help='min value for bin initialization', default='0')
+parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='1')
+
 # Log and save
 parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
 parser.add_argument('--checkpoint_path',           type=str,   help='path to a checkpoint to load', default='')
@@ -196,10 +203,8 @@ def main_worker(gpu, ngpus_per_node, args):
             args.rank = args.rank * ngpus_per_node + gpu
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
-    update_block = 1
-    max_tree_depth = 5
     # model
-    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=max_tree_depth, update_block=update_block, pretrained=args.pretrain)
+    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, pretrained=args.pretrain)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -244,11 +249,17 @@ def main_worker(gpu, ngpus_per_node, args):
             else:
                 loc = 'cuda:{}'.format(args.gpu)
                 checkpoint = torch.load(args.checkpoint_path, map_location=loc)
-            if update_block != 0:
+            if args.update_block != 0:
+                weights_to_remove = "update"
+                keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove in key]
+                for key_to_remove in keys_to_remove:
+                    checkpoint['model'].pop(key_to_remove)
+
                 model.load_state_dict(checkpoint['model'], strict=False)
+                #optimizer.load_state_dict(checkpoint['optimizer'])
             else:
                 model.load_state_dict(checkpoint['model'])
-            #optimizer.load_state_dict(checkpoint['optimizer'])
+                optimizer.load_state_dict(checkpoint['optimizer'])
             if not args.retrain:
                 try:
                     global_step = checkpoint['global_step']
@@ -272,7 +283,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # ===== Evaluation before training ======
     # model.eval()
     # with torch.no_grad():
-    #     eval_measures = online_eval(model, update_block, dataloader_eval, gpu, ngpus_per_node, post_process=True)
+    #     eval_measures = online_eval(model, args.update_block, dataloader_eval, gpu, ngpus_per_node, post_process=True)
 
     # Logging
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
@@ -283,6 +294,21 @@ def main_worker(gpu, ngpus_per_node, args):
             else:
                 eval_summary_path = os.path.join(args.log_directory, args.model_name, 'eval')
             eval_summary_writer = SummaryWriter(eval_summary_path, flush_secs=30)
+        # Log hparams #
+        hparams = {
+            "epochs": args.num_epochs,
+            "batch_size": args.batch_size,
+            "learning_rate": args.learning_rate,
+            "weight_decay": args.weight_decay,
+            "update_block": args.update_block,
+            "max_tree_depth": args.max_tree_depth,
+            "bin_num": args.bin_num,
+            "bin_min": args.bin_min,
+            "bin_max": args.bin_max,
+        }
+        writer.add_hparams(hparam_dict=hparams, metric_dict={})
+
+    
 
     silog_criterion = silog_loss(variance_focus=args.variance_focus)
     rmse_criterion = rmse_loss()
@@ -314,9 +340,9 @@ def main_worker(gpu, ngpus_per_node, args):
             image = torch.autograd.Variable(sample_batched['image'].cuda(args.gpu, non_blocking=True))
             num_log_images = image.shape[0]
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
-            if update_block == 0:
+            if args.update_block == 0:
                 pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
-            elif update_block == 1:
+            elif args.update_block == 1:
                 pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
             else:
                 pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list, uncertainty_maps_depth_list = model(image, epoch, step)
@@ -389,7 +415,7 @@ def main_worker(gpu, ngpus_per_node, args):
                             for ii in range(max_tree_depth):
                                 writer.add_image('depth_c_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_c_list[ii][i, :, :, :].data)), global_step)
 
-                            if update_block != 0:
+                            if args.update_block != 0:
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data)), global_step)
 
@@ -400,7 +426,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 time.sleep(0.1)
                 model.eval()
                 with torch.no_grad():
-                    eval_measures = online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=True)
+                    eval_measures = online_eval(model, args.update_block, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=True)
                 if eval_measures is not None:
                     exp_name = '%s'%(datetime.now().strftime('%m%d'))
                     log_txt = os.path.join(args.log_directory + '/' + args.model_name, exp_name+'_logs.txt')

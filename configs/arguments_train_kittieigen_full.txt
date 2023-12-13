@@ -22,6 +22,12 @@
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2347
 
+--update_block 1
+--bin_num 5
+--bin_min 0
+--bin_max 5
+--max_tree_depth 6
+
 --checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_T.pth
 --retrain
 
