@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from tensorboardX import SummaryWriter
 
-from utils import post_process_depth, flip_lr, silog_loss, rmse_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
+from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
                        block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args, colormap_magma
 from networks.NewCRFDepth import NewCRFDepth
 from networks.depth_update import *
@@ -55,6 +55,7 @@ parser.add_argument('--save_freq',                 type=int,   help='Checkpoint 
 
 # Training
 parser.add_argument('--weight_decay',              type=float, help='weight decay factor for optimization', default=1e-2)
+parser.add_argument('--loss_type',                 type=int,   help='0 for silog and 1 for l2', default=0)
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
 parser.add_argument('--adam_eps',                  type=float, help='epsilon in Adam optimizer', default=1e-6)
 parser.add_argument('--batch_size',                type=int,   help='batch size', default=4)
@@ -205,7 +206,7 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
     # model
-    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, pretrained=args.pretrain)
+    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, pretrained=args.pretrain)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -300,6 +301,7 @@ def main_worker(gpu, ngpus_per_node, args):
         # Log hparams #
         hparams = {
             "epochs": args.num_epochs,
+            "loss_type": args.loss_type,
             "batch_size": args.batch_size,
             "learning_rate": args.learning_rate,
             "weight_decay": args.weight_decay,
@@ -314,7 +316,7 @@ def main_worker(gpu, ngpus_per_node, args):
     
 
     silog_criterion = silog_loss(variance_focus=args.variance_focus)
-    rmse_criterion = rmse_loss()
+    l1_criterion = l1_loss()
     sum_localdepth = Sum_depth().cuda(args.gpu)
 
     start_time = time.time()
@@ -357,7 +359,11 @@ def main_worker(gpu, ngpus_per_node, args):
 
             max_tree_depth = len(pred_depths_r_list)
             for curr_tree_depth in range(max_tree_depth):
-                current_loss += silog_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
+                if args.loss_type == 0:
+                    current_loss += silog_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
+                else:
+                    current_loss += l1_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
+
 
             loss = current_loss
 
@@ -373,6 +379,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 # if np.isnan(loss.cpu().item()):
                 #     print('NaN in loss occurred. Aborting training.')
                 #     return -1
+
             duration += time.time() - before_op_time
             if global_step and global_step % args.log_freq == 0 and not model_just_loaded:
                 var_sum = [var.sum().item() for var in model.parameters() if var.requires_grad]

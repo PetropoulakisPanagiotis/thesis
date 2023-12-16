@@ -25,6 +25,8 @@
 --checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_T.pth
 --retrain
 
+--loss_type 1
+
 --log_freq 20
 --do_online_eval
 --eval_freq 100

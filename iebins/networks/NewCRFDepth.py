@@ -14,7 +14,7 @@ class NewCRFDepth(nn.Module):
     Depth network based on neural window FC-CRFs architecture.
     """
     def __init__(self, version=None, inv_depth=False, pretrained=None, 
-                    frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=3, bin_num=16, bin_min=0, bin_max=1, update_block=1, **kwargs):
+                    frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=3, bin_num=16, bin_min=0, bin_max=1, update_block=1, loss_type=0, **kwargs):
         super().__init__()
 
         self.inv_depth = inv_depth
@@ -27,6 +27,8 @@ class NewCRFDepth(nn.Module):
         self.bin_min = bin_min
         self.bin_max = bin_max
         self.update_block = update_block # 0 iebins, 1 canonical, 2 canonical with uncertainty 
+   
+        self.loss_type = loss_type # 0 for silog 1 for l1
 
 
         norm_cfg = dict(type='BN', requires_grad=True)
@@ -40,9 +42,9 @@ class NewCRFDepth(nn.Module):
             if self.update_block == 0:
                 self.update = BasicUpdateBlockDepth(hidden_dim=128, context_dim=128, bin_num=16)
             elif self.update_block == 1:
-                self.update = BasicUpdateBlockCDepth(hidden_dim=128, context_dim=128, bin_num=self.bin_num)
+                self.update = BasicUpdateBlockCDepth(hidden_dim=128, context_dim=128, bin_num=self.bin_num, loss_type=self.loss_type)
             else:
-                self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=128, bin_num=self.bin_num)
+                self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=128, bin_num=self.bin_num, loss_type=self.loss_type)
         elif version[:-2] == 'large':
             embed_dim = 192
             depths = [2, 2, 18, 2]
@@ -51,9 +53,9 @@ class NewCRFDepth(nn.Module):
             if self.update_block == 0:
                 self.update = BasicUpdateBlockDepth(hidden_dim=128, context_dim=192, bin_num=16)
             elif self.update_block == 1:
-                self.update = BasicUpdateBlockCDepth(hidden_dim=128, context_dim=192, bin_num=self.bin_num)
+                self.update = BasicUpdateBlockCDepth(hidden_dim=128, context_dim=192, bin_num=self.bin_num, loss_type=self.loss_type)
             else:
-                self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=192, bin_num=self.bin_num)
+                self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=192, bin_num=self.bin_num, loss_type=self.loss_type)
         elif version[:-2] == 'tiny':
             embed_dim = 96
             depths = [2, 2, 6, 2]
@@ -62,9 +64,9 @@ class NewCRFDepth(nn.Module):
             if self.update_block == 0:
                 self.update = BasicUpdateBlockDepth(hidden_dim=128, context_dim=96, bin_num=16)
             elif self.update_block == 1:
-                self.update = BasicUpdateBlockCDepth(hidden_dim=128, context_dim=96, bin_num=self.bin_num)
+                self.update = BasicUpdateBlockCDepth(hidden_dim=128, context_dim=96, bin_num=self.bin_num, loss_type=self.loss_type)
             else:
-                self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=96, bin_num=self.bin_num)
+                self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=96, bin_num=self.bin_num, loss_type=self.loss_type)
 
         backbone_cfg = dict(
             embed_dim=embed_dim,
@@ -287,7 +289,7 @@ class BasicUpdateBlockDepth(nn.Module):
         return pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list
 
 class BasicUpdateBlockCDepth(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0):
         super(BasicUpdateBlockCDepth, self).__init__()
 
         self.encoder = ProjectionInputDepth(hidden_dim=hidden_dim, out_chs=hidden_dim * 2, bin_num=bin_num)
@@ -295,6 +297,7 @@ class BasicUpdateBlockCDepth(nn.Module):
         self.p_head = CPHead(hidden_dim, hidden_dim, bin_num=bin_num)
         self.s_head = SPHead(hidden_dim, hidden_dim)
         self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
 
     def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth):
 
@@ -328,7 +331,11 @@ class BasicUpdateBlockCDepth(nn.Module):
             depth_rc = (pred_prob * current_depths.detach()).sum(1, keepdim=True)
             pred_depths_rc_list.append(depth_rc)
             # Predict depth
-            depth_r = (self.relu(depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :])).clamp(min=1e-3)
+            if self.loss_type == 0:
+                depth_r = (self.relu(depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :])).clamp(min=1e-3)
+            else:
+                depth_r = depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :]
+
             pred_depths_r_list.append(depth_r)
             uncertainty_map = torch.sqrt((pred_prob * ((current_depths.detach() - depth_rc.repeat(1, bin_num, 1, 1))**2)).sum(1, keepdim=True))
             uncertainty_maps_list.append(uncertainty_map)
@@ -348,7 +355,7 @@ class BasicUpdateBlockCDepth(nn.Module):
         return pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list
 
 class BasicUpdateBlockCUDepth(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192):
+    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0):
         super(BasicUpdateBlockCDepth, self).__init__()
 
         self.encoder = ProjectionInputDepth(hidden_dim=hidden_dim, out_chs=hidden_dim * 2)

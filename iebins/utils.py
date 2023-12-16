@@ -99,20 +99,6 @@ def compute_errors(gt, pred):
 
     return [silog, abs_rel, log10, rms, sq_rel, log_rms, d1, d2, d3]
 
-def compute_errors_canonical(gt, pred):
-    thresh = np.maximum((gt / pred), (pred / gt))
-    d1 = (thresh < 1.25).mean()
-    d2 = (thresh < 1.25 ** 2).mean()
-    d3 = (thresh < 1.25 ** 3).mean()
-
-    rms = (gt - pred) ** 2
-    rms = np.sqrt(rms.mean())
-
-    abs_rel = np.mean(np.abs(gt - pred) / gt)
-    sq_rel = np.mean(((gt - pred) ** 2) / gt)
-
-    return [rms, sq_rel, d1, d2, d3]
-
 class silog_loss(nn.Module):
     def __init__(self, variance_focus):
         super(silog_loss, self).__init__()
@@ -122,9 +108,9 @@ class silog_loss(nn.Module):
         d = torch.log(depth_est[mask]) - torch.log(depth_gt[mask])
         return torch.sqrt((d ** 2).mean() - self.variance_focus * (d.mean() ** 2)) * 10.0
 
-class rmse_loss(nn.Module):
+class l1_loss(nn.Module):
     def __init__(self):
-        super(rmse_loss, self).__init__()
+        super(l1_loss, self).__init__()
 
     def forward(self, depth_est, depth_gt, mask):
         return torch.mean(torch.abs(depth_est[mask] - depth_gt[mask]))
