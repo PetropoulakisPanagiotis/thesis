@@ -48,6 +48,7 @@ parser.add_argument('--bin_max',                   type=float, help='max value f
 
 # Log and save
 parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
+parser.add_argument('--exp_name',                  type=str,   help='directory to save checkpoints and summaries', default='exp-1')
 parser.add_argument('--checkpoint_path',           type=str,   help='path to a checkpoint to load', default='')
 parser.add_argument('--log_freq',                  type=int,   help='Logging frequency in global steps', default=100)
 parser.add_argument('--save_freq',                 type=int,   help='Checkpoint saving frequency in global steps', default=5000)
@@ -287,6 +288,8 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # Logging
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
+        print(args.log_directory)
+        print(args.log_directory + '/' + args.model_name + '/summaries')
         writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
         if args.do_online_eval:
             if args.eval_summary_directory != '':
@@ -428,7 +431,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 with torch.no_grad():
                     eval_measures = online_eval(model, args.update_block, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=True)
                 if eval_measures is not None:
-                    exp_name = '%s'%(datetime.now().strftime('%m%d'))
+                    exp_name = args.exp_name
                     log_txt = os.path.join(args.log_directory + '/' + args.model_name, exp_name+'_logs.txt')
                     with open(log_txt, 'a') as txtfile:
                         txtfile.write(">>>>>>>>>>>>>>>>>>>>>>>>>Step:%d>>>>>>>>>>>>>>>>>>>>>>>>>\n"%(int(global_step)))
@@ -493,7 +496,7 @@ def main():
         print('train.py is only for training.')
         return -1
 
-    exp_name = '%s'%(datetime.now().strftime('%m%d'))  
+    exp_name = args.exp_name  
     args.log_directory = os.path.join(args.log_directory,exp_name)  
     command = 'mkdir -p ' + os.path.join(args.log_directory, args.model_name)
     os.system(command)

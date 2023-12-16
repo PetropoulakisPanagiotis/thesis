@@ -30,6 +30,13 @@ parser.add_argument('--input_height',              type=int,   help='input heigh
 parser.add_argument('--input_width',               type=int,   help='input width',  default=640)
 parser.add_argument('--max_depth',                 type=float, help='maximum depth in estimation', default=10)
 
+# Bins 
+parser.add_argument('--update_block',              type=int,   help='pdate block: iebins (0), canonical(1)', default='1')
+parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
+parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='1')
+parser.add_argument('--bin_min',                   type=float, help='min value for bin initialization', default='0')
+parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='1')
+
 # Preprocessing
 parser.add_argument('--do_random_rotate',                      help='if set, will perform random rotation for augmentation', action='store_true')
 parser.add_argument('--degree',                    type=float, help='random rotation maximum degree', default=2.5)
@@ -100,7 +107,7 @@ def eval(model, dataloader_eval, post_process=False):
 
             if args.garg_crop:
                 eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height), int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
-
+                print(int(0.40810811 * gt_height), int(0.99189189 * gt_height))
             elif args.eigen_crop:
                 if args.dataset == 'kitti':
                     eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height), int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
@@ -108,7 +115,7 @@ def eval(model, dataloader_eval, post_process=False):
                     eval_mask[45:471, 41:601] = 1
 
             valid_mask = np.logical_and(valid_mask, eval_mask)
-
+            
         measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
         eval_measures[:9] += torch.tensor(measures).cuda()
         eval_measures[9] += 1
@@ -129,7 +136,7 @@ def eval(model, dataloader_eval, post_process=False):
 def main_worker(args):
 
     # CRF model
-    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, pretrained=None)
+    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, pretrained=None)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])

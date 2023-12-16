@@ -6,11 +6,18 @@
 --max_depth 80
 --do_kb_crop
 
---data_path_eval /usr/stud/petp/code/datasets/kitti/data_depth_annotated/val/
---gt_path_eval /usr/stud/petp/code/datasets/kitti/data_depth_annotated/val/
---filenames_file_eval /usr/stud/petp/code/thesis/data_splits/eigen_test_files_with_gt.txt
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/kitti_images/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/kitti_depth/val/
+--filenames_file_eval /usr/stud/petp/code/thesis/data_splits/eigen_test_files_with_gt_full.txt
 --min_depth_eval 1e-3
 --max_depth_eval 80
 --garg_crop
 
---checkpoint_path /usr/stud/petp/code/thesis/tmp/1204/iebins_kittieigen/model-500-best_silog_5.58815.pth
+--update_block 0
+--bin_num 16
+--bin_min 0
+--bin_max 80
+--max_tree_depth 6
+
+--exp_name test
+--checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_T.pth
