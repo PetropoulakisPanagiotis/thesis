@@ -14,7 +14,7 @@ class NewCRFDepth(nn.Module):
     Depth network based on neural window FC-CRFs architecture.
     """
     def __init__(self, version=None, inv_depth=False, pretrained=None, 
-                    frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=3, bin_num=16, bin_min=0, bin_max=1, update_block=1, loss_type=0, **kwargs):
+                    frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=3, bin_num=16, bin_min=0, bin_max=1, update_block=1, loss_type=0, train_decoder=0, **kwargs):
         super().__init__()
 
         self.inv_depth = inv_depth
@@ -27,7 +27,8 @@ class NewCRFDepth(nn.Module):
         self.bin_min = bin_min
         self.bin_max = bin_max
         self.update_block = update_block # 0 iebins, 1 canonical, 2 canonical with uncertainty 
-   
+        self.train_decoder = train_decoder # 0 not train, 1 -> last layer
+
         self.loss_type = loss_type # 0 for silog 1 for l1
 
 
@@ -128,8 +129,9 @@ class NewCRFDepth(nn.Module):
                 param.requires_grad = False
             for param in self.crf2.parameters():
                 param.requires_grad = False
-            for param in self.crf1.parameters():
-                param.requires_grad = False
+            if self.decoder == 0:
+                for param in self.crf1.parameters():
+                    param.requires_grad = False
 
     def init_weights(self, pretrained=None):
         """Initialize the weights in backbone and heads.

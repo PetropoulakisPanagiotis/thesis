@@ -54,6 +54,7 @@ parser.add_argument('--log_freq',                  type=int,   help='Logging fre
 parser.add_argument('--save_freq',                 type=int,   help='Checkpoint saving frequency in global steps', default=5000)
 
 # Training
+parser.add_argument('--train_decoder',             type=int,   help='how many layers to train from the decoder', default=0)
 parser.add_argument('--weight_decay',              type=float, help='weight decay factor for optimization', default=1e-2)
 parser.add_argument('--loss_type',                 type=int,   help='0 for silog and 1 for l2', default=0)
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
@@ -206,7 +207,7 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
     # model
-    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, pretrained=args.pretrain)
+    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -310,6 +311,7 @@ def main_worker(gpu, ngpus_per_node, args):
             "bin_num": args.bin_num,
             "bin_min": args.bin_min,
             "bin_max": args.bin_max,
+            "train_decoder": args.train_decoder,
         }
         writer.add_hparams(hparam_dict=hparams, metric_dict={})
 
@@ -396,7 +398,11 @@ def main_worker(gpu, ngpus_per_node, args):
 
                 if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                             and args.rank % ngpus_per_node == 0):
-                    writer.add_scalar('silog_loss', current_loss, global_step)
+                    if args.loss_type == 0:
+                        writer.add_scalar('silog_loss', current_loss, global_step)
+                    else:
+                        writer.add_scalar('l1_loss', current_loss, global_step)
+
                     # writer.add_scalar('var_loss', var_loss, global_step)
                     writer.add_scalar('learning_rate', current_lr, global_step)
                     writer.add_scalar('var average', var_sum.item()/var_cnt, global_step)

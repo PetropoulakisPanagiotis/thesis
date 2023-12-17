@@ -7,8 +7,8 @@
 --gt_path /usr/stud/petp/storage/user/petp/datasets/kitti_depth/train/
 --filenames_file /usr/stud/petp/code/thesis/data_splits/eigen_train_files_with_gt_full.txt
 --batch_size 8
---num_epochs 10
---learning_rate 2e-5
+--num_epochs 5
+--learning_rate 5e-6
 --weight_decay 1e-2
 --adam_eps 1e-3
 --num_threads 1
@@ -24,16 +24,15 @@
 
 --update_block 1
 --bin_num 16
---bin_min 0
---bin_max 10
+--bin_min -5
+--bin_max 5
 --max_tree_depth 6
-
 --checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_T.pth
 --retrain
 
---exp_name e
 --loss_type 0
 
+--exp_name o
 --log_freq 20
 --do_online_eval
 --eval_freq 100

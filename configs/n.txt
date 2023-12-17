@@ -27,12 +27,12 @@
 --bin_min 0
 --bin_max 10
 --max_tree_depth 6
-
 --checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_T.pth
 --retrain
 
---exp_name e
---loss_type 0
+--loss_type 1
+--train_decoder 1
+--exp_name n
 
 --log_freq 20
 --do_online_eval
