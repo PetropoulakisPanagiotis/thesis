@@ -42,7 +42,7 @@ parser.add_argument('--min_depth',                 type=float, help='minimum dep
 # Bins 
 parser.add_argument('--update_block',              type=int,   help='pdate block: iebins (0), canonical(1)', default='1')
 parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
-parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='1')
+parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 parser.add_argument('--bin_min',                   type=float, help='min value for bin initialization', default='0')
 parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='1')
 
@@ -119,19 +119,19 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                 continue
             if update_block == 0:
                 pred_depths_r_list, _, _ = model(image)
-            elif update_block == 1:
+            elif update_block == 1 or update_block == 2:
                 pred_depths_r_list, _, _, _ = model(image)
             else:
-                pred_depths_r_list, _, _, _, _ = model(image)
+                pass
 
             if post_process:
                 image_flipped = flip_lr(image)
                 if update_block == 0:
                     pred_depths_r_list_flipped, _, _ = model(image_flipped)
-                elif update_block == 1:
+                elif update_block == 1 or update_block == 2:
                     pred_depths_r_list_flipped, _, _, _ = model(image_flipped)
                 else:
-                    pred_depths_r_list_flipped, _, _, _, _ = model(image_flipped)
+                    pass
 
                 pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
 
@@ -349,10 +349,10 @@ def main_worker(gpu, ngpus_per_node, args):
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
             if args.update_block == 0:
                 pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
-            elif args.update_block == 1:
+            elif args.update_block == 1 or args.update_block == 2:
                 pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
             else:
-                pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list, uncertainty_maps_depth_list = model(image, epoch, step)
+                pass
    
             if args.dataset == 'nyu':
                 mask = depth_gt > 0.1
