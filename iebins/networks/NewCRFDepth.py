@@ -14,7 +14,7 @@ class NewCRFDepth(nn.Module):
     Depth network based on neural window FC-CRFs architecture.
     """
     def __init__(self, version=None, inv_depth=False, pretrained=None, 
-                    frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=3, bin_num=16, bin_min=0, bin_max=1, update_block=1, loss_type=0, train_decoder=0, **kwargs):
+                    frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=6, bin_num=16, bin_min=0, bin_max=80, update_block=0, loss_type=0, train_decoder=0, **kwargs):
         super().__init__()
 
         self.inv_depth = inv_depth
@@ -44,8 +44,13 @@ class NewCRFDepth(nn.Module):
                 self.update = BasicUpdateBlockDepth(hidden_dim=128, context_dim=128, bin_num=16)
             elif self.update_block == 1:
                 self.update = BasicUpdateBlockCDepth(hidden_dim=128, context_dim=128, bin_num=self.bin_num, loss_type=self.loss_type)
-            else:
+            elif self.update_block == 2:
                 self.update = BasicUpdateBlockCPDepth(hidden_dim=128, context_dim=128, bin_num=self.bin_num, loss_type=self.loss_type)
+            elif self.update_block == 3:
+                self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=128, bin_num=self.bin_num, loss_type=self.loss_type)
+            else:
+                pass
+
         elif version[:-2] == 'large':
             embed_dim = 192
             depths = [2, 2, 18, 2]
@@ -55,8 +60,12 @@ class NewCRFDepth(nn.Module):
                 self.update = BasicUpdateBlockDepth(hidden_dim=128, context_dim=192, bin_num=16)
             elif self.update_block == 1:
                 self.update = BasicUpdateBlockCDepth(hidden_dim=128, context_dim=192, bin_num=self.bin_num, loss_type=self.loss_type)
-            else:
+            elif self.update_block == 2:
                 self.update = BasicUpdateBlockCPDepth(hidden_dim=128, context_dim=192, bin_num=self.bin_num, loss_type=self.loss_type)
+            elif self.update_block == 3:
+                self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=192, bin_num=self.bin_num, loss_type=self.loss_type)
+            else:
+                pass
         elif version[:-2] == 'tiny':
             embed_dim = 96
             depths = [2, 2, 6, 2]
@@ -66,8 +75,12 @@ class NewCRFDepth(nn.Module):
                 self.update = BasicUpdateBlockDepth(hidden_dim=128, context_dim=96, bin_num=16)
             elif self.update_block == 1:
                 self.update = BasicUpdateBlockCDepth(hidden_dim=128, context_dim=96, bin_num=self.bin_num, loss_type=self.loss_type)
-            else:
+            elif self.update_block == 2:
                 self.update = BasicUpdateBlockCPDepth(hidden_dim=128, context_dim=96, bin_num=self.bin_num, loss_type=self.loss_type)
+            elif self.update_block == 3:
+                self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=96, bin_num=self.bin_num, loss_type=self.loss_type)
+            else:
+                pass
 
         backbone_cfg = dict(
             embed_dim=embed_dim,
@@ -199,6 +212,8 @@ class NewCRFDepth(nn.Module):
             pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
         elif self.update_block == 1 or self.update_block == 2:
             pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list = self.update(depth, context, gru_hidden, self.max_tree_depth, self.bin_num, self.bin_min, self.bin_max)
+        elif self.update_block == 3:
+            pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list = self.update(depth, context, gru_hidden, self.max_tree_depth, self.bin_num, self.bin_min, self.bin_max)
         else:
             pass
 
@@ -207,21 +222,35 @@ class NewCRFDepth(nn.Module):
                 pred_depths_r_list[i] = self.upsample_mask(pred_depths_r_list[i], mask)  
             for i in range(len(pred_depths_c_list)):
                 pred_depths_c_list[i] = self.upsample_mask(pred_depths_c_list[i], mask.detach())
+            for i in range(len(pred_depths_rc_list)):
+                pred_depths_rc_list[i] = self.upsample_mask(pred_depths_rc_list[i], mask.detach())
             for i in range(len(uncertainty_maps_list)):
-                uncertainty_maps_list[i] = self.upsample_mask(uncertainty_maps_list[i], mask.detach())                   
+                uncertainty_maps_list[i] = self.upsample_mask(uncertainty_maps_list[i], mask.detach())
+            if self.update_block == 3:        
+                for i in range(len(pred_depths_u_list)):
+                    pred_depths_u_list[i] = self.upsample_mask(pred_depths_u_list[i], mask.detach())
+
+                   
         else:
             for i in range(len(pred_depths_r_list)):
                 pred_depths_r_list[i] = upsample(pred_depths_r_list[i], scale_factor=4)
             for i in range(len(pred_depths_c_list)):
                 pred_depths_c_list[i] = upsample(pred_depths_c_list[i], scale_factor=4) 
+            for i in range(len(pred_depths_rc_list)):
+                pred_depths_rc_list[i] = upsample(pred_depths_rc_list[i], scale_factor=4) 
             for i in range(len(uncertainty_maps_list)):
                 uncertainty_maps_list[i] = upsample(uncertainty_maps_list[i], scale_factor=4) 
+            if self.update_block == 3:        
+                for i in range(len(pred_depths_u_list)):
+                    pred_depths_u_list[i] = upsample(pred_depths_u_list[i], scale_factor=4)
 
         if self.update_block == 0:
             return pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list
         elif self.update_block == 1 or self.update_block == 2:
             return pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list
-        else:
+        elif self.update_block == 3:
+            return pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list
+        else:    
             pass
 
 class DispHead(nn.Module):
@@ -337,7 +366,10 @@ class BasicUpdateBlockCDepth(nn.Module):
                 depth_r = (self.relu(depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :])).clamp(min=1e-3)
             else:
                 depth_r = depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :]
-
+            #print(torch.mean(pred_scale[0, 1:2, :, :]))
+            #print(torch.std(pred_scale[0, 1:2, :, :]))
+            #print(torch.min(pred_scale[0, 0:1, :, :]))
+            #print(torch.max(pred_scale[0, 1:2, :, :]))
             pred_depths_r_list.append(depth_r)
             uncertainty_map = torch.sqrt((pred_prob * ((current_depths.detach() - depth_rc.repeat(1, bin_num, 1, 1))**2)).sum(1, keepdim=True))
             uncertainty_maps_list.append(uncertainty_map)
@@ -433,18 +465,80 @@ class BasicUpdateBlockCPDepth(nn.Module):
 
         return pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list
 
+class BasicUpdateBlockCUDepth(nn.Module):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0):
+        super(BasicUpdateBlockCUDepth, self).__init__()
 
-class UncerHead(nn.Module):
-    def __init__(self, input_dim=100):
-        super(UncerHead, self).__init__()
-        self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
-        self.sigmoid = nn.Sigmoid()
+        self.encoder = ProjectionInputDepth(hidden_dim=hidden_dim, out_chs=hidden_dim * 2, bin_num=bin_num)
+        self.gru = SepConvGRU(hidden_dim=hidden_dim, input_dim=self.encoder.out_chs+context_dim)
+        self.p_head = CPHead(hidden_dim, hidden_dim, bin_num=bin_num)
+        self.s_head = SPHead(hidden_dim, hidden_dim)
+        self.u_head = UPHead(hidden_dim, hidden_dim)
+        self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
 
-    def forward(self, x, scale):
-        x = self.sigmoid(self.conv1(x))
-        if scale > 1:
-            x = upsample(x, scale_factor=scale)
-        return x
+    def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth):
+
+        pred_depths_r_list = []
+        pred_depths_u_list = []
+        pred_depths_rc_list = []
+        pred_depths_c_list = []
+        uncertainty_maps_list = []
+
+        b, _, h, w = depth.shape
+        depth_range = max_depth - min_depth
+        interval = depth_range / bin_num
+        interval = interval * torch.ones_like(depth)
+        interval = interval.repeat(1, bin_num, 1, 1)
+        interval = torch.cat([torch.ones_like(depth) * min_depth, interval], 1)
+
+        bin_edges = torch.cumsum(interval, 1)
+        current_depths = 0.5 * (bin_edges[:, :-1] + bin_edges[:, 1:])
+        index_iter = 0
+
+        for i in range(seq_len):
+            # current_depths --> 16, 88, 280
+            input_features = self.encoder(current_depths.detach())
+            input_c = torch.cat([input_features, context], dim=1)
+            # input_c 352, 88, 280
+            # pred_prob 16, 88, 280
+            gru_hidden = self.gru(gru_hidden, input_c)
+            pred_prob = self.p_head(gru_hidden)
+            # pred_scale 2, 88, 280
+            pred_scale = self.s_head(gru_hidden)
+
+            # Uncertainty 
+            pred_u = self.u_head(gru_hidden)
+            pred_depths_u_list.append(pred_u)
+
+            # 1,  88, 280
+            depth_rc = (pred_prob * current_depths.detach()).sum(1, keepdim=True)
+            pred_depths_rc_list.append(depth_rc)
+            # Predict depth
+            if self.loss_type == 0:
+                depth_r = (self.relu(depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :])).clamp(min=1e-3)
+            else:
+                depth_r = depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :]
+
+            pred_depths_r_list.append(depth_r)
+            uncertainty_map = torch.sqrt((pred_prob * ((current_depths.detach() - depth_rc.repeat(1, bin_num, 1, 1))**2)).sum(1, keepdim=True))
+            uncertainty_maps_list.append(uncertainty_map)
+
+            index_iter = index_iter + 1
+
+            pred_label = get_label(torch.squeeze(depth_rc, 1), bin_edges, bin_num).unsqueeze(1)
+            depth_c = torch.gather(current_depths.detach(), 1, pred_label.detach())
+            pred_depths_c_list.append(depth_c)
+
+            label_target_bin_left = pred_label
+            target_bin_left = torch.gather(bin_edges, 1, label_target_bin_left)
+            label_target_bin_right = (pred_label.float() + 1).long()
+            target_bin_right = torch.gather(bin_edges, 1, label_target_bin_right)
+
+            bin_edges, current_depths = update_sample(bin_edges, target_bin_left, target_bin_right, depth_rc.detach(), pred_label.detach(), bin_num, min_depth, max_depth, uncertainty_map)
+        return pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list
+
+
         
 class PHead(nn.Module):
     def __init__(self, input_dim=128, hidden_dim=128, bin_num=16):
@@ -474,6 +568,17 @@ class SPHead(nn.Module):
 
     def forward(self, x):
         out = self.conv2(F.relu(self.conv1(x)))
+        return out
+
+class UPHead(nn.Module):
+    def __init__(self, input_dim=128, hidden_dim=128):
+        super(UPHead, self).__init__()
+        self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, 1, 3, padding=1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        out = self.sigmoid(self.conv2(F.relu(self.conv1(x))))
         return out
 
 class SepConvGRU(nn.Module):

@@ -6,6 +6,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 
 import os, sys, time
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 from telnetlib import IP
 import argparse
 import numpy as np
@@ -121,6 +122,8 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                 pred_depths_r_list, _, _ = model(image)
             elif update_block == 1 or update_block == 2:
                 pred_depths_r_list, _, _, _ = model(image)
+            elif update_block == 3:
+                pred_depths_r_list, _, _, _, _ = model(image)
             else:
                 pass
 
@@ -130,6 +133,8 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                     pred_depths_r_list_flipped, _, _ = model(image_flipped)
                 elif update_block == 1 or update_block == 2:
                     pred_depths_r_list_flipped, _, _, _ = model(image_flipped)
+                elif update_block == 3:
+                    pred_depths_r_list_flipped, _, _, _, _ = model(image_flipped)
                 else:
                     pass
 
@@ -252,7 +257,7 @@ def main_worker(gpu, ngpus_per_node, args):
             else:
                 loc = 'cuda:{}'.format(args.gpu)
                 checkpoint = torch.load(args.checkpoint_path, map_location=loc)
-            if args.update_block != 0:
+            if args.update_block != 0 and args.checkpoint_path.find("kittieigen") != -1:
                 weights_to_remove = "update"
                 keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove in key]
                 for key_to_remove in keys_to_remove:
@@ -343,7 +348,8 @@ def main_worker(gpu, ngpus_per_node, args):
         for step, sample_batched in enumerate(dataloader.data):
             optimizer.zero_grad()
             before_op_time = time.time()
-            current_loss = 0
+            current_loss_d = 0
+            current_loss_u = 0
             image = torch.autograd.Variable(sample_batched['image'].cuda(args.gpu, non_blocking=True))
             num_log_images = image.shape[0]
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
@@ -351,6 +357,8 @@ def main_worker(gpu, ngpus_per_node, args):
                 pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
             elif args.update_block == 1 or args.update_block == 2:
                 pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
+            elif args.update_block == 3:
+                pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list = model(image, epoch, step)
             else:
                 pass
    
@@ -362,12 +370,19 @@ def main_worker(gpu, ngpus_per_node, args):
             max_tree_depth = len(pred_depths_r_list)
             for curr_tree_depth in range(max_tree_depth):
                 if args.loss_type == 0:
-                    current_loss += silog_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
+                    current_loss_d += silog_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
                 else:
-                    current_loss += l1_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
+                    current_loss_d += l1_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
 
+                if args.update_block == 3:
+                    u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[curr_tree_depth].detach()) / (depth_gt + pred_depths_r_list[curr_tree_depth].detach() + 1e-7))
 
-            loss = current_loss
+                    current_loss_u += torch.abs(pred_depths_u_list[curr_tree_depth][mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
+
+            if args.update_block == 3:
+                loss = current_loss_d + current_loss_u
+            else:
+                loss = current_loss_d
 
             loss.backward()
             for param_group in optimizer.param_groups:
@@ -399,9 +414,12 @@ def main_worker(gpu, ngpus_per_node, args):
                 if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                             and args.rank % ngpus_per_node == 0):
                     if args.loss_type == 0:
-                        writer.add_scalar('silog_loss', current_loss, global_step)
+                        writer.add_scalar('silog_loss', current_loss_d, global_step)
                     else:
-                        writer.add_scalar('l1_loss', current_loss, global_step)
+                        writer.add_scalar('l1_loss', current_loss_d, global_step)
+
+                    if args.update_block == 3:
+                        writer.add_scalar('u_loss', current_loss_u, global_step)
 
                     # writer.add_scalar('var_loss', var_loss, global_step)
                     writer.add_scalar('learning_rate', current_lr, global_step)
@@ -434,6 +452,10 @@ def main_worker(gpu, ngpus_per_node, args):
                             if args.update_block != 0:
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data)), global_step)
+
+                            if args.update_block == 3:
+                                for ii in range(max_tree_depth):
+                                    writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_u_list[ii][i, :, :, :].data)), global_step)
 
                         for ii in range(max_tree_depth):
                             writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), global_step)
@@ -503,6 +525,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
 def main():
     import gc
+
     torch.cuda.empty_cache()
     gc.collect()
     if args.mode != 'train':

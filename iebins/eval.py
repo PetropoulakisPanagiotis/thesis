@@ -1,7 +1,9 @@
 import torch
 import torch.backends.cudnn as cudnn
 
+from tensorboardX import SummaryWriter
 import os, sys
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 import argparse
 import numpy as np
 from tqdm import tqdm
@@ -9,6 +11,8 @@ from tqdm import tqdm
 from utils import post_process_depth, flip_lr, compute_errors
 from networks.NewCRFDepth import NewCRFDepth
 
+from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
+                       block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args, colormap_magma
 
 def convert_arg_line_to_args(arg_line):
     for arg in arg_line.split():
@@ -23,6 +27,7 @@ parser.convert_arg_line_to_args = convert_arg_line_to_args
 parser.add_argument('--model_name',                type=str,   help='model name', default='iebins')
 parser.add_argument('--encoder',                   type=str,   help='type of encoder, base07, large07, tiny07', default='large07')
 parser.add_argument('--checkpoint_path',           type=str,   help='path to a checkpoint to load', default='')
+parser.add_argument('--pretrain',                  type=str,   help='path of pretrained encoder', default=None)
 
 # Dataset
 parser.add_argument('--dataset',                   type=str,   help='dataset to train on, kitti or nyu', default='nyu')
@@ -31,11 +36,11 @@ parser.add_argument('--input_width',               type=int,   help='input width
 parser.add_argument('--max_depth',                 type=float, help='maximum depth in estimation', default=10)
 
 # Bins 
-parser.add_argument('--update_block',              type=int,   help='pdate block: iebins (0), canonical(1)', default='1')
+parser.add_argument('--update_block',              type=int,   help='pdate block: iebins (0), canonical(1)', default='0')
 parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
-parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='1')
+parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 parser.add_argument('--bin_min',                   type=float, help='min value for bin initialization', default='0')
-parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='1')
+parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='80')
 
 # Preprocessing
 parser.add_argument('--do_random_rotate',                      help='if set, will perform random rotation for augmentation', action='store_true')
@@ -44,6 +49,8 @@ parser.add_argument('--do_kb_crop',                            help='if set, cro
 parser.add_argument('--use_right',                             help='if set, will randomly use right images when train on KITTI', action='store_true')
 
 # Eval
+parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='.')
+parser.add_argument('--exp_name',                  type=str,   help='directory to save checkpoints and summaries', default='exp-1')
 parser.add_argument('--data_path_eval',            type=str,   help='path to the data for evaluation', required=False)
 parser.add_argument('--gt_path_eval',              type=str,   help='path to the groundtruth data for evaluation', required=False)
 parser.add_argument('--filenames_file_eval',       type=str,   help='path to the filenames text file for evaluation', required=False)
@@ -52,6 +59,8 @@ parser.add_argument('--max_depth_eval',            type=float, help='maximum dep
 parser.add_argument('--eigen_crop',                            help='if set, crops according to Eigen NIPS14', action='store_true')
 parser.add_argument('--garg_crop',                             help='if set, crops according to Garg  ECCV16', action='store_true')
 
+parser.add_argument('--loss_type',                 type=int,   help='0 for silog and 1 for l2', default=0)
+parser.add_argument('--train_decoder',             type=int,   help='how many layers to train from the decoder', default=0)
 
 if sys.argv.__len__() == 2:
     arg_filename_with_prefix = '@' + sys.argv[1]
@@ -66,19 +75,88 @@ if args.dataset == 'kitti' or args.dataset == 'nyu':
 def eval(model, dataloader_eval, post_process=False):
     eval_measures = torch.zeros(10).cuda()
 
-    for _, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
+    writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
+   
+    eval_images = 0 
+    for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
+        eval_images += 1
+        if eval_images == 30:
+            break
         with torch.no_grad():
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
+            num_log_images = image.shape[0]
             gt_depth = eval_sample_batched['depth']
             has_valid_depth = eval_sample_batched['has_valid_depth']
             if not has_valid_depth:
                 print('Invalid depth. continue.')
                 continue
 
-            pred_depths_r_list, _, _ = model(image)
+            if args.update_block == 0:
+                pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = model(image)
+            elif args.update_block == 1 or args.update_block == 2:
+                pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list = model(image)
+            elif args.update_block == 3:
+                pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list = model(image)
+            else:
+                pass
+            print(torch.min(pred_depths_rc_list[0][0, 0, :, :]))
+            print(torch.max(pred_depths_rc_list[0][0, 0, :, :]))
+            print(torch.mean(pred_depths_rc_list[0][0, 0, :, :]))
+            print(torch.std(pred_depths_rc_list[0][0, 0, :, :]))
+            print(pred_depths_r_list[0][0, :, :, :].shape)
+            
+            max_tree_depth = len(pred_depths_r_list)
+            for i in range(num_log_images):
+                if args.dataset == 'nyu':
+                    writer.add_image('gt_depth/image/{}'.format(i), colormap(torch.where(gt_depth < 1e-3, gt_depth * 0 + 1e-3, gt_depth)[i, :, :, :].data), step)
+                    writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, step)
+                    writer.add_image('depth_r_est0/image/{}'.format(i), colormap(pred_depths_r_list[0][i, :, :, :].data), step)
+                    writer.add_image('depth_r_est1/image/{}'.format(i), colormap(pred_depths_r_list[1][i, :, :, :].data), step)
+                    writer.add_image('depth_r_est2/image/{}'.format(i), colormap(pred_depths_r_list[2][i, :, :, :].data), step)
+                    writer.add_image('depth_r_est3/image/{}'.format(i), colormap(pred_depths_r_list[3][i, :, :, :].data), step)
+                    writer.add_image('depth_r_est4/image/{}'.format(i), colormap(pred_depths_r_list[4][i, :, :, :].data), step)
+                    writer.add_image('depth_r_est5/image/{}'.format(i), colormap(pred_depths_r_list[5][i, :, :, :].data), step)
+                    writer.add_image('depth_c_est0/image/{}'.format(i), colormap(pred_depths_c_list[0][i, :, :, :].data), step)
+                    writer.add_image('depth_c_est1/image/{}'.format(i), colormap(pred_depths_c_list[1][i, :, :, :].data), step)
+                    writer.add_image('depth_c_est2/image/{}'.format(i), colormap(pred_depths_c_list[2][i, :, :, :].data), step)
+                    writer.add_image('depth_c_est3/image/{}'.format(i), colormap(pred_depths_c_list[3][i, :, :, :].data), step)
+                    writer.add_image('depth_c_est4/image/{}'.format(i), colormap(pred_depths_c_list[4][i, :, :, :].data), step)
+                    writer.add_image('depth_c_est5/image/{}'.format(i), colormap(pred_depths_c_list[5][i, :, :, :].data), step)
+                else:
+                    gt_depth_viz  = torch.where(gt_depth < 1e-3, gt_depth * 0 + 1e-3, gt_depth)
+                    #gt_depth_viz = torch.unsqueeze(gt_depth_viz, 0)
+                    #print(gt_depth_viz.shape)   
+                    #exit()
+                    writer.add_image('gt_depth/image/{}'.format(i), colormap_magma(torch.log10(gt_depth_viz[i, :, :, :].data)), step)
+                    writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, step)
+                    for ii in range(max_tree_depth):
+                        writer.add_image('depth_r_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_r_list[ii][i, :, :, :].data)), step)
+                    for ii in range(max_tree_depth):
+                        writer.add_image('depth_c_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_c_list[ii][i, :, :, :].data)), step)
+
+                    if args.update_block != 0:
+                        for ii in range(max_tree_depth):
+                            writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data)), step)
+
+                    if args.update_block == 3:
+                        for ii in range(max_tree_depth):
+                            writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_u_list[ii][i, :, :, :].data)), step)
+
+                for ii in range(max_tree_depth):
+                    writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), step)
+
+
+            max_tree_depth = len(pred_depths_r_list)
             if post_process:
                 image_flipped = flip_lr(image)
-                pred_depths_r_list_flipped, _, _ = model(image_flipped)
+                if args.update_block == 0:
+                    pred_depths_r_list_flipped, _, _ = model(image_flipped)
+                elif args.update_block == 1 or args.update_block == 2:
+                    pred_depths_r_list_flipped, _, _, _ = model(image_flipped)
+                elif args.update_block == 3:
+                    pred_depths_r_list_flipped, _, _, _, _ = model(image_flipped)
+                else:
+                    pass
                 pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
 
             pred_depth = pred_depth.cpu().numpy().squeeze()
@@ -90,11 +168,7 @@ def eval(model, dataloader_eval, post_process=False):
             pred_depth_uncropped = np.zeros((height, width), dtype=np.float32)
             pred_depth_uncropped[top_margin:top_margin + 352, left_margin:left_margin + 1216] = pred_depth
             pred_depth = pred_depth_uncropped
-
-        for x in pred_depth:
-            for y in x:
-                if np.isinf(y) or np.isnan(y):
-                    print(y)
+        
         pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
         pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
         pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
@@ -107,7 +181,6 @@ def eval(model, dataloader_eval, post_process=False):
 
             if args.garg_crop:
                 eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height), int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
-                print(int(0.40810811 * gt_height), int(0.99189189 * gt_height))
             elif args.eigen_crop:
                 if args.dataset == 'kitti':
                     eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height), int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
@@ -136,7 +209,7 @@ def eval(model, dataloader_eval, post_process=False):
 def main_worker(args):
 
     # CRF model
-    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, pretrained=None)
+    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -159,6 +232,7 @@ def main_worker(args):
             del checkpoint
         else:
             print("== No checkpoint found at '{}'".format(args.checkpoint_path))
+            exit()
 
     cudnn.benchmark = True
 
@@ -174,6 +248,13 @@ def main():
     torch.cuda.empty_cache()
     args.distributed = False
     ngpus_per_node = torch.cuda.device_count()
+
+    exp_name = args.exp_name  
+    args.log_directory = os.path.join(args.log_directory,exp_name)  
+    print(args.log_directory)
+    command = 'mkdir -p ' + os.path.join(args.log_directory, args.model_name)
+    os.system(command)
+
     if ngpus_per_node > 1:
         print("This machine has more than 1 gpu. Please set \'CUDA_VISIBLE_DEVICES=0\'")
         return -1

@@ -163,6 +163,9 @@ def colormap_magma(inputs, normalize=True, torch_transpose=True):
         inputs = inputs.detach().cpu().numpy()
     _DEPTH_COLORMAP = plt.get_cmap('magma', 256)  # for plotting
     vis = inputs
+    print(vis.shape)
+    print(np.max(vis[0, :, :]))
+    print(np.min(vis[0, :, :]))
     if normalize:
         ma = float(vis.max())
         mi = float(vis.min())
