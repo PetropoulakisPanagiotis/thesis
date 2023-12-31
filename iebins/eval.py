@@ -99,11 +99,17 @@ def eval(model, dataloader_eval, post_process=False):
                 pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list = model(image)
             else:
                 pass
-            print(torch.min(pred_depths_rc_list[0][0, 0, :, :]))
-            print(torch.max(pred_depths_rc_list[0][0, 0, :, :]))
-            print(torch.mean(pred_depths_rc_list[0][0, 0, :, :]))
-            print(torch.std(pred_depths_rc_list[0][0, 0, :, :]))
-            print(pred_depths_r_list[0][0, :, :, :].shape)
+
+            if False:
+                print(torch.max(pred_depths_rc_list[5][0, 0, :, :]))
+                print(torch.min(pred_depths_rc_list[5][0, 0, :, :]))
+                print(torch.mean(pred_depths_rc_list[5][0, 0, :, :]))
+                print(torch.std(pred_depths_rc_list[5][0, 0, :, :]))
+            if False:
+                print(torch.max(uncertainty_maps_list[5][0, 0, :, :]))
+                print(torch.min(uncertainty_maps_list[5][0, 0, :, :]))
+                print(torch.mean(uncertainty_maps_list[5][0, 0, :, :]))
+                print(torch.std(uncertainty_maps_list[5][0, 0, :, :]))
             
             max_tree_depth = len(pred_depths_r_list)
             for i in range(num_log_images):
@@ -124,9 +130,7 @@ def eval(model, dataloader_eval, post_process=False):
                     writer.add_image('depth_c_est5/image/{}'.format(i), colormap(pred_depths_c_list[5][i, :, :, :].data), step)
                 else:
                     gt_depth_viz  = torch.where(gt_depth < 1e-3, gt_depth * 0 + 1e-3, gt_depth)
-                    #gt_depth_viz = torch.unsqueeze(gt_depth_viz, 0)
-                    #print(gt_depth_viz.shape)   
-                    #exit()
+                    gt_depth_viz = gt_depth_viz.permute(0, 3, 1, 2)
                     writer.add_image('gt_depth/image/{}'.format(i), colormap_magma(torch.log10(gt_depth_viz[i, :, :, :].data)), step)
                     writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, step)
                     for ii in range(max_tree_depth):

@@ -1,0 +1,44 @@
+--mode train
+--model_name iebins_kittieigen
+--encoder tiny07
+--pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
+--dataset kitti
+--data_path /usr/stud/petp/storage/user/petp/datasets/kitti_images/
+--gt_path /usr/stud/petp/storage/user/petp/datasets/kitti_depth/train/
+--filenames_file /usr/stud/petp/code/thesis/data_splits/eigen_train_files_with_gt_full.txt
+--batch_size 2
+--num_epochs 5
+--learning_rate 2e-5
+--weight_decay 1e-2
+--adam_eps 1e-3
+--num_threads 1
+--input_height 352
+--input_width 1120
+--max_depth 80
+--do_kb_crop
+--do_random_rotate
+--degree 1.0
+--log_directory /usr/stud/petp/code/thesis/tmp/
+--multiprocessing_distributed
+--dist_url tcp://127.0.0.1:2347
+
+--update_block 1
+--bin_num 16
+--bin_min 0
+--bin_max 1
+--max_tree_depth 6
+
+--exp_name simple
+--checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_T.pth
+--retrain
+
+--loss_type 0
+--log_freq 20
+--do_online_eval
+--eval_freq 100
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/kitti_images/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/kitti_depth/val/
+--filenames_file_eval /usr/stud/petp/code/thesis/data_splits/eigen_test_files_with_gt_full.txt
+--min_depth_eval 1e-3
+--max_depth_eval 80
+--garg_crop

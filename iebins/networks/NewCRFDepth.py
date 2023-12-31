@@ -366,10 +366,17 @@ class BasicUpdateBlockCDepth(nn.Module):
                 depth_r = (self.relu(depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :])).clamp(min=1e-3)
             else:
                 depth_r = depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :]
-            #print(torch.mean(pred_scale[0, 1:2, :, :]))
-            #print(torch.std(pred_scale[0, 1:2, :, :]))
-            #print(torch.min(pred_scale[0, 0:1, :, :]))
-            #print(torch.max(pred_scale[0, 1:2, :, :]))
+
+            if i == 5 and False:
+                print(torch.max(pred_scale[0,0,:,:]))            
+                print(torch.min(pred_scale[0,0,:,:]))            
+                print(torch.mean(pred_scale[0,0,:,:]))            
+                print(torch.std(pred_scale[0,0,:,:]))   
+                print(torch.max(pred_scale[0,1,:,:]))            
+                print(torch.min(pred_scale[0,1,:,:]))            
+                print(torch.mean(pred_scale[0,1,:,:]))            
+                print(torch.std(pred_scale[0,1,:,:]))            
+                #exit()
             pred_depths_r_list.append(depth_r)
             uncertainty_map = torch.sqrt((pred_prob * ((current_depths.detach() - depth_rc.repeat(1, bin_num, 1, 1))**2)).sum(1, keepdim=True))
             uncertainty_maps_list.append(uncertainty_map)

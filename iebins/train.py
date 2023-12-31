@@ -396,7 +396,13 @@ def main_worker(gpu, ngpus_per_node, args):
                 # if np.isnan(loss.cpu().item()):
                 #     print('NaN in loss occurred. Aborting training.')
                 #     return -1
-
+ 
+            if True:
+                print(torch.max(pred_depths_rc_list[5][0, 0, :, :]))
+                print(torch.min(pred_depths_rc_list[5][0, 0, :, :]))
+                print(torch.mean(pred_depths_rc_list[5][0, 0, :, :]))
+                print(torch.std(pred_depths_rc_list[5][0, 0, :, :]))
+   
             duration += time.time() - before_op_time
             if global_step and global_step % args.log_freq == 0 and not model_just_loaded:
                 var_sum = [var.sum().item() for var in model.parameters() if var.requires_grad]

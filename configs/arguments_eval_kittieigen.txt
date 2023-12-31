@@ -13,11 +13,14 @@
 --max_depth_eval 80
 --garg_crop
 
---update_block 0
+--update_block 1
 --bin_num 16
 --bin_min 0
---bin_max 80
+--bin_max 10
 --max_tree_depth 6
 
+--log_directory /usr/stud/petp/code/thesis/tmp/
 --exp_name test
---checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_T.pth
+
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/m/iebins_kittieigen/model-14400-best_silog_8.05117
+

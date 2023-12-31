@@ -26,7 +26,7 @@
 --retrain
 
 --loss_type 1
---update_block 2
+--update_block 3
 
 --log_freq 20
 --do_online_eval

@@ -28,6 +28,7 @@
 --bin_max 5
 --max_tree_depth 6
 
+--exp_name a
 --checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_T.pth
 --retrain
 
