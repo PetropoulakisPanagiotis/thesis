@@ -118,25 +118,14 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             if not has_valid_depth:
                 # print('Invalid depth. continue.')
                 continue
-            if update_block == 0:
-                pred_depths_r_list, _, _ = model(image)
-            elif update_block == 1 or update_block == 2:
-                pred_depths_r_list, _, _, _ = model(image)
-            elif update_block == 3:
-                pred_depths_r_list, _, _, _, _ = model(image)
-            else:
-                pass
+
+            result = model(image)
+            pred_depths_r_list = result["pred_depths_r_list"]
 
             if post_process:
                 image_flipped = flip_lr(image)
-                if update_block == 0:
-                    pred_depths_r_list_flipped, _, _ = model(image_flipped)
-                elif update_block == 1 or update_block == 2:
-                    pred_depths_r_list_flipped, _, _, _ = model(image_flipped)
-                elif update_block == 3:
-                    pred_depths_r_list_flipped, _, _, _, _ = model(image_flipped)
-                else:
-                    pass
+                result = model(image_flipped)
+                pred_depths_r_list_flipped = result["pred_depths_r_list"]
 
                 pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
 
@@ -353,14 +342,17 @@ def main_worker(gpu, ngpus_per_node, args):
             image = torch.autograd.Variable(sample_batched['image'].cuda(args.gpu, non_blocking=True))
             num_log_images = image.shape[0]
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
-            if args.update_block == 0:
-                pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
-            elif args.update_block == 1 or args.update_block == 2:
-                pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list = model(image, epoch, step)
-            elif args.update_block == 3:
-                pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list = model(image, epoch, step)
-            else:
-                pass
+            
+            result = model(image, epoch, step)
+            
+            # unpack #            
+            pred_depths_r_list = result["pred_depths_r_list"]
+            pred_depths_c_list = result["pred_depths_c_list"]
+            uncertainty_maps_list = result["uncertainty_maps_list"]
+            if args.update_block != 0:
+                pred_depths_rc_list = result["pred_depths_rc_list"]
+            if args.update_block == 3:
+                pred_depths_u_list = result["pred_depths_u_list"]
    
             if args.dataset == 'nyu':
                 mask = depth_gt > 0.1
@@ -397,12 +389,6 @@ def main_worker(gpu, ngpus_per_node, args):
                 #     print('NaN in loss occurred. Aborting training.')
                 #     return -1
  
-            if True:
-                print(torch.max(pred_depths_rc_list[5][0, 0, :, :]))
-                print(torch.min(pred_depths_rc_list[5][0, 0, :, :]))
-                print(torch.mean(pred_depths_rc_list[5][0, 0, :, :]))
-                print(torch.std(pred_depths_rc_list[5][0, 0, :, :]))
-   
             duration += time.time() - before_op_time
             if global_step and global_step % args.log_freq == 0 and not model_just_loaded:
                 var_sum = [var.sum().item() for var in model.parameters() if var.requires_grad]

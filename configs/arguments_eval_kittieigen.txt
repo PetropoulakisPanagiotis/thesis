@@ -22,5 +22,5 @@
 --log_directory /usr/stud/petp/code/thesis/tmp/
 --exp_name test
 
---checkpoint_path /usr/stud/petp/code/thesis/tmp/m/iebins_kittieigen/model-14400-best_silog_8.05117
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/simple/iebins_kittieigen/model-600-best_silog_8.33385
 

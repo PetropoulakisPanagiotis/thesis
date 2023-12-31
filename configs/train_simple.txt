@@ -25,7 +25,7 @@
 --update_block 1
 --bin_num 16
 --bin_min 0
---bin_max 1
+--bin_max 10
 --max_tree_depth 6
 
 --exp_name simple

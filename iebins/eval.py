@@ -91,26 +91,44 @@ def eval(model, dataloader_eval, post_process=False):
                 print('Invalid depth. continue.')
                 continue
 
-            if args.update_block == 0:
-                pred_depths_r_list, pred_depths_c_list, uncertainty_maps_list = model(image)
-            elif args.update_block == 1 or args.update_block == 2:
-                pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list = model(image)
-            elif args.update_block == 3:
-                pred_depths_r_list, pred_depths_rc_list, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list = model(image)
-            else:
-                pass
+            result = model(image)
+            
+            # unpack #            
+            pred_depths_r_list = result["pred_depths_r_list"]
+            pred_depths_c_list = result["pred_depths_c_list"]
+            uncertainty_maps_list = result["uncertainty_maps_list"]
+            if args.update_block != 0:
+                pred_depths_rc_list = result["pred_depths_rc_list"]
+                pred_scale_list = result["pred_scale_list"] 
+                pred_shift_list = result["pred_shift_list"] 
+            if args.update_block == 3:
+                pred_depths_u_list = result["pred_depths_u_list"]
 
-            if False:
+            if True:
+                print("canonical")
                 print(torch.max(pred_depths_rc_list[5][0, 0, :, :]))
                 print(torch.min(pred_depths_rc_list[5][0, 0, :, :]))
                 print(torch.mean(pred_depths_rc_list[5][0, 0, :, :]))
                 print(torch.std(pred_depths_rc_list[5][0, 0, :, :]))
-            if False:
+            if True:
+                print("uncertainty (std)")
                 print(torch.max(uncertainty_maps_list[5][0, 0, :, :]))
                 print(torch.min(uncertainty_maps_list[5][0, 0, :, :]))
                 print(torch.mean(uncertainty_maps_list[5][0, 0, :, :]))
-                print(torch.std(uncertainty_maps_list[5][0, 0, :, :]))
-            
+                print(torch.std(uncertainty_maps_list[5][0, 0, :, :]))            
+            if True:
+                print("scale")
+                print(torch.max(pred_scale_list[5][0, 0, :, :]))
+                print(torch.min(pred_scale_list[5][0, 0, :, :]))
+                print(torch.mean(pred_scale_list[5][0, 0, :, :]))
+                print(torch.std(pred_scale_list[5][0, 0, :, :]))            
+            if True:
+                print("shift")
+                print(torch.max(pred_shift_list[5][0, 0, :, :]))
+                print(torch.min(pred_shift_list[5][0, 0, :, :]))
+                print(torch.mean(pred_shift_list[5][0, 0, :, :]))
+                print(torch.std(pred_shift_list[5][0, 0, :, :]))
+
             max_tree_depth = len(pred_depths_r_list)
             for i in range(num_log_images):
                 if args.dataset == 'nyu':
@@ -153,14 +171,8 @@ def eval(model, dataloader_eval, post_process=False):
             max_tree_depth = len(pred_depths_r_list)
             if post_process:
                 image_flipped = flip_lr(image)
-                if args.update_block == 0:
-                    pred_depths_r_list_flipped, _, _ = model(image_flipped)
-                elif args.update_block == 1 or args.update_block == 2:
-                    pred_depths_r_list_flipped, _, _, _ = model(image_flipped)
-                elif args.update_block == 3:
-                    pred_depths_r_list_flipped, _, _, _, _ = model(image_flipped)
-                else:
-                    pass
+                result = model(image_flipped)
+                pred_depths_r_list_flipped  = result["pred_depths_r_list"]
                 pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
 
             pred_depth = pred_depth.cpu().numpy().squeeze()
