@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from networks.NewCRFDepth import NewCRFDepth
 from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
-                       block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args, colormap_magma
+                       block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args
 
 def convert_arg_line_to_args(arg_line):
     for arg in arg_line.split():
@@ -35,7 +35,7 @@ parser.add_argument('--input_width',               type=int,   help='input width
 parser.add_argument('--max_depth',                 type=float, help='maximum depth in estimation', default=10)
 
 # Bins 
-parser.add_argument('--update_block',              type=int,   help='pdate block: iebins (0), canonical(1)', default='0')
+parser.add_argument('--update_block',              type=int,   help='update block: iebins (0), canonical(1), canonical with uncertainty(2)', default='0')
 parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
 parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 parser.add_argument('--bin_min',                   type=float, help='min value for bin initialization', default='0')
@@ -70,29 +70,32 @@ else:
 if args.dataset == 'kitti' or args.dataset == 'nyu':
     from dataloaders.dataloader import NewDataLoader
 
-
 def eval(model, dataloader_eval, post_process=False):
     eval_measures = torch.zeros(10).cuda()
 
     writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
    
-    eval_images = 0 
+    image_counter = 0
+    eval_images = 30
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
-        eval_images += 1
-        if eval_images == 30:
+        image_counter += 1
+        if image_counter == eval_images:
             break
+
         with torch.no_grad():
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
             num_log_images = image.shape[0]
             gt_depth = eval_sample_batched['depth']
+
             has_valid_depth = eval_sample_batched['has_valid_depth']
             if not has_valid_depth:
                 print('Invalid depth. continue.')
                 continue
 
+            # Predict #
             result = model(image)
             
-            # unpack #            
+            # Unpack #            
             pred_depths_r_list = result["pred_depths_r_list"]
             pred_depths_c_list = result["pred_depths_c_list"]
             uncertainty_maps_list = result["uncertainty_maps_list"]
@@ -103,6 +106,7 @@ def eval(model, dataloader_eval, post_process=False):
             if args.update_block == 2:
                 pred_depths_u_list = result["pred_depths_u_list"]
 
+            # Debug #
             if True:
                 print("canonical")
                 print(torch.max(pred_depths_rc_list[5][0, 0, :, :]))
@@ -148,23 +152,24 @@ def eval(model, dataloader_eval, post_process=False):
                 else:
                     gt_depth_viz  = torch.where(gt_depth < 1e-3, gt_depth * 0 + 1e-3, gt_depth)
                     gt_depth_viz = gt_depth_viz.permute(0, 3, 1, 2)
-                    writer.add_image('gt_depth/image/{}'.format(i), colormap_magma(torch.log10(gt_depth_viz[i, :, :, :].data)), step)
+                    
+                    writer.add_image('gt_depth/image/{}'.format(i), colormap(torch.log10(gt_depth_viz[i, :, :, :].data), name='magma'), step)
                     writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, step)
                     for ii in range(max_tree_depth):
-                        writer.add_image('depth_r_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_r_list[ii][i, :, :, :].data)), step)
+                        writer.add_image('depth_r_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), step)
                     for ii in range(max_tree_depth):
-                        writer.add_image('depth_c_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_c_list[ii][i, :, :, :].data)), step)
+                        writer.add_image('depth_c_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), step)
 
                     if args.update_block != 0:
                         for ii in range(max_tree_depth):
-                            writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data)), step)
+                            writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data), name='magma'), step)
 
                     if args.update_block == 2:
                         for ii in range(max_tree_depth):
-                            writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_u_list[ii][i, :, :, :].data)), step)
+                            writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_u_list[ii][i, :, :, :].data), name='viridis'), step)
 
                 for ii in range(max_tree_depth):
-                    writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), step)
+                    writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(torch.log10(uncertainty_maps_list[ii][i, :, :, :].data), name='magma'), step)
 
 
             max_tree_depth = len(pred_depths_r_list)
@@ -174,8 +179,12 @@ def eval(model, dataloader_eval, post_process=False):
                 pred_depths_r_list_flipped  = result["pred_depths_r_list"]
                 pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
 
-            pred_depth = pred_depth.cpu().numpy().squeeze()
+                pred_depth = pred_depth.cpu().numpy().squeeze()
+            else:
+                pred_depth = pred_depths_r_list[-1].cpu().numpy().squeeze()
+
             gt_depth = gt_depth.cpu().numpy().squeeze()     
+        
         if args.do_kb_crop:
             height, width = gt_depth.shape
             top_margin = int(height - 352)
@@ -218,8 +227,8 @@ def eval(model, dataloader_eval, post_process=False):
     for i in range(8):
         print('{:7.4f}, '.format(eval_measures_cpu[i]), end='')
     print('{:7.4f}'.format(eval_measures_cpu[8]))
-    return eval_measures_cpu
 
+    return eval_measures_cpu
 
 def main_worker(args):
 

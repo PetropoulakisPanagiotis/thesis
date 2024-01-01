@@ -1,13 +1,14 @@
+import os
+import random
+import copy
+
+import numpy as np
+from PIL import Image
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.utils.data.distributed
 from torchvision import transforms
-
-import numpy as np
-from PIL import Image
-import os
-import random
-import copy
 
 from utils import DistributedSamplerNoEvenlyDivisible
 
@@ -61,7 +62,6 @@ class NewDataLoader(object):
         else:
             print('mode should be one of \'train, test, online_eval\'. Got {}'.format(mode))
             
-            
 class DataLoadPreprocess(Dataset):
     def __init__(self, args, mode, transform=None, is_for_online_eval=False):
         self.args = args
@@ -76,6 +76,7 @@ class DataLoadPreprocess(Dataset):
         self.transform = transform
         self.to_tensor = ToTensor
         self.is_for_online_eval = is_for_online_eval
+
     def __getitem__(self, idx):
         sample_path = self.filenames[idx]
         # focal = float(sample_path.split()[2])
@@ -86,8 +87,7 @@ class DataLoadPreprocess(Dataset):
                 rgb_file = sample_path.split()[0]
                 #depth_file = os.path.join(sample_path.split()[0].split('/')[0], sample_path.split()[1])
                 depth_file = os.path.join(sample_path.split()[1])
-                #print(sample_path)
-                #print(depth_file)
+                
                 if self.args.use_right is True and random.random() > 0.5:
                     rgb_file.replace('image_02', 'image_03')
                     depth_file.replace('image_02', 'image_03')
@@ -97,6 +97,7 @@ class DataLoadPreprocess(Dataset):
 
             image_path = os.path.join(self.args.data_path, rgb_file)
             depth_path = os.path.join(self.args.gt_path, depth_file)
+            
             image = Image.open(image_path)
             depth_gt = Image.open(depth_path)
             
@@ -125,7 +126,9 @@ class DataLoadPreprocess(Dataset):
                 image = self.rotate_image(image, random_angle)
                 depth_gt = self.rotate_image(depth_gt, random_angle, flag=Image.NEAREST)
             
+            # Normalize image #
             image = np.asarray(image, dtype=np.float32) / 255.0
+            
             depth_gt = np.asarray(depth_gt, dtype=np.float32)
             depth_gt = np.expand_dims(depth_gt, axis=2)
 
@@ -134,13 +137,17 @@ class DataLoadPreprocess(Dataset):
             else:
                 depth_gt = depth_gt / 256.0
 
+            # Random crop #
             if image.shape[0] != self.args.input_height or image.shape[1] != self.args.input_width:
                 image, depth_gt = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width)
+            
+            # General augmentations #
             image, depth_gt = self.train_preprocess(image, depth_gt)
+            
             # https://github.com/ShuweiShao/URCDC-Depth
             image, depth_gt = self.Cut_Flip(image, depth_gt)
+            
             sample = {'image': image, 'depth': depth_gt, 'focal': focal}
-        
         else:
             if self.mode == 'online_eval':
                 data_path = self.args.data_path_eval
@@ -149,6 +156,7 @@ class DataLoadPreprocess(Dataset):
 
             #image_path = os.path.join(data_path, "./" + sample_path.split()[0])
             image_path = os.path.join(data_path,  sample_path.split()[0])
+            
             image = np.asarray(Image.open(image_path), dtype=np.float32) / 255.0
             if self.mode == 'online_eval':
                 gt_path = self.args.gt_path_eval
@@ -201,10 +209,12 @@ class DataLoadPreprocess(Dataset):
         assert img.shape[1] >= width
         assert img.shape[0] == depth.shape[0]
         assert img.shape[1] == depth.shape[1]
+
         x = random.randint(0, img.shape[1] - width)
         y = random.randint(0, img.shape[0] - height)
         img = img[y:y + height, x:x + width, :]
         depth = depth[y:y + height, x:x + width, :]
+
         return img, depth
 
     def train_preprocess(self, image, depth_gt):
@@ -231,6 +241,7 @@ class DataLoadPreprocess(Dataset):
             brightness = random.uniform(0.75, 1.25)
         else:
             brightness = random.uniform(0.9, 1.1)
+
         image_aug = image_aug * brightness
 
         # color augmentation
@@ -238,6 +249,7 @@ class DataLoadPreprocess(Dataset):
         white = np.ones((image.shape[0], image.shape[1]))
         color_image = np.stack([white * colors[i] for i in range(3)], axis=2)
         image_aug *= color_image
+
         image_aug = np.clip(image_aug, 0, 1)
 
         return image_aug
@@ -310,6 +322,7 @@ class ToTensor(object):
         if self.mode == 'train':
             depth = self.to_tensor(depth)
             return {'image': image, 'depth': depth, 'focal': focal}
+        
         else:
             has_valid_depth = sample['has_valid_depth']
             return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth}

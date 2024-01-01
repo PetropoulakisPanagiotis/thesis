@@ -10,6 +10,14 @@ import torch.distributed as dist
 from torch.utils.data import Sampler
 from torchvision import transforms
 
+inv_normalize = transforms.Normalize(
+    mean=[-0.485/0.229, -0.456/0.224, -0.406/0.225],
+    std=[1/0.229, 1/0.224, 1/0.225]
+)
+
+
+eval_metrics = ['silog', 'abs_rel', 'log10', 'rms', 'sq_rel', 'log_rms', 'd1', 'd2', 'd3']
+
 def convert_arg_line_to_args(arg_line):
     for arg in arg_line.split():
         if not arg.strip():
@@ -66,15 +74,6 @@ def normalize_result(value, vmin=None, vmax=None):
     return np.expand_dims(value, 0)
 
 
-inv_normalize = transforms.Normalize(
-    mean=[-0.485/0.229, -0.456/0.224, -0.406/0.225],
-    std=[1/0.229, 1/0.224, 1/0.225]
-)
-
-
-eval_metrics = ['silog', 'abs_rel', 'log10', 'rms', 'sq_rel', 'log_rms', 'd1', 'd2', 'd3']
-
-
 def compute_errors(gt, pred):
     thresh = np.maximum((gt / pred), (pred / gt))
     d1 = (thresh < 1.25).mean()
@@ -126,10 +125,10 @@ def entropy_loss(preds, gt_label, mask):
     return loss
 
 
-def colormap(inputs, normalize=True, torch_transpose=True):
+def colormap(inputs, name='jet', normalize=True, torch_transpose=True):
     if isinstance(inputs, torch.Tensor):
         inputs = inputs.detach().cpu().numpy()
-    _DEPTH_COLORMAP = plt.get_cmap('jet', 256)  # for plotting
+    _DEPTH_COLORMAP = plt.get_cmap(name, 256)  # for plotting
     vis = inputs
     if normalize:
         ma = float(vis.max())
@@ -154,35 +153,6 @@ def colormap(inputs, normalize=True, torch_transpose=True):
         if torch_transpose:
             vis = vis.transpose(2, 0, 1)
 
-    return vis[0,:,:,:]
-
-
-def colormap_magma(inputs, normalize=True, torch_transpose=True, eval=False):
-    if isinstance(inputs, torch.Tensor):
-        inputs = inputs.detach().cpu().numpy()
-    _DEPTH_COLORMAP = plt.get_cmap('magma', 256)  # for plotting
-    vis = inputs
-    if normalize:
-        ma = float(vis.max())
-        mi = float(vis.min())
-        d = ma - mi if ma != mi else 1e5
-        vis = (vis - mi) / d
-    if vis.ndim == 4:
-        vis = vis.transpose([0, 2, 3, 1])
-        vis = _DEPTH_COLORMAP(vis)
-        vis = vis[:, :, :, 0, :3]
-        if torch_transpose:
-            vis = vis.transpose(0, 3, 1, 2)
-    elif vis.ndim == 3:
-        vis = _DEPTH_COLORMAP(vis)
-        vis = vis[:, :, :, :3]
-        if torch_transpose:
-            vis = vis.transpose(0, 3, 1, 2)
-    elif vis.ndim == 2:
-        vis = _DEPTH_COLORMAP(vis)
-        vis = vis[..., :3]
-        if torch_transpose:
-            vis = vis.transpose(2, 0, 1)
     return vis[0,:,:,:]
 
 
@@ -201,6 +171,7 @@ def flip_lr(image):
         Flipped image
     """
     assert image.dim() == 4, 'You need to provide a [B,C,H,W] image to flip'
+    
     return torch.flip(image, [3])
 
 
@@ -253,12 +224,12 @@ def post_process_depth(depth, depth_flipped, method='mean'):
     B, C, H, W = depth.shape
     inv_depth_hat = flip_lr(depth_flipped)
     inv_depth_fused = fuse_inv_depth(depth, inv_depth_hat, method=method)
-    xs = torch.linspace(0., 1., W, device=depth.device,
-                        dtype=depth.dtype).repeat(B, C, H, 1)
+    
+    xs = torch.linspace(0., 1., W, device=depth.device, dtype=depth.dtype).repeat(B, C, H, 1)
     mask = 1.0 - torch.clamp(20. * (xs - 0.05), 0., 1.)
     mask_hat = flip_lr(mask)
-    return mask_hat * depth + mask * inv_depth_hat + \
-           (1.0 - mask - mask_hat) * inv_depth_fused
+
+    return mask_hat * depth + mask * inv_depth_hat + (1.0 - mask - mask_hat) * inv_depth_fused
 
 
 class DistributedSamplerNoEvenlyDivisible(Sampler):
@@ -289,14 +260,17 @@ class DistributedSamplerNoEvenlyDivisible(Sampler):
             if not dist.is_available():
                 raise RuntimeError("Requires distributed package to be available")
             rank = dist.get_rank()
+
         self.dataset = dataset
         self.num_replicas = num_replicas
         self.rank = rank
         self.epoch = 0
+
         num_samples = int(math.floor(len(self.dataset) * 1.0 / self.num_replicas))
         rest = len(self.dataset) - num_samples * self.num_replicas
         if self.rank < rest:
             num_samples += 1
+     
         self.num_samples = num_samples
         self.total_size = len(dataset)
         # self.total_size = self.num_samples * self.num_replicas
@@ -306,6 +280,7 @@ class DistributedSamplerNoEvenlyDivisible(Sampler):
         # deterministically shuffle based on epoch
         g = torch.Generator()
         g.manual_seed(self.epoch)
+
         if self.shuffle:
             indices = torch.randperm(len(self.dataset), generator=g).tolist()
         else:

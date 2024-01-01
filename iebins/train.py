@@ -19,16 +19,15 @@ from tqdm import tqdm
 from networks.NewCRFDepth import NewCRFDepth
 from networks.depth_update import *
 from datetime import datetime
-from sum_depth import Sum_depth
 from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
-                       block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args, colormap_magma
+                       block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args
 
 parser = argparse.ArgumentParser(description='IEBins PyTorch implementation.', fromfile_prefix_chars='@')
 parser.convert_arg_line_to_args = convert_arg_line_to_args
 
 parser.add_argument('--mode',                      type=str,   help='train or test', default='train')
 parser.add_argument('--model_name',                type=str,   help='model name', default='iebins')
-parser.add_argument('--encoder',                   type=str,   help='type of encoder, base07, large07, tiny07', default='large07')
+parser.add_argument('--encoder',                   type=str,   help='type of encoder, base07, large07, tiny07', default='tiny07')
 parser.add_argument('--pretrain',                  type=str,   help='path of pretrained encoder', default=None)
 
 # Dataset
@@ -42,11 +41,11 @@ parser.add_argument('--max_depth',                 type=float, help='maximum dep
 parser.add_argument('--min_depth',                 type=float, help='minimum depth in estimation', default=0.1)
 
 # Bins 
-parser.add_argument('--update_block',              type=int,   help='pdate block: iebins (0), canonical(1)', default='1')
+parser.add_argument('--update_block',              type=int,   help='update block: iebins (0), canonical(1), canonica with uncertainty(2)', default='1')
 parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
 parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 parser.add_argument('--bin_min',                   type=float, help='min value for bin initialization', default='0')
-parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='1')
+parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='10')
 
 # Log and save
 parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
@@ -58,7 +57,7 @@ parser.add_argument('--save_freq',                 type=int,   help='Checkpoint 
 # Training
 parser.add_argument('--train_decoder',             type=int,   help='how many layers to train from the decoder', default=1)
 parser.add_argument('--weight_decay',              type=float, help='weight decay factor for optimization', default=1e-2)
-parser.add_argument('--loss_type',                 type=int,   help='0 for silog and 1 for l2', default=0)
+parser.add_argument('--loss_type',                 type=int,   help='0 for silog and 1 for l1', default=0)
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
 parser.add_argument('--adam_eps',                  type=float, help='epsilon in Adam optimizer', default=1e-6)
 parser.add_argument('--batch_size',                type=int,   help='batch size', default=4)
@@ -106,7 +105,6 @@ else:
 if args.dataset == 'kitti' or args.dataset == 'nyu':
     from dataloaders.dataloader import NewDataLoader
 
-
 def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, post_process=False):
     measures_size = 10
     eval_measures = torch.zeros(measures_size).cuda(device=gpu)
@@ -123,6 +121,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             result = model(image)
             pred_depths_r_list = result["pred_depths_r_list"]
 
+            # IEBins true: predict depth of flipped image too and fuse
             if post_process:
                 image_flipped = flip_lr(image)
                 result = model(image_flipped)
@@ -130,7 +129,10 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
 
                 pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
 
-            pred_depth = pred_depth.cpu().numpy().squeeze()
+                pred_depth = pred_depth.cpu().numpy().squeeze()
+            else:
+                pred_depth = pred_depths_r_list[-1].cpu().numpy().squeeze()
+
             gt_depth = gt_depth.cpu().numpy().squeeze()
 
         if args.do_kb_crop:
@@ -162,6 +164,8 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                     eval_mask[45:471, 41:601] = 1
 
             valid_mask = np.logical_and(valid_mask, eval_mask)
+        
+        # Calculate metrics #
         measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
 
         eval_measures[:measures_size - 1] += torch.tensor(measures).cuda(device=gpu)
@@ -171,6 +175,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
         # group = dist.new_group([i for i in range(ngpus)])
         dist.all_reduce(tensor=eval_measures, op=dist.ReduceOp.SUM, group=group)
 
+    # Devide by sum for multiprocessing #
     if not args.multiprocessing_distributed or gpu == 0:
         eval_measures_cpu = eval_measures.cpu()
         cnt = eval_measures_cpu[measures_size - 1].item()
@@ -187,7 +192,6 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
 
     return None
 
-
 def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
 
@@ -201,7 +205,7 @@ def main_worker(gpu, ngpus_per_node, args):
             args.rank = args.rank * ngpus_per_node + gpu
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
-    # model
+    # Model #
     model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain)
     model.train()
 
@@ -211,6 +215,7 @@ def main_worker(gpu, ngpus_per_node, args):
     num_params_update = sum([np.prod(p.shape) for p in model.parameters() if p.requires_grad])
     print("== Total number of learning parameters: {}".format(num_params_update))
 
+    # Nodes #
     if args.distributed:
         if args.gpu is not None:
             torch.cuda.set_device(args.gpu)
@@ -220,6 +225,7 @@ def main_worker(gpu, ngpus_per_node, args):
         else:
             model.cuda()
             model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
+    # Single #
     else:
         model = torch.nn.DataParallel(model)
         model.cuda()
@@ -248,6 +254,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 loc = 'cuda:{}'.format(args.gpu)
                 checkpoint = torch.load(args.checkpoint_path, map_location=loc)
             if args.update_block != 0 and args.checkpoint_path.find("kittieigen") != -1:
+                # Canonical -> use IEBins weights else adapt #
                 weights_to_remove = "update"
                 keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove in key]
                 for key_to_remove in keys_to_remove:
@@ -283,17 +290,19 @@ def main_worker(gpu, ngpus_per_node, args):
     # with torch.no_grad():
     #     eval_measures = online_eval(model, args.update_block, dataloader_eval, gpu, ngpus_per_node, post_process=True)
 
-    # Logging
+    # Logging #
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
-        print(args.log_directory)
-        print(args.log_directory + '/' + args.model_name + '/summaries')
+        
         writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
+        
+        # Metrics #
         if args.do_online_eval:
             if args.eval_summary_directory != '':
                 eval_summary_path = os.path.join(args.eval_summary_directory, args.model_name)
             else:
                 eval_summary_path = os.path.join(args.log_directory, args.model_name, 'eval')
             eval_summary_writer = SummaryWriter(eval_summary_path, flush_secs=30)
+        
         # Log hparams #
         hparams = {
             "epochs": args.num_epochs,
@@ -308,19 +317,19 @@ def main_worker(gpu, ngpus_per_node, args):
             "bin_max": args.bin_max,
             "train_decoder": args.train_decoder,
         }
+
         writer.add_hparams(hparam_dict=hparams, metric_dict={})
-
     
-
+    # Losses #
     silog_criterion = silog_loss(variance_focus=args.variance_focus)
     l1_criterion = l1_loss()
-    sum_localdepth = Sum_depth().cuda(args.gpu)
 
     start_time = time.time()
     duration = 0
 
     end_learning_rate = args.end_learning_rate if args.end_learning_rate != -1 else 0.1 * args.learning_rate
-
+    
+    # Print stats #
     var_sum = [var.sum().item() for var in model.parameters() if var.requires_grad]
     var_cnt = len(var_sum)
     var_sum = np.sum(var_sum)
@@ -331,22 +340,27 @@ def main_worker(gpu, ngpus_per_node, args):
     epoch = global_step // steps_per_epoch
     ii = 0
     group = dist.new_group([i for i in range(ngpus_per_node)])
+
     while epoch < args.num_epochs:
         if args.distributed:
             dataloader.train_sampler.set_epoch(epoch)
 
         for step, sample_batched in enumerate(dataloader.data):
             optimizer.zero_grad()
+
             before_op_time = time.time()
             current_loss_d = 0
             current_loss_u = 0
+
             image = torch.autograd.Variable(sample_batched['image'].cuda(args.gpu, non_blocking=True))
-            num_log_images = image.shape[0]
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
             
+            num_images = image.shape[0]
+
+            # Predict #            
             result = model(image, epoch, step)
             
-            # unpack #            
+            # Unpack #            
             pred_depths_r_list = result["pred_depths_r_list"]
             pred_depths_c_list = result["pred_depths_c_list"]
             uncertainty_maps_list = result["uncertainty_maps_list"]
@@ -355,70 +369,74 @@ def main_worker(gpu, ngpus_per_node, args):
             if args.update_block == 2:
                 pred_depths_u_list = result["pred_depths_u_list"]
    
+            max_tree_depth = len(pred_depths_r_list)
+            
             if args.dataset == 'nyu':
                 mask = depth_gt > 0.1
             else:
                 mask = depth_gt > 1.0
 
-            max_tree_depth = len(pred_depths_r_list)
+            # Loss #
             for curr_tree_depth in range(max_tree_depth):
                 if args.loss_type == 0:
                     current_loss_d += silog_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
                 else:
                     current_loss_d += l1_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
 
-                if args.update_block == 3:
+                if args.update_block == 2:
                     u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[curr_tree_depth].detach()) / (depth_gt + pred_depths_r_list[curr_tree_depth].detach() + 1e-7))
 
                     current_loss_u += torch.abs(pred_depths_u_list[curr_tree_depth][mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
-
-            if args.update_block == 3:
+            
+            if args.update_block == 2:
                 loss = current_loss_d + current_loss_u
             else:
                 loss = current_loss_d
 
+            # Optimize #
             loss.backward()
             for param_group in optimizer.param_groups:
                 current_lr = (args.learning_rate - end_learning_rate) * (1 - global_step / num_total_steps) ** 0.9 + end_learning_rate
                 param_group['lr'] = current_lr
-
             optimizer.step()
 
             if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
                 print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}'.format(epoch, step, steps_per_epoch, global_step, current_lr, loss))
-                # if np.isnan(loss.cpu().item()):
-                #     print('NaN in loss occurred. Aborting training.')
-                #     return -1
  
             duration += time.time() - before_op_time
+
+            # Logging #
             if global_step and global_step % args.log_freq == 0 and not model_just_loaded:
                 var_sum = [var.sum().item() for var in model.parameters() if var.requires_grad]
                 var_cnt = len(var_sum)
                 var_sum = np.sum(var_sum)
+                
                 examples_per_sec = args.batch_size / duration * args.log_freq
+                
                 duration = 0
                 time_sofar = (time.time() - start_time) / 3600
                 training_time_left = (num_total_steps / global_step - 1.0) * time_sofar
+                
                 if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
                     print("{}".format(args.model_name))
+                
                 print_string = 'GPU: {} | examples/s: {:4.2f} | loss: {:.5f} | var sum: {:.3f} avg: {:.3f} | time elapsed: {:.2f}h | time left: {:.2f}h'
                 print(print_string.format(args.gpu, examples_per_sec, loss, var_sum.item(), var_sum.item()/var_cnt, time_sofar, training_time_left))
 
-                if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                            and args.rank % ngpus_per_node == 0):
+                if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
                     if args.loss_type == 0:
                         writer.add_scalar('silog_loss', current_loss_d, global_step)
                     else:
                         writer.add_scalar('l1_loss', current_loss_d, global_step)
 
-                    if args.update_block == 3:
+                    if args.update_block == 2:
                         writer.add_scalar('u_loss', current_loss_u, global_step)
 
                     # writer.add_scalar('var_loss', var_loss, global_step)
                     writer.add_scalar('learning_rate', current_lr, global_step)
                     writer.add_scalar('var average', var_sum.item()/var_cnt, global_step)
                     depth_gt = torch.where(depth_gt < 1e-3, depth_gt * 0 + 1e-3, depth_gt)
-                    for i in range(num_log_images):
+                    for i in range(num_images):
                         if args.dataset == 'nyu':
                             writer.add_image('depth_gt/image/{}'.format(i), colormap(depth_gt[i, :, :, :].data), global_step)
                             writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
@@ -435,29 +453,32 @@ def main_worker(gpu, ngpus_per_node, args):
                             writer.add_image('depth_c_est4/image/{}'.format(i), colormap(pred_depths_c_list[4][i, :, :, :].data), global_step)
                             writer.add_image('depth_c_est5/image/{}'.format(i), colormap(pred_depths_c_list[5][i, :, :, :].data), global_step)
                         else:
-                            writer.add_image('depth_gt/image/{}'.format(i), colormap_magma(torch.log10(depth_gt[i, :, :, :].data)), global_step)
+                            writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
                             writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
+                            
                             for ii in range(max_tree_depth):
-                                writer.add_image('depth_r_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_r_list[ii][i, :, :, :].data)), global_step)
+                                writer.add_image('depth_r_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), global_step)
                             for ii in range(max_tree_depth):
-                                writer.add_image('depth_c_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_c_list[ii][i, :, :, :].data)), global_step)
+                                writer.add_image('depth_c_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), global_step)
 
                             if args.update_block != 0:
                                 for ii in range(max_tree_depth):
-                                    writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data)), global_step)
+                                    writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data), name='magma'), global_step)
 
                             if args.update_block == 2:
                                 for ii in range(max_tree_depth):
-                                    writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_u_list[ii][i, :, :, :].data)), global_step)
+                                    writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_u_list[ii][i, :, :, :].data), name='viridis'), global_step)
 
                         for ii in range(max_tree_depth):
-                            writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), global_step)
+                            writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(torch.log10(uncertainty_maps_list[ii][i, :, :, :].data), name='magma'), global_step)
 
+            # Evaluate #
             if args.do_online_eval and global_step and global_step % args.eval_freq == 0 and not model_just_loaded:
                 time.sleep(0.1)
                 model.eval()
                 with torch.no_grad():
                     eval_measures = online_eval(model, args.update_block, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=True)
+                
                 if eval_measures is not None:
                     exp_name = args.exp_name
                     log_txt = os.path.join(args.log_directory + '/' + args.model_name, exp_name+'_logs.txt')
@@ -502,6 +523,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                           }
                             torch.save(checkpoint, args.log_directory + '/' + args.model_name + model_save_name)
                     eval_summary_writer.flush()
+                
                 model.train()
                 block_print()
                 enable_print()
@@ -510,16 +532,20 @@ def main_worker(gpu, ngpus_per_node, args):
             global_step += 1
 
         epoch += 1
+
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
         writer.close()
         if args.do_online_eval:
             eval_summary_writer.close()
-    print("training ended\n")
+
+    print("Training ended:\n")
+    print(best_eval_measures_higher_better)
+    print(best_eval_measures_lower_better)
 
 def main():
-
     torch.cuda.empty_cache()
     gc.collect()
+
     if args.mode != 'train':
         print('train.py is only for training.')
         return -1
@@ -545,7 +571,6 @@ def main():
         command = 'mkdir -p ' + dataloaders_savepath + ' && cp iebins/dataloaders/*.py ' + dataloaders_savepath
         os.system(command)
 
-    torch.cuda.empty_cache()
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
 
     ngpus_per_node = torch.cuda.device_count()
