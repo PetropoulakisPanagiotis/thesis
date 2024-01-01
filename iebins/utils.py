@@ -1,15 +1,14 @@
+import matplotlib.pyplot as plt
+import os, sys
+import numpy as np
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
 from torch.utils.data import Sampler
 from torchvision import transforms
-import matplotlib.pyplot as plt
-import os, sys
-import numpy as np
-import math
-import torch
-
 
 def convert_arg_line_to_args(arg_line):
     for arg in arg_line.split():

@@ -7,31 +7,30 @@ from .newcrf_layers import NewCRF
 from .uper_crf_head import PSP
 from .depth_update  import *
 from .utils import *
-########################################################################################################################
 
 
 class NewCRFDepth(nn.Module):
     """
-    Depth network based on neural window FC-CRFs architecture.
+    Depth network based on neural window FC-CRFs architecture
     """
-    def __init__(self, version=None, inv_depth=False, pretrained=None, 
+    def __init__(self, version=None, pretrained=None, 
                     frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=6, bin_num=16, bin_min=0, bin_max=80, update_block=0, loss_type=0, train_decoder=0, **kwargs):
         super().__init__()
 
-        self.inv_depth = inv_depth
         self.with_auxiliary_head = False
         self.with_neck = False
+        
         self.freeze_backbone = True
-
-        self.max_tree_depth = max_tree_depth
+        self.train_decoder = train_decoder # 1 train last layer
+        
+        self.max_tree_depth = max_tree_depth # GRU iter
         self.bin_num = bin_num
         self.bin_min = bin_min
         self.bin_max = bin_max
-        self.update_block = update_block   # 0 iebins, 1 canonical, 2 canonical with probabilities concat in GRU, 3 predict uncertainty map
-        self.train_decoder = train_decoder # 0 not train, 1 -> last layer
 
+        # 0 iebins, 1 canonical, 2 canonical with metric uncertainty
+        self.update_block = update_block   
         self.loss_type = loss_type # 0 for silog 1 for l1
-
 
         norm_cfg = dict(type='BN', requires_grad=True)
         window_size = int(version[-2:])
@@ -53,14 +52,14 @@ class NewCRFDepth(nn.Module):
             in_channels = [96, 192, 384, 768]
        
         # Set update block #
-        if self.update_block == 0:
+        if self.update_block == 0: # IEBins
             self.update = BasicUpdateBlockDepth(hidden_dim=128, context_dim=embed_dim, bin_num=16)
-        elif self.update_block == 1:
+        elif self.update_block == 1: # Canonical
             self.update = BasicUpdateBlockCDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
-        elif self.update_block == 2:
-            self.update = BasicUpdateBlockCPDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
-        elif self.update_block == 3:
+        elif self.update_block == 2: # with metric uncertainty
             self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+        else:
+            pass
 
         backbone_cfg = dict(
             embed_dim=embed_dim,
@@ -87,6 +86,8 @@ class NewCRFDepth(nn.Module):
         )
 
         self.backbone = SwinTransformer(**backbone_cfg)
+       
+        # Decoder layers # 
         v_dim = decoder_cfg['num_classes']*4
         win = 7
         crf_dims = [128, 256, 512, 1024]
@@ -95,8 +96,10 @@ class NewCRFDepth(nn.Module):
         self.crf2 = NewCRF(input_dim=in_channels[2], embed_dim=crf_dims[2], window_size=win, v_dim=v_dims[2], num_heads=16)
         self.crf1 = NewCRF(input_dim=in_channels[1], embed_dim=crf_dims[1], window_size=win, v_dim=v_dims[1], num_heads=8)
 
-        self.decoder = PSP(**decoder_cfg)
+        # Last layer - "downsampling" encoder # 
+        self.psp_module = PSP(**decoder_cfg)
 
+        # Depth upsampling #
         self.up_mode = 'bilinear'
         if self.up_mode == 'mask':
             self.mask_head = nn.Sequential(
@@ -104,10 +107,11 @@ class NewCRFDepth(nn.Module):
                 nn.ReLU(inplace=True),
                 nn.Conv2d(64, 16*9, 1, padding=0))
 
+        # GRU #
         self.min_depth = min_depth
         self.max_depth = max_depth
         self.hidden_dim = 128
-        self.project = Projection(v_dims[0], self.hidden_dim)
+        self.project = Projection(v_dims[0], self.hidden_dim) # Project features to GRU input  
 
         self.init_weights(pretrained=pretrained)
 
@@ -115,14 +119,17 @@ class NewCRFDepth(nn.Module):
         if self.freeze_backbone:
             for param in self.backbone.parameters():
                 param.requires_grad = False
-            for param in self.decoder.parameters():
+            for param in self.psp_module.parameters():
                 param.requires_grad = False
             for param in self.crf3.parameters():
                 param.requires_grad = False
             for param in self.crf2.parameters():
                 param.requires_grad = False
-            #for param in self.crf1.parameters():
-            #    param.requires_grad = False
+            if self.train_decoder == 0:
+                for param in self.crf1.parameters():
+                    param.requires_grad = False
+            else:
+                print("Training last decoder layer")
 
     def init_weights(self, pretrained=None):
         """Initialize the weights in backbone and heads.
@@ -133,7 +140,7 @@ class NewCRFDepth(nn.Module):
         """
         print(f'== Load encoder backbone from: {pretrained}')
         self.backbone.init_weights(pretrained=pretrained)
-        self.decoder.init_weights()
+        self.psp_module.init_weights()
         if self.with_auxiliary_head:
             if isinstance(self.auxiliary_head, nn.ModuleList):
                 for aux_head in self.auxiliary_head:
@@ -157,9 +164,10 @@ class NewCRFDepth(nn.Module):
     def forward(self, imgs, epoch=1, step=100):
 
         feats = self.backbone(imgs)
-        ppm_out = self.decoder(feats)
+        psp_out = self.psp_module(feats)
 
-        e3 = self.crf3(feats[3], ppm_out)
+        # crf concat with encoder features
+        e3 = self.crf3(feats[3], psp_out)
         e3 = nn.PixelShuffle(2)(e3)
         e2 = self.crf2(feats[2], e3)
         e2 = nn.PixelShuffle(2)(e2)
@@ -177,8 +185,8 @@ class NewCRFDepth(nn.Module):
         depth = torch.zeros([b, 1, h, w]).to(device)
         context = feats[0]
         gru_hidden = torch.tanh(self.project(e1))
-        # Hidden initialized with decoder
 
+        # Predict depth with GRU. context: early feature map and hidden: late feature map #
         result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.bin_min, self.bin_max)
 
         if self.up_mode == 'mask':
@@ -187,17 +195,18 @@ class NewCRFDepth(nn.Module):
                 result["pred_depths_c_list"][i] = self.upsample_mask(result["pred_depths_c_list"][i], mask.detach())
                 result["pred_depths_rc_list"][i] = self.upsample_mask(result["pred_depths_rc_list"][i], mask.detach())
                 result["uncertainty_maps_list"][i] = self.upsample_mask(result["uncertainty_maps_list"][i], mask.detach())
-            if self.update_block == 3:        
+
+            if self.update_block == 2:        
                 for i in range(max_tree_depth):
                     result["pred_depths_u_list"][i] = self.upsample_mask(result["pred_depths_u_list"][i], mask.detach())
-                   
         else:
             for i in range(max_tree_depth):
                 result["pred_depths_r_list"][i] = upsample(result["pred_depths_r_list"][i], scale_factor=4)
                 result["pred_depths_c_list"][i] = upsample(result["pred_depths_c_list"][i], scale_factor=4) 
                 result["pred_depths_rc_list"][i] = upsample(result["pred_depths_rc_list"][i], scale_factor=4) 
                 result["uncertainty_maps_list"][i] = upsample(result["uncertainty_maps_list"][i], scale_factor=4) 
-            if self.update_block == 3:        
+
+            if self.update_block == 2:        
                 for i in range(max_tree_depth):
                     result["pred_depths_u_list"][i] = upsample(result["pred_depths_u_list"][i], scale_factor=4)
 

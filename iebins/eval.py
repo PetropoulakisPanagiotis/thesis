@@ -101,7 +101,7 @@ def eval(model, dataloader_eval, post_process=False):
                 pred_depths_rc_list = result["pred_depths_rc_list"]
                 pred_scale_list = result["pred_scale_list"] 
                 pred_shift_list = result["pred_shift_list"] 
-            if args.update_block == 3:
+            if args.update_block == 2:
                 pred_depths_u_list = result["pred_depths_u_list"]
 
             if True:
@@ -160,7 +160,7 @@ def eval(model, dataloader_eval, post_process=False):
                         for ii in range(max_tree_depth):
                             writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data)), step)
 
-                    if args.update_block == 3:
+                    if args.update_block == 2:
                         for ii in range(max_tree_depth):
                             writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_u_list[ii][i, :, :, :].data)), step)
 
@@ -225,7 +225,7 @@ def eval(model, dataloader_eval, post_process=False):
 def main_worker(args):
 
     # CRF model
-    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain)
+    model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])

@@ -55,7 +55,7 @@ parser.add_argument('--log_freq',                  type=int,   help='Logging fre
 parser.add_argument('--save_freq',                 type=int,   help='Checkpoint saving frequency in global steps', default=5000)
 
 # Training
-parser.add_argument('--train_decoder',             type=int,   help='how many layers to train from the decoder', default=0)
+parser.add_argument('--train_decoder',             type=int,   help='how many layers to train from the decoder', default=1)
 parser.add_argument('--weight_decay',              type=float, help='weight decay factor for optimization', default=1e-2)
 parser.add_argument('--loss_type',                 type=int,   help='0 for silog and 1 for l2', default=0)
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
@@ -201,7 +201,7 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
     # model
-    model = NewCRFDepth(version=args.encoder, inv_depth=False, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain)
+    model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -351,7 +351,7 @@ def main_worker(gpu, ngpus_per_node, args):
             uncertainty_maps_list = result["uncertainty_maps_list"]
             if args.update_block != 0:
                 pred_depths_rc_list = result["pred_depths_rc_list"]
-            if args.update_block == 3:
+            if args.update_block == 2:
                 pred_depths_u_list = result["pred_depths_u_list"]
    
             if args.dataset == 'nyu':
