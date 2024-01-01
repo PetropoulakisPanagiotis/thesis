@@ -1,19 +1,20 @@
 #!/bin/bash
-#SBATCH --job-name="depth-n"
-#SBATCH --nodelist=node[15]
+#SBATCH --job-name="unc4"
+#SBATCH --nodelist=node[11,12,14,16]
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:1,VRAM:32G
+#SBATCH --gres=gpu:2,VRAM:32G
 #SBATCH --mem=24G
 #SBATCH --time=20:00:00
 #SBATCH --mail-type=NONE
-#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-n-%j.out
-#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-n-%j.out
-srun python /usr/stud/petp/code/thesis/iebins/train.py /usr/stud/petp/code/thesis/configs/n.txt
+#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-unc-4-%j.out
+#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-unc-4-%j.out
+srun python /usr/stud/petp/code/thesis/iebins/train.py /usr/stud/petp/code/thesis/configs/unc_4.txt
 
 
 
 
-#SBATCH --nodelist=node[11,12,13,14,15,16,17,18]
+# SBATCH --nodelist=node[11,12,13,14,15,16,17,18]
 # SBATCH --exclude=node1,node2,node3,node4,node5,node6,node7,node8,node9,node10
 # SBATCH --gres=gpu:2,VRAM:48G
+# SBATCH --gres=gpu:1,VRAM:32G

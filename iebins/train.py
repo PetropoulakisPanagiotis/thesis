@@ -1,6 +1,6 @@
 import os, sys, time
 import gc
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import torch
 import torch.nn as nn
@@ -58,6 +58,7 @@ parser.add_argument('--save_freq',                 type=int,   help='Checkpoint 
 parser.add_argument('--train_decoder',             type=int,   help='how many layers to train from the decoder', default=1)
 parser.add_argument('--weight_decay',              type=float, help='weight decay factor for optimization', default=1e-2)
 parser.add_argument('--loss_type',                 type=int,   help='0 for silog and 1 for l1', default=0)
+parser.add_argument('--uncertainty_weight',        type=float, help='weight for uncertainty loss', default=1)
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
 parser.add_argument('--adam_eps',                  type=float, help='epsilon in Adam optimizer', default=1e-6)
 parser.add_argument('--batch_size',                type=int,   help='batch size', default=4)
@@ -389,7 +390,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     current_loss_u += torch.abs(pred_depths_u_list[curr_tree_depth][mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
             
             if args.update_block == 2:
-                loss = current_loss_d + current_loss_u
+                loss = current_loss_d + (args.uncertainty_weight * current_loss_u)
             else:
                 loss = current_loss_d
 
