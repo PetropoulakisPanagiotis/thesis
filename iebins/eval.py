@@ -1,16 +1,16 @@
+import os, sys
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+
 import torch
 import torch.backends.cudnn as cudnn
 
 from tensorboardX import SummaryWriter
-import os, sys
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+
 import argparse
 import numpy as np
 from tqdm import tqdm
 
-from utils import post_process_depth, flip_lr, compute_errors
 from networks.NewCRFDepth import NewCRFDepth
-
 from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
                        block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args, colormap_magma
 
@@ -19,7 +19,6 @@ def convert_arg_line_to_args(arg_line):
         if not arg.strip():
             continue
         yield arg
-
 
 parser = argparse.ArgumentParser(description='IEBins PyTorch implementation.', fromfile_prefix_chars='@')
 parser.convert_arg_line_to_args = convert_arg_line_to_args

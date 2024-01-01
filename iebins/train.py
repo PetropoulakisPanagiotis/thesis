@@ -1,3 +1,7 @@
+import os, sys, time
+import gc
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 import torch
 import torch.nn as nn
 import torch.nn.utils as utils
@@ -5,22 +9,19 @@ import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-import os, sys, time
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+from tensorboardX import SummaryWriter
+
 from telnetlib import IP
 import argparse
 import numpy as np
 from tqdm import tqdm
 
-from tensorboardX import SummaryWriter
-
-from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
-                       block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args, colormap_magma
 from networks.NewCRFDepth import NewCRFDepth
 from networks.depth_update import *
 from datetime import datetime
 from sum_depth import Sum_depth
-
+from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
+                       block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args, colormap_magma
 
 parser = argparse.ArgumentParser(description='IEBins PyTorch implementation.', fromfile_prefix_chars='@')
 parser.convert_arg_line_to_args = convert_arg_line_to_args
@@ -445,7 +446,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data)), global_step)
 
-                            if args.update_block == 3:
+                            if args.update_block == 2:
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap_magma(torch.log10(pred_depths_u_list[ii][i, :, :, :].data)), global_step)
 
@@ -516,7 +517,6 @@ def main_worker(gpu, ngpus_per_node, args):
     print("training ended\n")
 
 def main():
-    import gc
 
     torch.cuda.empty_cache()
     gc.collect()
