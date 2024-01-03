@@ -46,6 +46,7 @@ parser.add_argument('--max_tree_depth',            type=int,   help='max GRU ite
 parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 parser.add_argument('--bin_min',                   type=float, help='min value for bin initialization', default='0')
 parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='10')
+parser.add_argument('--predict_unc',               type=bool,  help='True to predict uncertainty from the decoder', default=False)
 
 # Log and save
 parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
@@ -207,7 +208,7 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
     # Model #
-    model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain)
+    model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -317,6 +318,7 @@ def main_worker(gpu, ngpus_per_node, args):
             "bin_min": args.bin_min,
             "bin_max": args.bin_max,
             "train_decoder": args.train_decoder,
+            "predict_unc": args.predict_unc,
         }
 
         writer.add_hparams(hparam_dict=hparams, metric_dict={})
@@ -369,7 +371,9 @@ def main_worker(gpu, ngpus_per_node, args):
                 pred_depths_rc_list = result["pred_depths_rc_list"]
             if args.update_block == 2:
                 pred_depths_u_list = result["pred_depths_u_list"]
-   
+            elif args.predict_unc == True:
+                unc = result["unc"]
+ 
             max_tree_depth = len(pred_depths_r_list)
             
             if args.dataset == 'nyu':
@@ -388,8 +392,11 @@ def main_worker(gpu, ngpus_per_node, args):
                     u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[curr_tree_depth].detach()) / (depth_gt + pred_depths_r_list[curr_tree_depth].detach() + 1e-7))
 
                     current_loss_u += torch.abs(pred_depths_u_list[curr_tree_depth][mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
-            
-            if args.update_block == 2:
+                elif args.predict_unc == True:           
+                    u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[0].detach()) / (depth_gt + pred_depths_r_list[0].detach() + 1e-7))
+                    current_loss_u = torch.abs(unc[mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
+ 
+            if args.update_block == 2 or args.predict_unc:
                 loss = current_loss_d + (args.uncertainty_weight * current_loss_u)
             else:
                 loss = current_loss_d
@@ -402,8 +409,11 @@ def main_worker(gpu, ngpus_per_node, args):
             optimizer.step()
 
             if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
-                print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}'.format(epoch, step, steps_per_epoch, global_step, current_lr, loss))
- 
+                if args.update_block == 2 or args.predict_unc:
+                    print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}, depth_loss: {:.12f}, u_loss: {:.12f}'.format(epoch, step, steps_per_epoch, global_step, current_lr, loss, current_loss_d, current_loss_u))
+                else:
+                    print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}'.format(epoch, step, steps_per_epoch, global_step, current_lr, loss))
+
             duration += time.time() - before_op_time
 
             # Logging #
@@ -430,7 +440,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     else:
                         writer.add_scalar('l1_loss', current_loss_d, global_step)
 
-                    if args.update_block == 2:
+                    if args.update_block == 2 or args.predict_unc:
                         writer.add_scalar('u_loss', current_loss_u, global_step)
 
                     # writer.add_scalar('var_loss', var_loss, global_step)
@@ -469,6 +479,8 @@ def main_worker(gpu, ngpus_per_node, args):
                             if args.update_block == 2:
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_u_list[ii][i, :, :, :].data), name='viridis'), global_step)
+                            if args.predict_unc:
+                                writer.add_image('unc_head_est{}/image/{}'.format(ii, i), colormap(torch.log10(unc[i, :, :, :].data), name='viridis'), global_step)
 
                         for ii in range(max_tree_depth):
                             writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(torch.log10(uncertainty_maps_list[ii][i, :, :, :].data), name='magma'), global_step)
