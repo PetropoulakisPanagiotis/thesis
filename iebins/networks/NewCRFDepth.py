@@ -14,7 +14,7 @@ class NewCRFDepth(nn.Module):
     Depth network based on neural window FC-CRFs architecture
     """
     def __init__(self, version=None, pretrained=None, 
-                    frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=6, bin_num=16, bin_min=0, bin_max=80, update_block=0, loss_type=0, train_decoder=0, predict_unc=False, **kwargs):
+                    frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=6, bin_num=16, bin_min=0, bin_max=80, update_block=0, loss_type=0, train_decoder=0, predict_unc=False, predict_unc_d3vo=False, **kwargs):
         super().__init__()
 
         self.with_auxiliary_head = False
@@ -29,6 +29,7 @@ class NewCRFDepth(nn.Module):
         self.bin_max = bin_max
       
         self.predict_unc = predict_unc
+        self.predict_unc_d3vo = predict_unc_d3vo
 
         # 0 iebins, 1 canonical, 2 canonical with metric uncertainty
         self.update_block = update_block   
@@ -122,7 +123,10 @@ class NewCRFDepth(nn.Module):
 
         if self.predict_unc:
             self.uncer_head = UncerHead(input_dim=crf_dims[0])
-    
+        if self.predict_unc_d3vo:
+            self.uncer_d3vo_head = D3VOUncerHead(input_dim=crf_dims[0])
+ 
+
         self.init_weights(pretrained=pretrained)
 
 	    # Freeze some weights #
@@ -194,6 +198,9 @@ class NewCRFDepth(nn.Module):
         if self.predict_unc:
             unc = self.uncer_head(e0)
 
+        if self.predict_unc_d3vo:
+            unc_d3vo = self.uncer_d3vo_head(e0)
+
         b, c, h, w = e1.shape
         device = e1.device
  
@@ -223,7 +230,9 @@ class NewCRFDepth(nn.Module):
             if self.predict_unc:
                 unc = self.upsample_mask(unc, mask.detach())
                 result["unc"] = unc
-        
+            if self.predict_unc_d3vo:
+                unc_d3vo = self.upsample_mask(unc_d3vo, mask.detach())
+                result["unc_d3vo"] = unc_d3vo
         else:
             for i in range(max_tree_depth):
                 result["pred_depths_r_list"][i] = upsample(result["pred_depths_r_list"][i], scale_factor=4)
@@ -237,6 +246,9 @@ class NewCRFDepth(nn.Module):
             if self.predict_unc:
                 unc = upsample(unc, scale_factor=4)
                 result["unc"] = unc
+            if self.predict_unc_d3vo:
+                unc_d3vo = upsample(unc_d3vo, scale_factor=4)
+                result["unc_d3vo"] = unc_d3vo
 
         return result
 
@@ -249,4 +261,14 @@ class UncerHead(nn.Module):
     def forward(self, x):
         x = self.sigmoid(self.conv1(x))
 
+        return x 
+
+class D3VOUncerHead(nn.Module):
+    def __init__(self, input_dim=100):
+        super(D3VOUncerHead, self).__init__()
+        self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
+        self.relu1 = nn.ReLU(inplace=True)
+    
+    def forward(self, x):
+        x = (self.relu1(self.conv1(x))).clamp(min=1e-3)
         return x 

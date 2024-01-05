@@ -106,6 +106,13 @@ class silog_loss(nn.Module):
         d = torch.log(depth_est[mask]) - torch.log(depth_gt[mask])
         return torch.sqrt((d ** 2).mean() - self.variance_focus * (d.mean() ** 2)) * 10.0
 
+class l1_unc_loss(nn.Module):
+    def __init__(self):
+        super(l1_unc_loss, self).__init__()
+
+    def forward(self, depth_est, depth_gt, unc, mask):
+        return torch.mean((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask]))
+
 class l1_loss(nn.Module):
     def __init__(self):
         super(l1_loss, self).__init__()

@@ -19,7 +19,7 @@ from tqdm import tqdm
 from networks.NewCRFDepth import NewCRFDepth
 from networks.depth_update import *
 from datetime import datetime
-from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
+from utils import post_process_depth, flip_lr, silog_loss, l1_loss, l1_unc_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
                        block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args
 
 parser = argparse.ArgumentParser(description='IEBins PyTorch implementation.', fromfile_prefix_chars='@')
@@ -46,7 +46,8 @@ parser.add_argument('--max_tree_depth',            type=int,   help='max GRU ite
 parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 parser.add_argument('--bin_min',                   type=float, help='min value for bin initialization', default='0')
 parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='10')
-parser.add_argument('--predict_unc',        dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
+parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
+parser.add_argument('--predict_unc_d3vo',          dest='predict_unc_d3vo',help='True to predict uncertainty d3vo from the decoder', action='store_true')
 
 # Log and save
 parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
@@ -208,7 +209,8 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
     # Model #
-    model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc)
+    model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, 
+                        update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -326,6 +328,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # Losses #
     silog_criterion = silog_loss(variance_focus=args.variance_focus)
     l1_criterion = l1_loss()
+    l1_d3vo_criterion = l1_unc_loss()
 
     start_time = time.time()
     duration = 0
@@ -371,8 +374,10 @@ def main_worker(gpu, ngpus_per_node, args):
                 pred_depths_rc_list = result["pred_depths_rc_list"]
             if args.update_block == 2:
                 pred_depths_u_list = result["pred_depths_u_list"]
-            elif args.predict_unc == True:
+            if args.predict_unc == True:
                 unc = result["unc"]
+            if args.predict_unc_d3vo == True:
+                unc_d3vo = result["unc_d3vo"]
  
             max_tree_depth = len(pred_depths_r_list)
             
@@ -385,17 +390,21 @@ def main_worker(gpu, ngpus_per_node, args):
             for curr_tree_depth in range(max_tree_depth):
                 if args.loss_type == 0:
                     current_loss_d += silog_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
-                else:
+                elif args.loss_type == 1:
                     current_loss_d += l1_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
+                elif args.loss_type == 2:
+                    current_loss_d += l1_d3vo_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
+                else:
+                    pass
 
                 if args.update_block == 2:
                     u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[curr_tree_depth].detach()) / (depth_gt + pred_depths_r_list[curr_tree_depth].detach() + 1e-7))
 
                     current_loss_u += torch.abs(pred_depths_u_list[curr_tree_depth][mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
-                elif args.predict_unc == True:           
+                elif args.predict_unc:           
                     u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[0].detach()) / (depth_gt + pred_depths_r_list[0].detach() + 1e-7))
                     current_loss_u = torch.abs(unc[mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
- 
+
             if args.update_block == 2 or args.predict_unc:
                 loss = current_loss_d + (args.uncertainty_weight * current_loss_u)
             else:
@@ -480,6 +489,9 @@ def main_worker(gpu, ngpus_per_node, args):
                                     writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_u_list[ii][i, :, :, :].data), name='viridis'), global_step)
                             if args.predict_unc:
                                 writer.add_image('unc_head_est{}/image/{}'.format(ii, i), colormap(torch.log10(unc[i, :, :, :].data), name='viridis'), global_step)
+
+                            if args.predict_unc_d3vo:
+                                writer.add_image('unc_d3vo_head_est{}/image/{}'.format(ii, i), colormap(torch.log10(unc_d3vo[i, :, :, :].data), name='viridis'), global_step)
 
                         for ii in range(max_tree_depth):
                             writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(torch.log10(uncertainty_maps_list[ii][i, :, :, :].data), name='magma'), global_step)

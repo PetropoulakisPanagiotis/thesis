@@ -80,8 +80,8 @@ def eval(model, dataloader_eval, post_process=False):
     eval_images = 30
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         image_counter += 1
-        if image_counter == eval_images:
-            break
+        #if image_counter == eval_images:
+        #    break
 
         with torch.no_grad():
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
@@ -107,31 +107,41 @@ def eval(model, dataloader_eval, post_process=False):
             if args.update_block == 2:
                 pred_depths_u_list = result["pred_depths_u_list"]
 
-            # Debug #
-            if True:
-                print("canonical")
-                print(torch.max(pred_depths_rc_list[5][0, 0, :, :]))
-                print(torch.min(pred_depths_rc_list[5][0, 0, :, :]))
-                print(torch.mean(pred_depths_rc_list[5][0, 0, :, :]))
-                print(torch.std(pred_depths_rc_list[5][0, 0, :, :]))
-            if True:
-                print("uncertainty (std)")
-                print(torch.max(uncertainty_maps_list[5][0, 0, :, :]))
-                print(torch.min(uncertainty_maps_list[5][0, 0, :, :]))
-                print(torch.mean(uncertainty_maps_list[5][0, 0, :, :]))
-                print(torch.std(uncertainty_maps_list[5][0, 0, :, :]))            
-            if True:
-                print("scale")
-                print(torch.max(pred_scale_list[5][0, 0, :, :]))
-                print(torch.min(pred_scale_list[5][0, 0, :, :]))
-                print(torch.mean(pred_scale_list[5][0, 0, :, :]))
-                print(torch.std(pred_scale_list[5][0, 0, :, :]))            
-            if True:
-                print("shift")
-                print(torch.max(pred_shift_list[5][0, 0, :, :]))
-                print(torch.min(pred_shift_list[5][0, 0, :, :]))
-                print(torch.mean(pred_shift_list[5][0, 0, :, :]))
-                print(torch.std(pred_shift_list[5][0, 0, :, :]))
+            if False: 
+                # Debug #
+                if True:
+                    print("canonical")
+                    print(torch.max(pred_depths_rc_list[5][0, 0, :, :]))
+                    print(torch.min(pred_depths_rc_list[5][0, 0, :, :]))
+                    print(torch.mean(pred_depths_rc_list[5][0, 0, :, :]))
+                    print(torch.std(pred_depths_rc_list[5][0, 0, :, :]))
+                if True:
+                    print("uncertainty (std)")
+                    print(torch.max(uncertainty_maps_list[5][0, 0, :, :]))
+                    print(torch.min(uncertainty_maps_list[5][0, 0, :, :]))
+                    print(torch.mean(uncertainty_maps_list[5][0, 0, :, :]))
+                    print(torch.std(uncertainty_maps_list[5][0, 0, :, :]))            
+                if True:
+                    print("scale")
+                    print(pred_scale_list[5].shape)
+                    print(torch.max(pred_scale_list[5][0, 0]))
+                    print(torch.min(pred_scale_list[5][0, 0]))
+                    print(torch.mean(pred_scale_list[5][0, 0]))
+                    print(torch.std(pred_scale_list[5][0, 0]))  
+                    #print(torch.max(pred_scale_list[5][0, 0, :, :]))
+                    #print(torch.min(pred_scale_list[5][0, 0, :, :]))
+                    #print(torch.mean(pred_scale_list[5][0, 0, :, :]))
+                    #print(torch.std(pred_scale_list[5][0, 0, :, :]))            
+                if True:
+                    print("shift")
+                    print(torch.max(pred_shift_list[5][0, 0]))
+                    print(torch.min(pred_shift_list[5][0, 0]))
+                    print(torch.mean(pred_shift_list[5][0, 0]))
+                    print(torch.std(pred_shift_list[5][0, 0]))       
+                    #print(torch.max(pred_shift_list[5][0, 0, :, :]))
+                    #print(torch.min(pred_shift_list[5][0, 0, :, :]))
+                    #print(torch.mean(pred_shift_list[5][0, 0, :, :]))
+                    #print(torch.std(pred_shift_list[5][0, 0, :, :]))
 
             max_tree_depth = len(pred_depths_r_list)
             for i in range(num_log_images):
