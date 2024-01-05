@@ -22,7 +22,6 @@
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2347
 
---predict_unc False
 --update_block 4
 --bin_num 16
 --bin_min 0

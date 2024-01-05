@@ -166,7 +166,7 @@ class BasicUpdateBlockCSDepth(nn.Module):
         self.gru = SepConvGRU(hidden_dim=hidden_dim, input_dim=self.encoder.out_chs+context_dim)
 
         self.p_head = PHead(hidden_dim, hidden_dim, bin_num=bin_num) # propabilities canonical
-        self.s_head = SSPHead(hidden_dim, hidden_dim)                 # scale and shift 
+        self.s_head = SSPHead(hidden_dim)                            # Global scale and shift 
 
         self.relu = nn.ReLU(inplace=True)
         self.loss_type = loss_type
@@ -194,7 +194,6 @@ class BasicUpdateBlockCSDepth(nn.Module):
 
         bin_edges = torch.cumsum(interval, 1)
         current_depths = 0.5 * (bin_edges[:, :-1] + bin_edges[:, 1:])
-
         for i in range(seq_len):
             input_features = self.encoder(current_depths.detach()) # current_depths 16, 88, 280
             input_c = torch.cat([input_features, context], dim=1)  # input_c        352, 88, 280
@@ -462,21 +461,18 @@ class SPHead(nn.Module):
 SSHead: scale and shift prediction - single per image 
 """     
 class SSPHead(nn.Module):
-    def __init__(self, input_dim=128, hidden_dim=128):
+    def __init__(self, input_dim=128):
         super(SSPHead, self).__init__()
-        self.conv1 = nn.Conv2d(input_dim, int(hidden_dim / 4), 3, padding=1)
-        self.pool = nn.MaxPool2d(kernel_size=4, stride=4)
-
-        self.fc1 = nn.Linear(int(hidden_dim / 4) * 22 * 70, 256) 
-        self.fc2 = nn.Linear(256, 2) # Scale and shift 
+        self.conv1 = nn.Conv2d(input_dim, 1, kernel_size=1)
+        self.pool = nn.AdaptiveAvgPool2d(88)
+        self.fc1= nn.Linear(88 * 88, 2) # Scale and shift 
     
     def forward(self, x):
         out = F.relu(self.pool(self.conv1(x)))
-
-        out = out.view(out.size(0), - 1)
         
-        out = F.relu(self.fc1(out))
-        out = F.relu(self.fc2(out))
+        out = torch.flatten(out, 1)
+        
+        out = self.fc1(out)
         
         return out
 

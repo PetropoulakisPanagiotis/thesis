@@ -22,14 +22,13 @@
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2347
 
---predict_unc False
 --update_block 4
 --bin_num 16
 --bin_min 0
 --bin_max 10
 --max_tree_depth 6
 
---exp_name exp_9
+--exp_name unc-9
 --checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_T.pth
 --retrain
 

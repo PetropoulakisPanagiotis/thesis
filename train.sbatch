@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name="exp-9"
-#SBATCH --nodelist=node[11,15,16,17,18]
+#SBATCH --nodelist=node[11,12,13,14,15,16,17,18]
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:2,VRAM:32G

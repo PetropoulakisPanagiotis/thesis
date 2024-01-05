@@ -46,7 +46,7 @@ parser.add_argument('--max_tree_depth',            type=int,   help='max GRU ite
 parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 parser.add_argument('--bin_min',                   type=float, help='min value for bin initialization', default='0')
 parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='10')
-parser.add_argument('--predict_unc',               type=bool,  help='True to predict uncertainty from the decoder', default=False)
+parser.add_argument('--predict_unc',        dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
 
 # Log and save
 parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
@@ -407,7 +407,6 @@ def main_worker(gpu, ngpus_per_node, args):
                 current_lr = (args.learning_rate - end_learning_rate) * (1 - global_step / num_total_steps) ** 0.9 + end_learning_rate
                 param_group['lr'] = current_lr
             optimizer.step()
-
             if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
                 if args.update_block == 2 or args.predict_unc:
                     print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}, depth_loss: {:.12f}, u_loss: {:.12f}'.format(epoch, step, steps_per_epoch, global_step, current_lr, loss, current_loss_d, current_loss_u))
@@ -558,7 +557,6 @@ def main_worker(gpu, ngpus_per_node, args):
 def main():
     torch.cuda.empty_cache()
     gc.collect()
-
     if args.mode != 'train':
         print('train.py is only for training.')
         return -1
