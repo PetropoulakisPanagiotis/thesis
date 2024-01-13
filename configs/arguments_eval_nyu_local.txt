@@ -5,9 +5,10 @@
 --input_width 640
 --max_depth 10
 
---data_path_eval  /home/petropoulakis/Desktop/thesis/code/datasets/NYUDepthv2/
---gt_path_eval /home/petropoulakis/Desktop/thesis/code/datasets/NYUDepthv2/
---filenames_file_eval ../../data_splits/NYUDepthv2_eval.txt
+--data_path_eval
+/home/petropoulakis/Desktop/thesis/code/dataset/nyu_depth_v2/official_splits/test/
+--gt_path_eval /home/petropoulakis/Desktop/thesis/code/dataset/nyu_depth_v2/official_splits/test/
+--filenames_file_eval ../../data_splits/nyudepthv2_test_files_with_gt.txt
 --min_depth_eval 1e-3
 --max_depth_eval 10
 --eigen_crop

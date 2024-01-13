@@ -1,6 +1,7 @@
 # Custom
 tmp/
 models/
+helpers/nyu_depth_v2_labeled.mat
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

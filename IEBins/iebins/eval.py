@@ -63,7 +63,7 @@ def eval(model, dataloader_eval, post_process=False):
     for _, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         with torch.no_grad():
             counter += 1
-            if counter == 15:
+            if counter == 15 and False:
                 break
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
             gt_depth = eval_sample_batched['depth']
