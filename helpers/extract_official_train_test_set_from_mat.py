@@ -51,6 +51,21 @@ custom_cmap_labels = LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bi
 custom_cmap_instances = LinearSegmentedColormap.from_list(cmap_name, colors, N=37)
 
 
+def encapsulate_bounding_boxes(map_data, id_value):
+    # Find the locations where the ID occurs
+    locations = np.where(map_data == id_value)
+
+    if len(locations[0]) == 0:
+        # ID not found in the map
+        return None
+
+    # Calculate bounding box coordinates
+    y1 = np.min(locations[0])
+    x1 = np.min(locations[1])
+    y2 = np.max(locations[0]) + 1
+    x2 = np.max(locations[1]) + 1
+
+    return [y1, x1, y2, x2]
 
 def convert_image(i, scene, depth_raw, image):
 
@@ -104,14 +119,76 @@ def convert_instance(i, scene, image):
 
     image_black_boundary = np.zeros((480, 640), dtype=np.uint8)
     image_black_boundary[7:474, 7:632] = image[7:474, 7:632]
-    image_black_boundary = cv2.flip(image_black_boundary, 1)
+    #image_black_boundary = cv2.flip(image_black_boundary, 1)
     cv2.imwrite("%s/instance_%05d.jpg" % (folder, i), image_black_boundary)
+
+    image = image_black_boundary
+
+    unique_ids = np.unique(image)
+    unique_ids = unique_ids[unique_ids != 0]
+    bounding_boxes = {}
+
+    for id_value in unique_ids:
+        bounding_box = encapsulate_bounding_boxes(image, id_value)
+        bounding_boxes[id_value] = bounding_box
+
+    print(bounding_boxes)
+
+    # Create a dictionary to store the separate maps for each ID
+    id_maps = {}
+
+    # Iterate over each unique ID
+    for id_value in unique_ids:
+        print(id_value)
+        # Create a new map with zeros in areas where the ID is not present
+        id_maps[id_value] = np.where(image == id_value, 255, 0)
+
+    # Print the resulting maps
+    for id_value, map_data in id_maps.items():
+        print(f'Map for ID {id_value}:')
+        print(map_data)
+        print()
+        cv2.imshow('image', map_data.astype(np.uint8))
+        cv2.waitKey(0)
+
+
+    """
+    data_dict = {
+        'image_name': 'your_image_name.jpg',  # Replace with the actual image name
+        'bounding_boxes': {},
+        'maps': {}
+    }
+    # Store bounding boxes
+    for id_value in unique_ids:
+        bounding_box = encapsulate_bounding_boxes(image, id_value)
+        data_dict['bounding_boxes'][id_value] = bounding_box
+
+    # Store maps
+    for id_value in unique_ids:
+        map_data = np.where(image == id_value, 1, 0).tolist()
+        data_dict['maps'][id_value] = map_data
+
+    # Save to JSON file
+    output_file_path = 'output_data.json'
+    with open(output_file_path, 'w') as json_file:
+        json.dump(data_dict, json_file)
+    """
 
     image = image_black_boundary
     # Map data values to RGB colors using the colormap
     rgb_data = custom_cmap_instances(image / np.max(image))  # Normalize the data to [0, 1]
+    rgb_data = rgb_data[:, :, :3] * 255
+    # Visualize bounding boxes on the image
+    for id, bounding_box in bounding_boxes.items():
+        y1, x1, y2, x2 = bounding_box
+        cv2.rectangle(rgb_data, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
     # Save the colored image
-    cv2.imwrite("%s/instance_colored_%05d.jpg" % (folder, i), (rgb_data[:, :, :3] * 255).astype(np.uint8))
+    cv2.imwrite("%s/instance_colored_%05d.jpg" % (folder, i), (rgb_data).astype(np.uint8))
+    print(folder, i)
+    #exit()
+
+
 
 
 def convert_labels(i, scene, image):
@@ -131,9 +208,11 @@ def convert_labels(i, scene, image):
     image_black_boundary[7:474, 7:632] = image[7:474, 7:632]
     image_black_boundary = cv2.flip(image_black_boundary, 1)
     cv2.imwrite("%s/label_%05d.jpg" % (folder, i), image_black_boundary)
-
     image = image_black_boundary
 
+    unique_ids = np.unique(image)
+    print(unique_ids)
+    exit()
     # Map data values to RGB colors using the colormap
     rgb_data = custom_cmap_labels(image / np.max(image))  # Normalize the data to [0, 1]
 
@@ -178,19 +257,18 @@ if __name__ == "__main__":
     convert_names(names)
 
     labels = h5_file['labels']
-
     print("processing labels")
     for i, image in enumerate(labels):
         print("image", i + 1, "/", len(labels))
         convert_labels(i, scenes[i],  image.T)
-
+        break
     instances = h5_file['instances']
 
     print("processing instances")
     for i, image in enumerate(instances):
         print("image", i + 1, "/", len(instances))
         convert_instance(i, scenes[i],  image.T)
-
+        break
 
 
     depth_raw = h5_file['rawDepths']
