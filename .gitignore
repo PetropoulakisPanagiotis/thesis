@@ -1,7 +1,6 @@
 # Custom
 tmp/
 models/
-IEBins/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
