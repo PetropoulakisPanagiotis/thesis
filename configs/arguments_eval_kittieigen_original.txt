@@ -13,16 +13,4 @@
 --max_depth_eval 80
 --garg_crop
 
---update_block 4
---bin_num 16
---bin_min 0
---bin_max 16
---max_tree_depth 6
-
---loss_type 2
---predict_unc_d3vo
---log_directory /usr/stud/petp/code/thesis/tmp/
---exp_name test
-
---checkpoint_path /usr/stud/petp/code/thesis/tmp/unc-9/iebins_kittieigen/model-10500-best_silog_54.14587
-
+--checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_T.pth

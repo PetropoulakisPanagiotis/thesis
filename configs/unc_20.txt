@@ -6,9 +6,9 @@
 --data_path /usr/stud/petp/storage/user/petp/datasets/kitti_images/
 --gt_path /usr/stud/petp/storage/user/petp/datasets/kitti_depth/train/
 --filenames_file /usr/stud/petp/code/thesis/data_splits/eigen_train_files_with_gt_full.txt
---batch_size 2
+--batch_size 8
 --num_epochs 5
---learning_rate 2e-5
+--learning_rate 0.00016
 --weight_decay 1e-2
 --adam_eps 1e-3
 --num_threads 1
@@ -28,12 +28,12 @@
 --bin_max 16
 --max_tree_depth 6
 
---exp_name unc-9
+--exp_name unc-19
 --checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_T.pth
 --retrain
 
---loss_type 5
---predict_unc_d3vo
+--loss_type 0
+--predict_unc
 --log_freq 50
 --do_online_eval
 --eval_freq 300

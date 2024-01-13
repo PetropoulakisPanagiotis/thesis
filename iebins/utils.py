@@ -97,6 +97,16 @@ def compute_errors(gt, pred):
 
     return [silog, abs_rel, log10, rms, sq_rel, log_rms, d1, d2, d3]
 
+def compute_errors_uncertainty(gt, pred, unc, type_unc):
+    if type_unc == 0:
+        u_gt = np.exp(-5 * np.abs(gt - pred) / (gt + pred + 1e-7))
+        unc_error = np.abs(unc - u_gt) 
+    
+    if type_unc == 1:
+        unc_error = (((np.abs(pred - gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))) * (unc ** 0.5)
+    
+    return unc_error
+
 class silog_loss(nn.Module):
     def __init__(self, variance_focus):
         super(silog_loss, self).__init__()
@@ -106,12 +116,51 @@ class silog_loss(nn.Module):
         d = torch.log(depth_est[mask]) - torch.log(depth_gt[mask])
         return torch.sqrt((d ** 2).mean() - self.variance_focus * (d.mean() ** 2)) * 10.0
 
+class silog_unc_loss(nn.Module):
+    def __init__(self, variance_focus):
+        super(silog_unc_loss, self).__init__()
+        self.variance_focus = variance_focus
+
+    def forward(self, depth_est, depth_gt, unc, mask):
+        d = ((torch.log(depth_est[mask]) - torch.log(depth_gt[mask])) / unc[mask]) + torch.log(unc[mask]) + (math.log(2 * math.pi))
+        return torch.sqrt((d ** 2).mean() - self.variance_focus * (d.mean() ** 2)) * 10.0
+
+class silog_unc_beta_loss(nn.Module):
+    def __init__(self, variance_focus, beta=0.5):
+        super(silog_unc_beta_loss, self).__init__()
+        self.variance_focus = variance_focus
+        self.beta = beta
+
+    def forward(self, depth_est, depth_gt, unc, mask):
+        d = ((torch.log(depth_est[mask]) - torch.log(depth_gt[mask])) / unc[mask]) + torch.log(unc[mask]) + (math.log(2 * math.pi))
+        d *= (unc[mask].detach() ** self.beta)
+        return torch.sqrt((d ** 2).mean() - self.variance_focus * (d.mean() ** 2)) * 10.0
+
+class silog_unc_beta_2_loss(nn.Module):
+    def __init__(self, variance_focus, beta=0.5):
+        super(silog_unc_beta_2_loss, self).__init__()
+        self.variance_focus = variance_focus
+        self.beta = beta
+
+    def forward(self, depth_est, depth_gt, unc, mask):
+        d = ((torch.log(depth_est[mask]) - torch.log(depth_gt[mask])) / torch.exp(torch.log(unc[mask]))) + torch.log(unc[mask]) + (math.log(2 * math.pi))
+        d *= (torch.exp(torch.log(unc[mask])).detach() ** self.beta)
+        return torch.sqrt((d ** 2).mean() - self.variance_focus * (d.mean() ** 2)) * 10.0
+
 class l1_unc_loss(nn.Module):
     def __init__(self):
         super(l1_unc_loss, self).__init__()
 
     def forward(self, depth_est, depth_gt, unc, mask):
         return torch.mean((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask]))
+
+class l1_unc_const_beta_loss(nn.Module):
+    def __init__(self, beta=0.5):
+        super(l1_unc_const_beta_loss, self).__init__()
+        self.beta = beta
+
+    def forward(self, depth_est, depth_gt, unc, mask):
+        return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) + (math.log(2 * math.pi))) * (unc[mask].detach() ** self.beta))
 
 class l1_loss(nn.Module):
     def __init__(self):

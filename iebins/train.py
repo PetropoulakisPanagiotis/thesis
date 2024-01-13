@@ -19,7 +19,7 @@ from tqdm import tqdm
 from networks.NewCRFDepth import NewCRFDepth
 from networks.depth_update import *
 from datetime import datetime
-from utils import post_process_depth, flip_lr, silog_loss, l1_loss, l1_unc_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
+from utils import post_process_depth, flip_lr, silog_loss, l1_loss, l1_unc_loss, l1_unc_const_beta_loss, silog_unc_loss, silog_unc_beta_loss, silog_unc_beta_2_loss, compute_errors, compute_errors_uncertainty, eval_metrics, entropy_loss, colormap, \
                        block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args
 
 parser = argparse.ArgumentParser(description='IEBins PyTorch implementation.', fromfile_prefix_chars='@')
@@ -59,8 +59,8 @@ parser.add_argument('--save_freq',                 type=int,   help='Checkpoint 
 # Training
 parser.add_argument('--train_decoder',             type=int,   help='how many layers to train from the decoder', default=1)
 parser.add_argument('--weight_decay',              type=float, help='weight decay factor for optimization', default=1e-2)
-parser.add_argument('--loss_type',                 type=int,   help='0 for silog and 1 for l1', default=0)
-parser.add_argument('--uncertainty_weight',        type=float, help='weight for uncertainty loss', default=1)
+parser.add_argument('--loss_type',                 type=int,   help='0 for silog, 1 for l1, 2 for l1 d3vo, 3 for silog d3vo, 4 for beta-d3vo, 5 silog beta-d3vo, 6 silog beta-d3vo log', default=0)
+parser.add_argument('--uncertainty_weight',        type=float, help='weight for uncertainty loss', default=1), 
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
 parser.add_argument('--adam_eps',                  type=float, help='epsilon in Adam optimizer', default=1e-6)
 parser.add_argument('--batch_size',                type=int,   help='batch size', default=4)
@@ -111,6 +111,7 @@ if args.dataset == 'kitti' or args.dataset == 'nyu':
 def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, post_process=False):
     measures_size = 10
     eval_measures = torch.zeros(measures_size).cuda(device=gpu)
+    eval_measures_unc = torch.zeros(1).cuda(device=gpu)
 
     for _, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         with torch.no_grad():
@@ -123,6 +124,10 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
 
             result = model(image)
             pred_depths_r_list = result["pred_depths_r_list"]
+            if args.predict_unc == True:
+                unc = result["unc"].cpu().numpy().squeeze()
+            if args.predict_unc_d3vo == True:
+                unc = result["unc_d3vo"].cpu().numpy().squeeze()
 
             # IEBins true: predict depth of flipped image too and fuse
             if post_process:
@@ -171,12 +176,19 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
         # Calculate metrics #
         measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
 
+        if args.predict_unc:
+            unc_error = compute_errors_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], unc[valid_mask], 0)
+        if args.predict_unc_d3vo:
+            unc_error = compute_errors_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], unc[valid_mask], 1)
+
         eval_measures[:measures_size - 1] += torch.tensor(measures).cuda(device=gpu)
         eval_measures[measures_size - 1] += 1
+        eval_measures_unc[0] += torch.tensor(unc_error).cuda(device=gpu)
 
     if args.multiprocessing_distributed:
         # group = dist.new_group([i for i in range(ngpus)])
         dist.all_reduce(tensor=eval_measures, op=dist.ReduceOp.SUM, group=group)
+        dist.all_reduce(tensor=eval_measures_unc, op=dist.ReduceOp.SUM, group=group)
 
     # Devide by sum for multiprocessing #
     if not args.multiprocessing_distributed or gpu == 0:
@@ -191,7 +203,11 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             print('{:7.4f}, '.format(eval_measures_cpu[i]), end='')
         print('{:7.4f}'.format(eval_measures_cpu[measures_size - 2]))
 
-        return eval_measures_cpu
+        if args.predict_unc or args.predict_unc_d3vo:
+            print("Eval uncer:", unc_error)
+            return eval_measures_cpu, unc_error
+        else:
+            return eval_measures_cpu
 
     return None
 
@@ -243,6 +259,8 @@ def main_worker(gpu, ngpus_per_node, args):
     best_eval_measures_lower_better = torch.zeros(6).cpu() + 1e3
     best_eval_measures_higher_better = torch.zeros(3).cpu()
     best_eval_steps = np.zeros(9, dtype=np.int32)
+
+    best_unc = np.inf
 
     # Training parameters
     optimizer = torch.optim.Adam([{'params': model.module.parameters()}],
@@ -327,9 +345,13 @@ def main_worker(gpu, ngpus_per_node, args):
     
     # Losses #
     silog_criterion = silog_loss(variance_focus=args.variance_focus)
+    silog_d3vo_criterion = silog_unc_loss(variance_focus=args.variance_focus)
+    silog_d3vo_beta_criterion = silog_unc_beta_loss(variance_focus=args.variance_focus)
+    silog_d3vo_beta_2_criterion = silog_unc_beta_2_loss(variance_focus=args.variance_focus)
     l1_criterion = l1_loss()
     l1_d3vo_criterion = l1_unc_loss()
-
+    l1_d3vo_beta_criterion = l1_unc_const_beta_loss()
+    
     start_time = time.time()
     duration = 0
 
@@ -378,7 +400,6 @@ def main_worker(gpu, ngpus_per_node, args):
                 unc = result["unc"]
             if args.predict_unc_d3vo == True:
                 unc_d3vo = result["unc_d3vo"]
- 
             max_tree_depth = len(pred_depths_r_list)
             
             if args.dataset == 'nyu':
@@ -394,16 +415,25 @@ def main_worker(gpu, ngpus_per_node, args):
                     current_loss_d += l1_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
                 elif args.loss_type == 2:
                     current_loss_d += l1_d3vo_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
+                elif args.loss_type == 3:
+                    current_loss_d += silog_d3vo_criterion(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
+                elif args.loss_type == 4:
+                    current_loss_d += l1_d3vo_beta_criterion(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
+                elif args.loss_type == 5:
+                    current_loss_d += silog_d3vo_beta_criterion(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
+                elif args.loss_type == 6:
+                    current_loss_d += silog_d3vo_beta_2_criterion(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
                 else:
                     pass
 
                 if args.update_block == 2:
                     u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[curr_tree_depth].detach()) / (depth_gt + pred_depths_r_list[curr_tree_depth].detach() + 1e-7))
-
                     current_loss_u += torch.abs(pred_depths_u_list[curr_tree_depth][mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
                 elif args.predict_unc:           
                     u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[0].detach()) / (depth_gt + pred_depths_r_list[0].detach() + 1e-7))
                     current_loss_u = torch.abs(unc[mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
+                else:
+                    pass
 
             if args.update_block == 2 or args.predict_unc:
                 loss = current_loss_d + (args.uncertainty_weight * current_loss_u)
@@ -501,9 +531,15 @@ def main_worker(gpu, ngpus_per_node, args):
                 time.sleep(0.1)
                 model.eval()
                 with torch.no_grad():
-                    eval_measures = online_eval(model, args.update_block, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=True)
-                
+                    if args.predict_unc or args.predict_unc_d3vo:
+                        eval_measures, unc_error = online_eval(model, args.update_block, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=True)
+                    else:
+                        eval_measures = online_eval(model, args.update_block, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=True)
+
                 if eval_measures is not None:
+                    if best_unc > unc_error:
+                        best_unc = unc_error
+
                     exp_name = args.exp_name
                     log_txt = os.path.join(args.log_directory + '/' + args.model_name, exp_name+'_logs.txt')
                     with open(log_txt, 'a') as txtfile:
@@ -547,7 +583,10 @@ def main_worker(gpu, ngpus_per_node, args):
                                           }
                             torch.save(checkpoint, args.log_directory + '/' + args.model_name + model_save_name)
                     eval_summary_writer.flush()
-                
+                    print("Best evals at global step: " + str(global_step))
+                    print(best_eval_measures_higher_better)
+                    print(best_eval_measures_lower_better)
+                    print(best_unc) 
                 model.train()
                 block_print()
                 enable_print()
@@ -565,6 +604,7 @@ def main_worker(gpu, ngpus_per_node, args):
     print("Training ended:\n")
     print(best_eval_measures_higher_better)
     print(best_eval_measures_lower_better)
+    print(best_unc)
 
 def main():
     torch.cuda.empty_cache()

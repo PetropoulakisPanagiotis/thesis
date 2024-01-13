@@ -32,9 +32,12 @@ class NewCRFDepth(nn.Module):
         self.predict_unc_d3vo = predict_unc_d3vo
 
         # 0 iebins, 1 canonical, 2 canonical with metric uncertainty
-        self.update_block = update_block   
-        self.loss_type = loss_type # 0 for silog 1 for l1
-
+        self.update_block = update_block  
+        if loss_type == 0 or loss_type == 3 or loss_type == 5 or loss_type == 6:
+            self.loss_type = 0 # relu positive depths prediction
+        else:
+            self.loss_type = 1
+        
         norm_cfg = dict(type='BN', requires_grad=True)
         window_size = int(version[-2:])
 

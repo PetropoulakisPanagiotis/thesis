@@ -40,7 +40,8 @@ parser.add_argument('--max_tree_depth',            type=int,   help='max GRU ite
 parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 parser.add_argument('--bin_min',                   type=float, help='min value for bin initialization', default='0')
 parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='80')
-parser.add_argument('--predict_unc',        dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
+parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
+parser.add_argument('--predict_unc_d3vo',          dest='predict_unc_d3vo',help='True to predict uncertainty d3vo from the decoder', action='store_true')
 
 # Preprocessing
 parser.add_argument('--do_random_rotate',                      help='if set, will perform random rotation for augmentation', action='store_true')
@@ -77,11 +78,11 @@ def eval(model, dataloader_eval, post_process=False):
     writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
    
     image_counter = 0
-    eval_images = 30
+    eval_images = 2
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         image_counter += 1
-        #if image_counter == eval_images:
-        #    break
+        if image_counter == eval_images:
+            break
 
         with torch.no_grad():
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
@@ -106,42 +107,12 @@ def eval(model, dataloader_eval, post_process=False):
                 pred_shift_list = result["pred_shift_list"] 
             if args.update_block == 2:
                 pred_depths_u_list = result["pred_depths_u_list"]
+            if args.predict_unc == True:
+                unc = result["unc"]
+            if args.predict_unc_d3vo == True:
+                unc_d3vo = result["unc_d3vo"]
 
-            if False: 
-                # Debug #
-                if True:
-                    print("canonical")
-                    print(torch.max(pred_depths_rc_list[5][0, 0, :, :]))
-                    print(torch.min(pred_depths_rc_list[5][0, 0, :, :]))
-                    print(torch.mean(pred_depths_rc_list[5][0, 0, :, :]))
-                    print(torch.std(pred_depths_rc_list[5][0, 0, :, :]))
-                if True:
-                    print("uncertainty (std)")
-                    print(torch.max(uncertainty_maps_list[5][0, 0, :, :]))
-                    print(torch.min(uncertainty_maps_list[5][0, 0, :, :]))
-                    print(torch.mean(uncertainty_maps_list[5][0, 0, :, :]))
-                    print(torch.std(uncertainty_maps_list[5][0, 0, :, :]))            
-                if True:
-                    print("scale")
-                    print(pred_scale_list[5].shape)
-                    print(torch.max(pred_scale_list[5][0, 0]))
-                    print(torch.min(pred_scale_list[5][0, 0]))
-                    print(torch.mean(pred_scale_list[5][0, 0]))
-                    print(torch.std(pred_scale_list[5][0, 0]))  
-                    #print(torch.max(pred_scale_list[5][0, 0, :, :]))
-                    #print(torch.min(pred_scale_list[5][0, 0, :, :]))
-                    #print(torch.mean(pred_scale_list[5][0, 0, :, :]))
-                    #print(torch.std(pred_scale_list[5][0, 0, :, :]))            
-                if True:
-                    print("shift")
-                    print(torch.max(pred_shift_list[5][0, 0]))
-                    print(torch.min(pred_shift_list[5][0, 0]))
-                    print(torch.mean(pred_shift_list[5][0, 0]))
-                    print(torch.std(pred_shift_list[5][0, 0]))       
-                    #print(torch.max(pred_shift_list[5][0, 0, :, :]))
-                    #print(torch.min(pred_shift_list[5][0, 0, :, :]))
-                    #print(torch.mean(pred_shift_list[5][0, 0, :, :]))
-                    #print(torch.std(pred_shift_list[5][0, 0, :, :]))
+            debug(result, gt_depth)
 
             max_tree_depth = len(pred_depths_r_list)
             for i in range(num_log_images):
@@ -178,6 +149,13 @@ def eval(model, dataloader_eval, post_process=False):
                     if args.update_block == 2:
                         for ii in range(max_tree_depth):
                             writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_u_list[ii][i, :, :, :].data), name='viridis'), step)
+
+                    if args.predict_unc:
+                        writer.add_image('unc_head_est{}/image/{}'.format(ii, i), colormap(torch.log10(unc[i, :, :, :].data), name='viridis'), step)
+
+                    if args.predict_unc_d3vo:
+                        writer.add_image('unc_d3vo_head_est{}/image/{}'.format(ii, i), colormap(torch.log10(unc_d3vo[i, :, :, :].data), name='viridis'), step)
+
 
                 for ii in range(max_tree_depth):
                     writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(torch.log10(uncertainty_maps_list[ii][i, :, :, :].data), name='magma'), step)
@@ -223,7 +201,11 @@ def eval(model, dataloader_eval, post_process=False):
                     eval_mask[45:471, 41:601] = 1
 
             valid_mask = np.logical_and(valid_mask, eval_mask)
-            
+           
+        if True:
+            print("GT")            
+            print(np.max(gt_depth[valid_mask]))
+            print(np.min(gt_depth[valid_mask])) 
         measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
         eval_measures[:9] += torch.tensor(measures).cuda()
         eval_measures[9] += 1
@@ -240,11 +222,64 @@ def eval(model, dataloader_eval, post_process=False):
     print('{:7.4f}'.format(eval_measures_cpu[8]))
 
     return eval_measures_cpu
+def debug(result, gt_depth):
+    if True: 
+        # Debug #
+        if True:
+            print("depth")
+            print(torch.max(result['pred_depths_r_list'][5][0, :, :, :]))
+            print(torch.min(result['pred_depths_r_list'][5][0, :, :, :]))
+        
+        if True:
+            print("canonical")
+            print(torch.max(result['pred_depths_rc_list'][5][0, 0, :, :]))
+            print(torch.min(result['pred_depths_rc_list'][5][0, 0, :, :]))
+            print(torch.mean(result['pred_depths_rc_list'][5][0, 0, :, :]))
+            print(torch.std(result['pred_depths_rc_list'][5][0, 0, :, :]))
+        if True:
+            print("uncertainty (std)")
+            print(torch.max(result['uncertainty_maps_list'][5][0, 0, :, :]))
+            print(torch.min(result['uncertainty_maps_list'][5][0, 0, :, :]))
+            print(torch.mean(result['uncertainty_maps_list'][5][0, 0, :, :]))
+            print(torch.std(result['uncertainty_maps_list'][5][0, 0, :, :]))            
+        if True:
+            print("scale")
+            print(torch.max(result['pred_scale_list'][5][0, 0]))
+            print(torch.min(result['pred_scale_list'][5][0, 0]))
+            print(torch.mean(result['pred_scale_list'][5][0, 0]))
+            print(torch.std(result['pred_scale_list'][5][0, 0]))  
+            #print(torch.max(result['pred_scale_list'][5][0, 0, :, :]))
+            #print(torch.min(result['pred_scale_list'][5][0, 0, :, :]))
+            #print(torch.mean(result['pred_scale_list'][5][0, 0, :, :]))
+            #print(torch.std(result['pred_scale_list'][5][0, 0, :, :]))            
+        if True:
+            print("shift")
+            print(torch.max(result['pred_shift_list'][5][0, 0]))
+            print(torch.min(result['pred_shift_list'][5][0, 0]))
+            print(torch.mean(result['pred_shift_list'][5][0, 0]))
+            print(torch.std(result['pred_shift_list'][5][0, 0]))       
+            #print(torch.max(result['pred_shift_list'][5][0, 0, :, :]))
+            #print(torch.min(result['pred_shift_list'][5][0, 0, :, :]))
+            #print(torch.mean(result['pred_shift_list'][5][0, 0, :, :]))
+            #print(torch.std(result['pred_shift_list'][5][0, 0, :, :]))
+        if True:
+            print("unc_d3vo")
+            print(torch.max(result['unc_d3vo'][0, 0, :, :]))
+            print(torch.min(result['unc_d3vo'][0, 0, :, :]))
+            print(torch.mean(result['unc_d3vo'][0, 0, :, :]))
+            print(torch.std(result['unc_d3vo'][0, 0, :, :]))
+        if True:
+            print("sample")
+            print(result['pred_depths_r_list'][5][0, 0, 120, 701])
+            print(result['unc_d3vo'][0, 0, 120, 701])
+            print(gt_depth[0, 120, 701, 0])
 
 def main_worker(args):
 
     # CRF model
-    model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc)
+    model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, 
+                        bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, 
+                        train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
