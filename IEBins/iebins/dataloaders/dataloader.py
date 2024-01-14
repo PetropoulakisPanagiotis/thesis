@@ -183,10 +183,11 @@ class DataLoadPreprocess(Dataset):
                     else:
                         depth_gt = depth_gt / 256.0
 
-            # Read segmentation mask #
-            segmentation = os.path.join(data_path, sample_path.split()[0])
-            segmentation = segmentation.replace("rgb", "label")
-            segmentation = np.asarray(cv2.imread(segmentation, cv2.IMREAD_UNCHANGED), dtype=np.uint8)
+            # Read instances and semantic map #
+            annotations = os.path.join(data_path, sample_path.split()[0])
+            annotations = annotations.replace("rgb", "annotations")
+            annotations = annotations[:len(annotations)-4] + ".json"
+            instances_map, semantic_map, bounding_boxes, _ = load_annotations(annotations)
 
             if self.args.do_kb_crop is True:
                 height = image.shape[0]
@@ -361,3 +362,43 @@ class ToTensor(object):
             return img.float()
         else:
             return img
+
+def load_annotations(json_file_path):
+    with open(json_file_path, 'r') as file:
+        coco_data = json.load(file)
+
+    # Initialize empty arrays
+    instances_array = None
+    label_map_array = None
+    bounding_boxes_list = []
+    areas_list = []
+
+    # Iterate over annotations in the COCO-like format
+    for annotation in coco_data.get("annotations", []):
+        # Unpack segmentation (assuming it's a list)
+        segmentation = np.array(annotation.get("segmentation", []), dtype=np.uint8)
+
+        # Unpack category_id, assuming it's the label in your semantic map
+        label = annotation.get("category_id", 0)
+
+        # Unpack bbox (bounding box) as a list
+        bbox = annotation.get("bbox", [])
+        bounding_boxes_list.append(bbox)
+
+        # Unpack area
+        area = annotation.get("area", 0)
+        areas_list.append(area)
+
+        # Update instances array
+        if instances_array is None:
+            instances_array = np.zeros((segmentation.shape[0], segmentation.shape[1], 0), dtype=np.uint8)
+        instances_array = np.dstack([instances_array, segmentation])
+
+        # Update label map array
+        if label_map_array is None:
+            label_map_array = np.zeros_like(segmentation, dtype=np.uint8)
+        label_map_array[segmentation > 0] = label
+
+    return instances_array, label_map_array, np.asarray(bounding_boxes_list), np.asarray(areas_list)
+
+

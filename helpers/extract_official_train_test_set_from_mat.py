@@ -41,6 +41,7 @@ import sys
 import cv2
 import json
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 # Define a custom colormap using LinearSegmentedColormap
 colors = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]  # Replace with your desired colors
@@ -49,6 +50,42 @@ n_bins = [894]  # Number of bins, can be adjusted based on your data
 cmap_name = "custom_colormap"
 custom_cmap_labels = LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins[0])
 custom_cmap_instances = LinearSegmentedColormap.from_list(cmap_name, colors, N=37)
+
+def get_instance_masks(imgObjectLabels, imgInstances):
+    H, W = imgObjectLabels.shape
+
+    pairs = np.unique(np.column_stack((imgObjectLabels.flatten(), np.uint16(imgInstances.flatten()))), axis=0)
+    pairs = pairs[pairs.sum(axis=1) != 0]
+
+    N = pairs.shape[0]
+
+    instanceMasks = []
+    instanceLabels = []
+    boxes = []
+    areas = []
+    min_instance_area = 0#0.25/100 * H * W
+    for ii in range(N):
+        tmp = np.logical_and(imgObjectLabels == pairs[ii, 0], imgInstances == pairs[ii, 1])
+        pixels = np.sum(tmp)
+        if pixels > min_instance_area:
+            areas.append(pixels)
+            instanceMasks.append(np.uint8(tmp) * 255)
+            instanceLabels.append(pairs[ii, 0])
+
+            # Find bounding box coordinates
+            nonzero_rows, nonzero_cols = np.nonzero(tmp)
+            bbox = [np.min(nonzero_rows), np.min(nonzero_cols), np.max(nonzero_rows), np.max(nonzero_cols)]
+            offset = 2
+            bbox[0] = max(bbox[0] - offset, 0)
+            bbox[1] = max(bbox[1] - offset, 0)
+            bbox[2] = min(bbox[2] + offset, labels.shape[1] - 1)
+            bbox[3] = min(bbox[3] + offset, labels.shape[0] - 1)
+
+            boxes.append(bbox)
+        else:
+            print("instance filterted with: ", str(pixels), " pixels")
+
+    return np.stack(instanceMasks, axis=2), np.array(instanceLabels), np.array(boxes), np.array(areas)
 
 
 def encapsulate_bounding_boxes(map_data, id_value):
@@ -67,7 +104,7 @@ def encapsulate_bounding_boxes(map_data, id_value):
 
     return [y1, x1, y2, x2]
 
-def convert_image(i, scene, depth_raw, image):
+def convert_image_and_depth(i, scene, depth_raw, image):
 
     idx = int(i) + 1
     if idx in train_images:
@@ -89,7 +126,12 @@ def convert_image(i, scene, depth_raw, image):
     cv2.imwrite("%s/rgb_%05d.jpg" % (folder, i), image_black_boundary)
 
 
-def convert_instance(i, scene, image):
+def convert_instances_and_semantic_mask(i, scene, image, label_map):
+    instances, labels, boxes, areas = get_instance_masks(label_map, image)
+    #for i in range(31):
+    #    cv2.imshow(str(i), instances[:, :, i].astype(np.uint8))
+    #    cv2.waitKey(0)
+    #    cv2.destroyAllWindows()
 
     idx = int(i) + 1
     if idx in train_images:
@@ -102,122 +144,109 @@ def convert_instance(i, scene, image):
     if not os.path.exists(folder):
         os.makedirs(folder)
 
-    image = image[:, ::-1]
-
-    # Filter #
-    h,w = image.shape
-    min_instance_area = 0.25/100 * h * w
-    # Specify the threshold
-    # Count the occurrences of each ID
-    id_counts = np.bincount(image.flatten())
-    # Identify IDs below the threshold and set them to 0
-    below_threshold_ids = np.where(id_counts < min_instance_area)[0]
-
-    # Update the original data array
-    for id_to_zero in below_threshold_ids:
-        image[image == id_to_zero] = 0
-
-    image_black_boundary = np.zeros((480, 640), dtype=np.uint8)
-    image_black_boundary[7:474, 7:632] = image[7:474, 7:632]
-    #image_black_boundary = cv2.flip(image_black_boundary, 1)
-    cv2.imwrite("%s/instance_%05d.jpg" % (folder, i), image_black_boundary)
-
-    image = image_black_boundary
-
-    unique_ids = np.unique(image)
-    unique_ids = unique_ids[unique_ids != 0]
-    bounding_boxes = {}
-
-    for id_value in unique_ids:
-        bounding_box = encapsulate_bounding_boxes(image, id_value)
-        bounding_boxes[id_value] = bounding_box
-
-    print(bounding_boxes)
-
-    # Create a dictionary to store the separate maps for each ID
-    id_maps = {}
-
-    # Iterate over each unique ID
-    for id_value in unique_ids:
-        print(id_value)
-        # Create a new map with zeros in areas where the ID is not present
-        id_maps[id_value] = np.where(image == id_value, 255, 0)
-
-    # Print the resulting maps
-    for id_value, map_data in id_maps.items():
-        print(f'Map for ID {id_value}:')
-        print(map_data)
-        print()
-        cv2.imshow('image', map_data.astype(np.uint8))
-        cv2.waitKey(0)
-
-
-    """
-    data_dict = {
-        'image_name': 'your_image_name.jpg',  # Replace with the actual image name
-        'bounding_boxes': {},
-        'maps': {}
+    # Create a COCO-like dictionary
+    coco_data = {
+        "annotations": [],
     }
-    # Store bounding boxes
-    for id_value in unique_ids:
-        bounding_box = encapsulate_bounding_boxes(image, id_value)
-        data_dict['bounding_boxes'][id_value] = bounding_box
 
-    # Store maps
-    for id_value in unique_ids:
-        map_data = np.where(image == id_value, 1, 0).tolist()
-        data_dict['maps'][id_value] = map_data
+    labels = labels.tolist()
+    # Add category information (assuming you have a fixed set of semantic labels)
+    coco_data["categories"] = label_map.tolist()
+    # Add instance annotations
+    annotation_id = 1
+    for i in range(instances.shape[2]):
+        bbox = boxes[i]
+        segmentation = instances[:, :, i].tolist()  # Convert to list for JSON serialization
 
-    # Save to JSON file
-    output_file_path = 'output_data.json'
-    with open(output_file_path, 'w') as json_file:
-        json.dump(data_dict, json_file)
-    """
+        annotation = {
+            "id": annotation_id,
+            "category_id": labels[i],
+            "segmentation": segmentation,
+            "bbox": bbox.tolist(),
+            "area": areas[i].tolist()
+        }
 
-    image = image_black_boundary
-    # Map data values to RGB colors using the colormap
-    rgb_data = custom_cmap_instances(image / np.max(image))  # Normalize the data to [0, 1]
-    rgb_data = rgb_data[:, :, :3] * 255
+        coco_data["annotations"].append(annotation)
+        annotation_id += 1
+
+    annotations_name = "%s/annotations_%05d.json" % (folder, i)
+    # Save the data to a JSON file
+    with open(annotations_name, "w") as json_file:
+        json.dump(coco_data, json_file)
+
+    rgb_data = custom_cmap_instances(label_map / np.max(label_map))  # Normalize the data to [0, 1]
+    rgb_data = rgb_data[:, :] * 255
     # Visualize bounding boxes on the image
-    for id, bounding_box in bounding_boxes.items():
-        y1, x1, y2, x2 = bounding_box
+    for box in boxes:
+        y1, x1, y2, x2 = box
         cv2.rectangle(rgb_data, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-    # Save the colored image
-    cv2.imwrite("%s/instance_colored_%05d.jpg" % (folder, i), (rgb_data).astype(np.uint8))
-    print(folder, i)
+    cv2.imwrite("%s/map_%05d.png" % (folder, i), rgb_data)
+    """
+    cv2.imshow("i", rgb_data[:, :].astype(np.uint8))
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    instances_array, label_map_array, bounding_boxes_list, areas_array = load_json_and_unpack(annotations_name)
+    """
+    #print(np.array_equal(instances, instances_array))
+    #print(np.array_equal(label_map_array, label_map))
+    #print(np.array_equal(boxes, bounding_boxes_list))
+    #print(np.array_equal(areas_array, areas))
+
+    #rgb_data = custom_cmap_instances(label_map / np.max(label_map))  # Normalize the data to [0, 1]
+    #rgb_data = rgb_data[:, :] * 255
+    # Visualize bounding boxes on the image
+    #for box in boxes:
+    #    y1, x1, y2, x2 = box
+    #    cv2.rectangle(rgb_data, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    #cv2.imshow("j", rgb_data[:, :].astype(np.uint8))
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
+    #for i in range(31):
+    #    cv2.imshow(str(i), instances[:, :, i].astype(np.uint8))
+    #    cv2.waitKey(0)
+    #    cv2.destroyAllWindows()
     #exit()
 
+def load_json_and_unpack(json_file_path):
+    with open(json_file_path, 'r') as file:
+        coco_data = json.load(file)
 
+    # Initialize empty arrays
+    instances_array = None
+    label_map_array = None
+    bounding_boxes_list = []
+    areas_list = []
 
+    # Iterate over annotations in the COCO-like format
+    for annotation in coco_data.get("annotations", []):
+        # Unpack segmentation (assuming it's a list)
+        segmentation = np.array(annotation.get("segmentation", []), dtype=np.uint8)
 
-def convert_labels(i, scene, image):
+        # Unpack category_id, assuming it's the label in your semantic map
+        label = annotation.get("category_id", 0)
 
-    idx = int(i) + 1
-    if idx in train_images:
-        train_test = "train"
-    else:
-        assert idx in test_images, "index %d neither found in training set nor in test set" % idx
-        train_test = "test"
+        # Unpack bbox (bounding box) as a list
+        bbox = annotation.get("bbox", [])
+        bounding_boxes_list.append(bbox)
 
-    folder = "%s/%s/%s" % (out_folder, train_test, scene)
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-    image = image[:, ::-1]
-    image_black_boundary = np.zeros((480, 640), dtype=np.uint8)
-    image_black_boundary[7:474, 7:632] = image[7:474, 7:632]
-    image_black_boundary = cv2.flip(image_black_boundary, 1)
-    cv2.imwrite("%s/label_%05d.jpg" % (folder, i), image_black_boundary)
-    image = image_black_boundary
+        # Unpack area
+        area = annotation.get("area", 0)
+        areas_list.append(area)
 
-    unique_ids = np.unique(image)
-    print(unique_ids)
-    exit()
-    # Map data values to RGB colors using the colormap
-    rgb_data = custom_cmap_labels(image / np.max(image))  # Normalize the data to [0, 1]
+        # Update instances array
+        if instances_array is None:
+            instances_array = np.zeros((segmentation.shape[0], segmentation.shape[1], 0), dtype=np.uint8)
+        instances_array = np.dstack([instances_array, segmentation])
 
-    # Save the colored image
-    cv2.imwrite("%s/label_colored_%05d.jpg" % (folder, i), (rgb_data[:, :, :3] * 255).astype(np.uint8))
+        # Update label map array
+        if label_map_array is None:
+            label_map_array = np.zeros_like(segmentation, dtype=np.uint8)
+        label_map_array[segmentation > 0] = label
+
+    return instances_array, label_map_array, np.asarray(bounding_boxes_list), np.asarray(areas_list)
+
 
 def convert_names(names):
     counter = 1
@@ -256,21 +285,14 @@ if __name__ == "__main__":
     names = [u''.join(chr(c[0]) for c in h5_file[obj_ref]) for obj_ref in names[0]]
     convert_names(names)
 
+
     labels = h5_file['labels']
-    print("processing labels")
-    for i, image in enumerate(labels):
-        print("image", i + 1, "/", len(labels))
-        convert_labels(i, scenes[i],  image.T)
-        break
     instances = h5_file['instances']
 
     print("processing instances")
-    for i, image in enumerate(instances):
+    for i, (instance, label) in enumerate(zip(instances, labels)):
         print("image", i + 1, "/", len(instances))
-        convert_instance(i, scenes[i],  image.T)
-        break
-
-
+        convert_instances_and_semantic_mask(i, scenes[i],  instance.T, label.T)
     depth_raw = h5_file['rawDepths']
 
     print("reading", sys.argv[1])
@@ -280,6 +302,6 @@ if __name__ == "__main__":
     print("processing images")
     for i, image in enumerate(images):
         print("image", i + 1, "/", len(images))
-        convert_image(i, scenes[i], depth_raw[i, :, :].T, image.T)
+        convert_image_and_depth(i, scenes[i], depth_raw[i, :, :].T, image.T)
 
     print("Finished")
