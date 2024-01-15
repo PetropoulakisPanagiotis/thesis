@@ -72,7 +72,7 @@ class DataLoadPreprocess(Dataset):
         else:
             with open(args.filenames_file, 'r') as f:
                 self.filenames = f.readlines()
-    
+
         self.mode = mode
         self.transform = transform
         self.to_tensor = ToTensor
@@ -88,7 +88,7 @@ class DataLoadPreprocess(Dataset):
                 rgb_file = sample_path.split()[0]
                 #depth_file = os.path.join(sample_path.split()[0].split('/')[0], sample_path.split()[1])
                 depth_file = os.path.join(sample_path.split()[1])
-                
+
                 if self.args.use_right is True and random.random() > 0.5:
                     rgb_file.replace('image_02', 'image_03')
                     depth_file.replace('image_02', 'image_03')
@@ -103,7 +103,7 @@ class DataLoadPreprocess(Dataset):
             depth_gt = Image.open(depth_path)
 
             # Read segmentation mask #
-            annotations = os.path.join(data_path, sample_path.split()[0])
+            annotations = os.path.join(self.args.data_path, sample_path.split()[0])
             annotations = annotations.replace("rgb", "annotations")
             annotations = annotations[:len(annotations)-4] + ".json"
             instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas = load_annotations(annotations)
@@ -195,7 +195,6 @@ class DataLoadPreprocess(Dataset):
             annotations = annotations.replace("rgb", "annotations")
             annotations = annotations[:len(annotations)-4] + ".json"
             instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas = load_annotations(annotations)
-
 
             if self.args.do_kb_crop is True:
                 height = image.shape[0]

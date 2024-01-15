@@ -34,6 +34,7 @@
 
 --loss_type 0
 --predict_unc
+
 --log_freq 50
 --do_online_eval
 --eval_freq 300

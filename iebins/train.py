@@ -275,7 +275,7 @@ def main_worker(gpu, ngpus_per_node, args):
             else:
                 loc = 'cuda:{}'.format(args.gpu)
                 checkpoint = torch.load(args.checkpoint_path, map_location=loc)
-            if args.update_block != 0 and args.checkpoint_path.find("kittieigen") != -1:
+            if args.update_block != 0:
                 # Canonical -> use IEBins weights else adapt #
                 weights_to_remove = "update"
                 keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove in key]
