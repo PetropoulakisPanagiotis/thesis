@@ -9,7 +9,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.utils.data.distributed
 from torchvision import transforms
-
+import torch.nn.functional as F
 from utils import DistributedSamplerNoEvenlyDivisible
 import json
 
@@ -215,7 +215,6 @@ class DataLoadPreprocess(Dataset):
             sample['segmentation_map'] = segmentation_map
             sample['instances_labels'] = instances_labels
             sample['instances_bbox'] = instances_bbox
-            sample['instances_areas'] = instances_areas
 
         if self.transform:
             sample = self.transform([sample, self.args.dataset])
@@ -311,7 +310,8 @@ class ToTensor(object):
     def __init__(self, mode):
         self.mode = mode
         self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    
+        self.max_instances = 78
+ 
     def __call__(self, sample_dataset):
 
         sample = sample_dataset[0]
@@ -337,12 +337,22 @@ class ToTensor(object):
             inv_K_p = np.linalg.pinv(K_p)
             inv_K_p = torch.from_numpy(inv_K_p)
 
+   
             instances_masks = torch.stack([torch.from_numpy(arr) for arr in sample['instances_masks']])
-            segmentation_map = torch.from_numpy(sample['segmentation_map'])
-            instances_labels = torch.from_numpy(sample['instances_labels'])
-            instances_bbox = torch.stack([torch.from_numpy(arr) for arr in sample['instances_bbox']])
-            instances_areas = torch.from_numpy(sample['instances_areas'])
+            num_zeros_needed = self.max_instances - instances_masks.shape[0]
+            
+            zero_tensors = [torch.zeros(1, *instances_masks.shape[1:]) for _ in range(num_zeros_needed)]
+            instances_masks = torch.cat([instances_masks] + zero_tensors, dim=0)
 
+            segmentation_map = torch.from_numpy(sample['segmentation_map'])
+           
+            instances_labels = torch.from_numpy(sample['instances_labels'])
+            zero_tensors = [-1 * torch.ones(1) for _ in range(num_zeros_needed)]
+            instances_labels = torch.cat([instances_labels] + zero_tensors, dim=0)
+
+            instances_bbox = torch.stack([torch.from_numpy(arr) for arr in sample['instances_bbox']])
+            zero_tensors = [torch.zeros(1, 4) for _ in range(num_zeros_needed)]
+            instances_bbox = torch.cat([instances_bbox] + zero_tensors, dim=0)
 
         if self.mode == 'test':
             return {'image': image, 'inv_K_p': inv_K_p, 'focal': focal}
@@ -352,12 +362,12 @@ class ToTensor(object):
             depth = self.to_tensor(depth)
 
             return {'image': image, 'depth': depth, 'focal': focal, 'instances_masks': instances_masks, 'segmentation_map': segmentation_map, 'instances_labels': instances_labels,
-                    'instances_bbox': instances_bbox, 'instances_areas': instances_areas
+                    'instances_bbox': instances_bbox
                     }
         else:
             has_valid_depth = sample['has_valid_depth']
             return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth, 'instances_masks': instances_masks, 'segmentation_map': segmentation_map, 'instances_labels': instances_labels,
-                    'instances_bbox': instances_bbox, 'instances_areas': instances_areas
+                    'instances_bbox': instances_bbox
                     }
 
     def to_tensor(self, pic):

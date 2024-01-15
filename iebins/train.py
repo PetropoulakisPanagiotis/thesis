@@ -142,7 +142,6 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                 pred_depth = pred_depths_r_list[-1].cpu().numpy().squeeze()
 
             gt_depth = gt_depth.cpu().numpy().squeeze()
-
         if args.do_kb_crop:
             height, width = gt_depth.shape
             top_margin = int(height - 352)
@@ -178,17 +177,20 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
 
         if args.predict_unc:
             unc_error = compute_errors_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], unc[valid_mask], 0)
+            eval_measures_unc[0] += torch.tensor(unc_error).cuda(device=gpu)
         if args.predict_unc_d3vo:
             unc_error = compute_errors_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], unc[valid_mask], 1)
+            eval_measures_unc[0] += torch.tensor(unc_error).cuda(device=gpu)
 
         eval_measures[:measures_size - 1] += torch.tensor(measures).cuda(device=gpu)
         eval_measures[measures_size - 1] += 1
-        eval_measures_unc[0] += torch.tensor(unc_error).cuda(device=gpu)
 
+        break
     if args.multiprocessing_distributed:
         # group = dist.new_group([i for i in range(ngpus)])
         dist.all_reduce(tensor=eval_measures, op=dist.ReduceOp.SUM, group=group)
-        dist.all_reduce(tensor=eval_measures_unc, op=dist.ReduceOp.SUM, group=group)
+        if args.predict_unc or args.predict_unc_d3vo:
+            dist.all_reduce(tensor=eval_measures_unc, op=dist.ReduceOp.SUM, group=group)
 
     # Devide by sum for multiprocessing #
     if not args.multiprocessing_distributed or gpu == 0:
@@ -259,7 +261,6 @@ def main_worker(gpu, ngpus_per_node, args):
     best_eval_measures_lower_better = torch.zeros(6).cpu() + 1e3
     best_eval_measures_higher_better = torch.zeros(3).cpu()
     best_eval_steps = np.zeros(9, dtype=np.int32)
-
     best_unc = np.inf
 
     # Training parameters
@@ -314,7 +315,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # Logging #
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
-        
+        print(args.log_directory + '/' + args.model_name + '/summaries') 
         writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
         
         # Metrics #
@@ -486,45 +487,31 @@ def main_worker(gpu, ngpus_per_node, args):
                     writer.add_scalar('var average', var_sum.item()/var_cnt, global_step)
                     depth_gt = torch.where(depth_gt < 1e-3, depth_gt * 0 + 1e-3, depth_gt)
                     for i in range(num_images):
-                        if args.dataset == 'nyu':
-                            writer.add_image('depth_gt/image/{}'.format(i), colormap(depth_gt[i, :, :, :].data), global_step)
-                            writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
-                            writer.add_image('depth_r_est0/image/{}'.format(i), colormap(pred_depths_r_list[0][i, :, :, :].data), global_step)
-                            writer.add_image('depth_r_est1/image/{}'.format(i), colormap(pred_depths_r_list[1][i, :, :, :].data), global_step)
-                            writer.add_image('depth_r_est2/image/{}'.format(i), colormap(pred_depths_r_list[2][i, :, :, :].data), global_step)
-                            writer.add_image('depth_r_est3/image/{}'.format(i), colormap(pred_depths_r_list[3][i, :, :, :].data), global_step)
-                            writer.add_image('depth_r_est4/image/{}'.format(i), colormap(pred_depths_r_list[4][i, :, :, :].data), global_step)
-                            writer.add_image('depth_r_est5/image/{}'.format(i), colormap(pred_depths_r_list[5][i, :, :, :].data), global_step)
-                            writer.add_image('depth_c_est0/image/{}'.format(i), colormap(pred_depths_c_list[0][i, :, :, :].data), global_step)
-                            writer.add_image('depth_c_est1/image/{}'.format(i), colormap(pred_depths_c_list[1][i, :, :, :].data), global_step)
-                            writer.add_image('depth_c_est2/image/{}'.format(i), colormap(pred_depths_c_list[2][i, :, :, :].data), global_step)
-                            writer.add_image('depth_c_est3/image/{}'.format(i), colormap(pred_depths_c_list[3][i, :, :, :].data), global_step)
-                            writer.add_image('depth_c_est4/image/{}'.format(i), colormap(pred_depths_c_list[4][i, :, :, :].data), global_step)
-                            writer.add_image('depth_c_est5/image/{}'.format(i), colormap(pred_depths_c_list[5][i, :, :, :].data), global_step)
-                        else:
-                            writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
-                            writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
-                            
-                            for ii in range(max_tree_depth):
-                                writer.add_image('depth_r_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), global_step)
-                            for ii in range(max_tree_depth):
-                                writer.add_image('depth_c_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), global_step)
-
-                            if args.update_block != 0:
-                                for ii in range(max_tree_depth):
-                                    writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data), name='magma'), global_step)
-
-                            if args.update_block == 2:
-                                for ii in range(max_tree_depth):
-                                    writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_u_list[ii][i, :, :, :].data), name='viridis'), global_step)
-                            if args.predict_unc:
-                                writer.add_image('unc_head_est{}/image/{}'.format(ii, i), colormap(torch.log10(unc[i, :, :, :].data), name='viridis'), global_step)
-
-                            if args.predict_unc_d3vo:
-                                writer.add_image('unc_d3vo_head_est{}/image/{}'.format(ii, i), colormap(torch.log10(unc_d3vo[i, :, :, :].data), name='viridis'), global_step)
-
+                        writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
+                        
                         for ii in range(max_tree_depth):
-                            writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(torch.log10(uncertainty_maps_list[ii][i, :, :, :].data), name='magma'), global_step)
+                            writer.add_image('depth_r_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), global_step)
+                        for ii in range(max_tree_depth):
+                            writer.add_image('depth_c_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), global_step)
+
+                        if args.update_block != 0:
+                            for ii in range(max_tree_depth):
+                                writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data), name='magma'), global_step)
+
+                        writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
+
+                        if args.update_block == 2:
+                            for ii in range(max_tree_depth):
+                                writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap(pred_depths_u_list[ii][i, :, :, :].data), global_step)
+
+                        if args.predict_unc:
+                            writer.add_image('unc_head_est{}/image/{}'.format(ii, i), colormap(unc[i, :, :, :].data, name='viridis'), global_step)
+
+                        if args.predict_unc_d3vo:
+                            writer.add_image('unc_d3vo_head_est{}/image/{}'.format(ii, i), colormap(unc_d3vo[i, :, :, :].data, name='viridis'), global_step)
+
+                    for ii in range(max_tree_depth):
+                        writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), global_step)
 
             # Evaluate #
             if args.do_online_eval and global_step and global_step % args.eval_freq == 0 and not model_just_loaded:
@@ -537,8 +524,9 @@ def main_worker(gpu, ngpus_per_node, args):
                         eval_measures = online_eval(model, args.update_block, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=True)
 
                 if eval_measures is not None:
-                    if best_unc > unc_error:
-                        best_unc = unc_error
+                    if args.predict_unc or args.predict_unc_d3vo:
+                        if best_unc > unc_error:
+                            best_unc = unc_error
 
                     exp_name = args.exp_name
                     log_txt = os.path.join(args.log_directory + '/' + args.model_name, exp_name+'_logs.txt')
@@ -586,7 +574,8 @@ def main_worker(gpu, ngpus_per_node, args):
                     print("Best evals at global step: " + str(global_step))
                     print(best_eval_measures_higher_better)
                     print(best_eval_measures_lower_better)
-                    print(best_unc) 
+                    if args.predict_unc or args.predict_unc_d3vo:
+                        print(best_unc) 
                 model.train()
                 block_print()
                 enable_print()
@@ -604,7 +593,8 @@ def main_worker(gpu, ngpus_per_node, args):
     print("Training ended:\n")
     print(best_eval_measures_higher_better)
     print(best_eval_measures_lower_better)
-    print(best_unc)
+    if args.predict_unc or args.predict_unc_d3vo:
+        print(best_unc)
 
 def main():
     torch.cuda.empty_cache()

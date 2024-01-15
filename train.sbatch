@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name="f-4"
-#SBATCH --nodelist=node[17]
+#SBATCH --job-name="nyu1"
+#SBATCH --nodelist=node[11,12,13,14,15,16,17,18]
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1,VRAM:32G
 #SBATCH --mem=24G
-#SBATCH --time=13:00:00
+#SBATCH --time=20:00:00
 #SBATCH --mail-type=NONE
-#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-f-4-%j.out
-#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-f-4-%j.out
-srun python /usr/stud/petp/code/thesis/iebins/train.py /usr/stud/petp/code/thesis/configs/f-4.txt
+#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-nyu1-%j.out
+#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-nyu1-%j.out
+srun python /usr/stud/petp/code/thesis/iebins/train.py /usr/stud/petp/code/thesis/configs/nyu1.txt
 
 
 
