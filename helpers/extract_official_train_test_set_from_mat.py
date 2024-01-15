@@ -63,6 +63,8 @@ def get_instance_masks(imgObjectLabels, imgInstances):
     instanceLabels = []
     boxes = []
     areas = []
+    pixel_coordinates = []
+
     min_instance_area = 0#0.25/100 * H * W
     for ii in range(N):
         tmp = np.logical_and(imgObjectLabels == pairs[ii, 0], imgInstances == pairs[ii, 1])
@@ -80,12 +82,12 @@ def get_instance_masks(imgObjectLabels, imgInstances):
             bbox[1] = max(bbox[1] - offset, 0)
             bbox[2] = min(bbox[2] + offset, labels.shape[1] - 1)
             bbox[3] = min(bbox[3] + offset, labels.shape[0] - 1)
-
             boxes.append(bbox)
+            pixel_coordinates.append(np.column_stack((nonzero_cols, nonzero_rows)))
+
         else:
             print("instance filterted with: ", str(pixels), " pixels")
-
-    return np.stack(instanceMasks, axis=2), np.array(instanceLabels), np.array(boxes), np.array(areas)
+    return np.stack(instanceMasks, axis=2), np.array(instanceLabels), np.array(boxes), np.array(areas), pixel_coordinates
 
 
 def encapsulate_bounding_boxes(map_data, id_value):
@@ -120,6 +122,7 @@ def convert_image_and_depth(i, scene, depth_raw, image):
     img_depth = depth_raw * 1000.0
     img_depth_uint16 = img_depth.astype(np.uint16)
     cv2.imwrite("%s/sync_depth_%05d.png" % (folder, i), img_depth_uint16)
+    print("%s/sync_depth_%05d.png" % (folder, i))
     image = image[:, :, ::-1]
     image_black_boundary = np.zeros((480, 640, 3), dtype=np.uint8)
     image_black_boundary[7:474, 7:632, :] = image[7:474, 7:632, :]
@@ -127,7 +130,7 @@ def convert_image_and_depth(i, scene, depth_raw, image):
 
 
 def convert_instances_and_semantic_mask(i, scene, image, label_map):
-    instances, labels, boxes, areas = get_instance_masks(label_map, image)
+    instances, labels, boxes, areas, pixel_coordinates = get_instance_masks(label_map, image)
     #for i in range(31):
     #    cv2.imshow(str(i), instances[:, :, i].astype(np.uint8))
     #    cv2.waitKey(0)
@@ -147,6 +150,7 @@ def convert_instances_and_semantic_mask(i, scene, image, label_map):
     # Create a COCO-like dictionary
     coco_data = {
         "annotations": [],
+        "categories": []
     }
 
     labels = labels.tolist()
@@ -154,22 +158,22 @@ def convert_instances_and_semantic_mask(i, scene, image, label_map):
     coco_data["categories"] = label_map.tolist()
     # Add instance annotations
     annotation_id = 1
-    for i in range(instances.shape[2]):
-        bbox = boxes[i]
-        segmentation = instances[:, :, i].tolist()  # Convert to list for JSON serialization
-
+    for ii in range(instances.shape[2]):
+        bbox = boxes[ii]
+        segmentation = pixel_coordinates[ii].tolist() #instances[:, :, ii].tolist()  # Convert to list for JSON serialization
         annotation = {
             "id": annotation_id,
-            "category_id": labels[i],
+            "category_id": labels[ii],
             "segmentation": segmentation,
             "bbox": bbox.tolist(),
-            "area": areas[i].tolist()
+            "area": areas[ii].tolist()
         }
 
         coco_data["annotations"].append(annotation)
         annotation_id += 1
 
     annotations_name = "%s/annotations_%05d.json" % (folder, i)
+    print(annotations_name)
     # Save the data to a JSON file
     with open(annotations_name, "w") as json_file:
         json.dump(coco_data, json_file)
@@ -187,13 +191,14 @@ def convert_instances_and_semantic_mask(i, scene, image, label_map):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-    instances_array, label_map_array, bounding_boxes_list, areas_array = load_json_and_unpack(annotations_name)
+    segmentations, labels_map_load, labels_load, bounding_boxes, areas_load = load_json_and_unpack(annotations_name)
+    print(np.array_equal(labels, labels_load))
+    print(np.array_equal(labels_map_load, label_map))
+    print(np.array_equal(segmentations[0], pixel_coordinates[0]))
+    print(np.array_equal(areas, areas_load))
+    print(np.array_equal(boxes, bounding_boxes))
+    exit()
     """
-    #print(np.array_equal(instances, instances_array))
-    #print(np.array_equal(label_map_array, label_map))
-    #print(np.array_equal(boxes, bounding_boxes_list))
-    #print(np.array_equal(areas_array, areas))
-
     #rgb_data = custom_cmap_instances(label_map / np.max(label_map))  # Normalize the data to [0, 1]
     #rgb_data = rgb_data[:, :] * 255
     # Visualize bounding boxes on the image
@@ -214,18 +219,19 @@ def load_json_and_unpack(json_file_path):
         coco_data = json.load(file)
 
     # Initialize empty arrays
-    instances_array = None
-    label_map_array = None
     bounding_boxes_list = []
     areas_list = []
-
+    segmentations = []
+    labels_map = np.array(coco_data.get("categories"))
+    labels = []
     # Iterate over annotations in the COCO-like format
     for annotation in coco_data.get("annotations", []):
         # Unpack segmentation (assuming it's a list)
-        segmentation = np.array(annotation.get("segmentation", []), dtype=np.uint8)
-
+        segmentation = np.array(annotation.get("segmentation", []), dtype=np.uint16)
+        segmentations.append(segmentation)
         # Unpack category_id, assuming it's the label in your semantic map
         label = annotation.get("category_id", 0)
+        labels.append(label)
 
         # Unpack bbox (bounding box) as a list
         bbox = annotation.get("bbox", [])
@@ -235,17 +241,7 @@ def load_json_and_unpack(json_file_path):
         area = annotation.get("area", 0)
         areas_list.append(area)
 
-        # Update instances array
-        if instances_array is None:
-            instances_array = np.zeros((segmentation.shape[0], segmentation.shape[1], 0), dtype=np.uint8)
-        instances_array = np.dstack([instances_array, segmentation])
-
-        # Update label map array
-        if label_map_array is None:
-            label_map_array = np.zeros_like(segmentation, dtype=np.uint8)
-        label_map_array[segmentation > 0] = label
-
-    return instances_array, label_map_array, np.asarray(bounding_boxes_list), np.asarray(areas_list)
+    return segmentations, labels_map, labels, np.asarray(bounding_boxes_list), np.asarray(areas_list)
 
 
 def convert_names(names):
@@ -286,22 +282,15 @@ if __name__ == "__main__":
     convert_names(names)
 
 
+    print("reading", sys.argv[1])
     labels = h5_file['labels']
+    images = h5_file['images']
     instances = h5_file['instances']
-
-    print("processing instances")
-    for i, (instance, label) in enumerate(zip(instances, labels)):
-        print("image", i + 1, "/", len(instances))
-        convert_instances_and_semantic_mask(i, scenes[i],  instance.T, label.T)
     depth_raw = h5_file['rawDepths']
 
-    print("reading", sys.argv[1])
-
-    images = h5_file['images']
-
-    print("processing images")
-    for i, image in enumerate(images):
-        print("image", i + 1, "/", len(images))
+    print("processing instances")
+    for i, (instance, label, image) in enumerate(zip(instances, labels, images)):
+        print("image", i + 1, "/", len(instances))
+        convert_instances_and_semantic_mask(i, scenes[i],  instance.T, label.T)
         convert_image_and_depth(i, scenes[i], depth_raw[i, :, :].T, image.T)
-
     print("Finished")

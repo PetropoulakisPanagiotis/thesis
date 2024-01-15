@@ -10,7 +10,7 @@ import random
 import copy
 import cv2
 from utils import DistributedSamplerNoEvenlyDivisible
-
+import json
 
 def _is_pil_image(img):
     return isinstance(img, Image.Image)
@@ -99,9 +99,10 @@ class DataLoadPreprocess(Dataset):
             depth_gt = Image.open(depth_path)
 
             # Read segmentation mask #
-            segmentation = os.path.join(data_path, sample_path.split()[0])
-            segmentation = segmentation.replace("rgb", "label")
-            segmentation = np.asarray(cv2.imread(segmentation, cv2.IMREAD_UNCHANGED), dtype=np.uint8)
+            annotations = os.path.join(data_path, sample_path.split()[0])
+            annotations = annotations.replace("rgb", "annotations")
+            annotations = annotations[:len(annotations)-4] + ".json"
+            instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas = load_annotations(annotations)
 
             if self.args.do_kb_crop is True:
                 height = image.height
@@ -120,11 +121,12 @@ class DataLoadPreprocess(Dataset):
                     depth_gt[valid_mask==0] = 0
                     depth_gt = Image.fromarray(depth_gt)
                 else:
-                    depth_gt = depth_gt.crop((43, 45, 608, 472))
-                    image = image.crop((43, 45, 608, 472))
+                    pass
+                    #depth_gt = depth_gt.crop((43, 45, 608, 472))
+                    #image = image.crop((43, 45, 608, 472))
 
             # Watch this for segmentation #
-            if self.args.do_random_rotate is True:
+            if self.args.do_random_rotate is True and False:
                 random_angle = (random.random() - 0.5) * 2 * self.args.degree
                 image = self.rotate_image(image, random_angle)
                 depth_gt = self.rotate_image(depth_gt, random_angle, flag=Image.NEAREST)
@@ -138,19 +140,22 @@ class DataLoadPreprocess(Dataset):
             else:
                 depth_gt = depth_gt / 256.0
 
-            if image.shape[0] != self.args.input_height or image.shape[1] != self.args.input_width:
-                image, depth_gt = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width)
+            #if image.shape[0] != self.args.input_height or image.shape[1] != self.args.input_width:
+            #    image, depth_gt = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width)
             image, depth_gt = self.train_preprocess(image, depth_gt)
 
-            if True:
+            if False:
                 # Watch this for segmentation #
                 # https://github.com/ShuweiShao/URCDC-Depth
                 image, depth_gt = self.Cut_Flip(image, depth_gt)
 
             sample = {'image': image, 'depth': depth_gt, 'focal': focal}
             if self.args.dataset == 'nyu':
-                sample['segmentation'] = segmentation
-
+                sample['instances_masks'] = instances_masks
+                sample['segmentation_map'] = segmentation_map
+                sample['instances_labels'] = instances_labels
+                sample['instances_bbox'] = instances_bbox
+                sample['instances_areas'] = instances_areas
         else:
             if self.mode == 'online_eval':
                 data_path = self.args.data_path_eval
@@ -187,7 +192,7 @@ class DataLoadPreprocess(Dataset):
             annotations = os.path.join(data_path, sample_path.split()[0])
             annotations = annotations.replace("rgb", "annotations")
             annotations = annotations[:len(annotations)-4] + ".json"
-            instances_map, semantic_map, bounding_boxes, _ = load_annotations(annotations)
+            instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas = load_annotations(annotations)
 
             if self.args.do_kb_crop is True:
                 height = image.shape[0]
@@ -204,10 +209,15 @@ class DataLoadPreprocess(Dataset):
                 sample = {'image': image, 'focal': focal}
 
         if self.args.dataset == 'nyu':
-            sample['segmentation'] = segmentation
+            sample['instances_masks'] = instances_masks
+            sample['segmentation_map'] = segmentation_map
+            sample['instances_labels'] = instances_labels
+            sample['instances_bbox'] = instances_bbox
+            sample['instances_areas'] = instances_areas
 
         if self.transform:
             sample = self.transform([sample, self.args.dataset])
+
         return sample
 
     def rotate_image(self, image, angle, flag=Image.BILINEAR):
@@ -227,18 +237,18 @@ class DataLoadPreprocess(Dataset):
 
     def train_preprocess(self, image, depth_gt):
         # Random flipping
-        do_flip = random.random()
-        if do_flip > 0.5:
-            image = (image[:, ::-1, :]).copy()
-            depth_gt = (depth_gt[:, ::-1, :]).copy()
-    
+        #do_flip = random.random()
+        #if do_flip > 0.5:
+        #    image = (image[:, ::-1, :]).copy()
+        #    depth_gt = (depth_gt[:, ::-1, :]).copy()
+
         # Random gamma, brightness, color augmentation
         do_augment = random.random()
         if do_augment > 0.5:
             image = self.augment_image(image)
-    
+
         return image, depth_gt
-    
+
     def augment_image(self, image):
         # gamma augmentation
         gamma = random.uniform(0.9, 1.1)
@@ -295,7 +305,7 @@ class ToTensor(object):
     def __init__(self, mode):
         self.mode = mode
         self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    
+
     def __call__(self, sample_dataset):
 
         sample = sample_dataset[0]
@@ -312,7 +322,7 @@ class ToTensor(object):
                   [0, 0, 0, 1]], dtype=np.float32)
             inv_K_p = np.linalg.pinv(K_p)
             inv_K_p = torch.from_numpy(inv_K_p)
-            
+
         elif dataset == 'nyu':
             K_p = np.array([[518.8579, 0, 325.5824, 0],
                   [0, 518.8579, 253.7362, 0],
@@ -320,6 +330,11 @@ class ToTensor(object):
                   [0, 0, 0, 1]], dtype=np.float32)
             inv_K_p = np.linalg.pinv(K_p)
             inv_K_p = torch.from_numpy(inv_K_p)
+            instances_masks = torch.stack([torch.from_numpy(arr) for arr in sample['instances_masks']])
+            segmentation_map = torch.from_numpy(sample['segmentation_map'])
+            instances_labels = torch.from_numpy(sample['instances_labels'])
+            instances_bbox = torch.stack([torch.from_numpy(arr) for arr in sample['instances_bbox']])
+            instances_areas = torch.from_numpy(sample['instances_areas'])
 
         if self.mode == 'test':
             return {'image': image, 'inv_K_p': inv_K_p, 'focal': focal}
@@ -327,20 +342,25 @@ class ToTensor(object):
         depth = sample['depth']
         if self.mode == 'train':
             depth = self.to_tensor(depth)
-            return {'image': image, 'depth': depth, 'focal': focal}
+
+            return {'image': image, 'depth': depth, 'focal': focal, 'instances_masks': instances_masks, 'segmentation_map': segmentation_map, 'instances_labels': instances_labels,
+                    'instances_bbox': instances_bbox, 'instances_areas': instances_areas
+                    }
         else:
             has_valid_depth = sample['has_valid_depth']
-            return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth}
-    
+            return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth, 'instances_masks': instances_masks, 'segmentation_map': segmentation_map, 'instances_labels': instances_labels,
+                    'instances_bbox': instances_bbox, 'instances_areas': instances_areas
+                    }
+
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):
             raise TypeError(
                 'pic should be PIL Image or ndarray. Got {}'.format(type(pic)))
-        
+
         if isinstance(pic, np.ndarray):
             img = torch.from_numpy(pic.transpose((2, 0, 1)))
             return img
-        
+
         # handle PIL Image
         if pic.mode == 'I':
             img = torch.from_numpy(np.array(pic, np.int32, copy=False))
@@ -356,7 +376,7 @@ class ToTensor(object):
         else:
             nchannel = len(pic.mode)
         img = img.view(pic.size[1], pic.size[0], nchannel)
-        
+
         img = img.transpose(0, 1).transpose(0, 2).contiguous()
         if isinstance(img, torch.ByteTensor):
             return img.float()
@@ -368,18 +388,23 @@ def load_annotations(json_file_path):
         coco_data = json.load(file)
 
     # Initialize empty arrays
-    instances_array = None
-    label_map_array = None
     bounding_boxes_list = []
     areas_list = []
-
+    segmentations = []
+    labels_map = np.array(coco_data.get("categories"), dtype=np.int32)
+    labels = []
+    h, w = labels_map.shape
     # Iterate over annotations in the COCO-like format
     for annotation in coco_data.get("annotations", []):
         # Unpack segmentation (assuming it's a list)
-        segmentation = np.array(annotation.get("segmentation", []), dtype=np.uint8)
+        segmentation = np.array(annotation.get("segmentation", []), dtype=np.int32)
+        segmentation_map = np.zeros((h,w), dtype=np.int32)
+        segmentation_map[segmentation[:, 1], segmentation[:, 0]] = 1
 
+        segmentations.append(segmentation_map)
         # Unpack category_id, assuming it's the label in your semantic map
         label = annotation.get("category_id", 0)
+        labels.append(label)
 
         # Unpack bbox (bounding box) as a list
         bbox = annotation.get("bbox", [])
@@ -389,16 +414,7 @@ def load_annotations(json_file_path):
         area = annotation.get("area", 0)
         areas_list.append(area)
 
-        # Update instances array
-        if instances_array is None:
-            instances_array = np.zeros((segmentation.shape[0], segmentation.shape[1], 0), dtype=np.uint8)
-        instances_array = np.dstack([instances_array, segmentation])
+    return segmentations, labels_map, np.array(labels), np.asarray(bounding_boxes_list, dtype=np.int32), np.asarray(areas_list, dtype=np.int32)
 
-        # Update label map array
-        if label_map_array is None:
-            label_map_array = np.zeros_like(segmentation, dtype=np.uint8)
-        label_map_array[segmentation > 0] = label
-
-    return instances_array, label_map_array, np.asarray(bounding_boxes_list), np.asarray(areas_list)
 
 
