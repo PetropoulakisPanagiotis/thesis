@@ -102,11 +102,12 @@ class DataLoadPreprocess(Dataset):
             image = Image.open(image_path)
             depth_gt = Image.open(depth_path)
 
-            # Read segmentation mask #
-            annotations = os.path.join(self.args.data_path, sample_path.split()[0])
-            annotations = annotations.replace("rgb", "annotations")
-            annotations = annotations[:len(annotations)-4] + ".json"
-            instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas = load_annotations(annotations)
+            if self.args.dataset == 'nyu':
+                # Read segmentation mask #
+                annotations = os.path.join(self.args.data_path, sample_path.split()[0])
+                annotations = annotations.replace("rgb", "annotations")
+                annotations = annotations[:len(annotations)-4] + ".json"
+                instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas = load_annotations(annotations)
 
             if self.args.do_kb_crop is True:
                 height = image.height
@@ -117,7 +118,7 @@ class DataLoadPreprocess(Dataset):
                 image = image.crop((left_margin, top_margin, left_margin + 1216, top_margin + 352))
 
             # To avoid blank boundaries due to pixel registration
-            if self.args.dataset == 'nyu':
+            if self.args.dataset == 'nyu' or self.args.dataset == 'nyud':
                 if self.args.input_height == 480:
                     depth_gt = np.array(depth_gt)
                     valid_mask = np.zeros_like(depth_gt)
@@ -125,15 +126,14 @@ class DataLoadPreprocess(Dataset):
                     depth_gt[valid_mask==0] = 0
                     depth_gt = Image.fromarray(depth_gt)
                 else:
-                    print("error\n")
-                    exit()
-                    #depth_gt = depth_gt.crop((43, 45, 608, 472))
-                    #image = image.crop((43, 45, 608, 472))
+                    print("cropping\n")
+                    depth_gt = depth_gt.crop((43, 45, 608, 472))
+                    image = image.crop((43, 45, 608, 472))
 
-            #if self.args.do_random_rotate is True:
-            #    random_angle = (random.random() - 0.5) * 2 * self.args.degree
-            #    image = self.rotate_image(image, random_angle)
-            #    depth_gt = self.rotate_image(depth_gt, random_angle, flag=Image.NEAREST)
+            if self.args.do_random_rotate is True and self.args.dataset != 'nyu':
+                random_angle = (random.random() - 0.5) * 2 * self.args.degree
+                image = self.rotate_image(image, random_angle)
+                depth_gt = self.rotate_image(depth_gt, random_angle, flag=Image.NEAREST)
 
             # Normalize image #
             image = np.asarray(image, dtype=np.float32) / 255.0
@@ -141,20 +141,21 @@ class DataLoadPreprocess(Dataset):
             depth_gt = np.asarray(depth_gt, dtype=np.float32)
             depth_gt = np.expand_dims(depth_gt, axis=2)
 
-            if self.args.dataset == 'nyu':
+            if self.args.dataset == 'nyu' or self.args.dataset == 'nyud':
                 depth_gt = depth_gt / 1000.0
             else:
                 depth_gt = depth_gt / 256.0
 
             # Random crop #
-            #if image.shape[0] != self.args.input_height or image.shape[1] != self.args.input_width:
-            #    image, depth_gt = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width)
+            if(image.shape[0] != self.args.input_height or image.shape[1] != self.args.input_width) and self.args.dataset != 'nyu':
+                image, depth_gt = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width)
 
             # General augmentations #
-            image, depth_gt = self.train_preprocess(image, depth_gt)
+            image, depth_gt = self.train_preprocess(image, depth_gt, self.args.dataset)
 
             # https://github.com/ShuweiShao/URCDC-Depth
-            #image, depth_gt = self.Cut_Flip(image, depth_gt)
+            if self.args.dataset != 'nyu':
+                image, depth_gt = self.Cut_Flip(image, depth_gt)
 
             sample = {'image': image, 'depth': depth_gt, 'focal': focal}
         else:
@@ -185,16 +186,17 @@ class DataLoadPreprocess(Dataset):
                 if has_valid_depth:
                     depth_gt = np.asarray(depth_gt, dtype=np.float32)
                     depth_gt = np.expand_dims(depth_gt, axis=2)
-                    if self.args.dataset == 'nyu':
+                    if self.args.dataset == 'nyu' or self.args.dataset == 'nyud':
                         depth_gt = depth_gt / 1000.0
                     else:
                         depth_gt = depth_gt / 256.0
 
             # Read instances and semantic map #
-            annotations = os.path.join(data_path, sample_path.split()[0])
-            annotations = annotations.replace("rgb", "annotations")
-            annotations = annotations[:len(annotations)-4] + ".json"
-            instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas = load_annotations(annotations)
+            if self.args.dataset == 'nyu':
+                annotations = os.path.join(data_path, sample_path.split()[0])
+                annotations = annotations.replace("rgb", "annotations")
+                annotations = annotations[:len(annotations)-4] + ".json"
+                instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas = load_annotations(annotations)
 
             if self.args.do_kb_crop is True:
                 height = image.shape[0]
@@ -238,12 +240,13 @@ class DataLoadPreprocess(Dataset):
 
         return img, depth
 
-    def train_preprocess(self, image, depth_gt):
+    def train_preprocess(self, image, depth_gt, dataset):
         # Random flipping
-        #do_flip = random.random()
-        #if do_flip > 0.5:
-        #    image = (image[:, ::-1, :]).copy()
-        #    depth_gt = (depth_gt[:, ::-1, :]).copy()
+        if dataset != 'nyu':
+            do_flip = random.random()
+            if do_flip > 0.5:
+                image = (image[:, ::-1, :]).copy()
+                depth_gt = (depth_gt[:, ::-1, :]).copy()
 
         # Random gamma, brightness, color augmentation
         do_augment = random.random()
@@ -258,7 +261,7 @@ class DataLoadPreprocess(Dataset):
         image_aug = image ** gamma
 
         # brightness augmentation
-        if self.args.dataset == 'nyu':
+        if self.args.dataset == 'nyu' or self.args.dataset == 'nyud':
             brightness = random.uniform(0.75, 1.25)
         else:
             brightness = random.uniform(0.9, 1.1)
@@ -329,7 +332,7 @@ class ToTensor(object):
             inv_K_p = np.linalg.pinv(K_p)
             inv_K_p = torch.from_numpy(inv_K_p)
             
-        elif dataset == 'nyu':
+        elif dataset == 'nyu' or dataset == 'nyud':
             K_p = np.array([[518.8579, 0, 325.5824, 0],
                   [0, 518.8579, 253.7362, 0],
                   [0, 0, 1, 0],
@@ -337,22 +340,39 @@ class ToTensor(object):
             inv_K_p = np.linalg.pinv(K_p)
             inv_K_p = torch.from_numpy(inv_K_p)
 
-   
-            instances_masks = torch.stack([torch.from_numpy(arr) for arr in sample['instances_masks']])
-            num_zeros_needed = self.max_instances - instances_masks.shape[0]
-            
-            zero_tensors = [torch.zeros(1, *instances_masks.shape[1:]) for _ in range(num_zeros_needed)]
-            instances_masks = torch.cat([instances_masks] + zero_tensors, dim=0)
+  
+            if dataset == 'nyu':
+                instances_masks = torch.stack([torch.from_numpy(arr) for arr in sample['instances_masks']])
+                num_zeros_needed = self.max_instances - instances_masks.shape[0]
+                
+                zero_tensors = [torch.zeros(1, *instances_masks.shape[1:], dtype=torch.int32) for _ in range(num_zeros_needed)]
+                instances_masks = torch.cat([instances_masks] + zero_tensors, dim=0)
 
-            segmentation_map = torch.from_numpy(sample['segmentation_map'])
-           
-            instances_labels = torch.from_numpy(sample['instances_labels'])
-            zero_tensors = [-1 * torch.ones(1) for _ in range(num_zeros_needed)]
-            instances_labels = torch.cat([instances_labels] + zero_tensors, dim=0)
+                segmentation_map = torch.from_numpy(sample['segmentation_map'])
+               
+                instances_labels = torch.from_numpy(sample['instances_labels'])
+                zero_tensors = [-1 * torch.ones(1, dtype=torch.int32) for _ in range(num_zeros_needed)]
+                instances_labels = torch.cat([instances_labels] + zero_tensors, dim=0)
 
-            instances_bbox = torch.stack([torch.from_numpy(arr) for arr in sample['instances_bbox']])
-            zero_tensors = [torch.zeros(1, 4) for _ in range(num_zeros_needed)]
-            instances_bbox = torch.cat([instances_bbox] + zero_tensors, dim=0)
+                instances_bbox = torch.stack([torch.from_numpy(arr) for arr in sample['instances_bbox']])
+                zero_tensors = [torch.zeros((1, 4), dtype=torch.int32) for _ in range(num_zeros_needed)]
+                instances_bbox = torch.cat([instances_bbox] + zero_tensors, dim=0)
+
+                if self.mode == 'test':
+                    return {'image': image, 'inv_K_p': inv_K_p, 'focal': focal}
+
+                depth = sample['depth']
+                if self.mode == 'train':
+                    depth = self.to_tensor(depth)
+
+                    return {'image': image, 'depth': depth, 'focal': focal, 'instances_masks': instances_masks, 'segmentation_map': segmentation_map, 'instances_labels': instances_labels,
+                            'instances_bbox': instances_bbox
+                            }
+                else:
+                    has_valid_depth = sample['has_valid_depth']
+                    return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth, 'instances_masks': instances_masks, 'segmentation_map': segmentation_map, 'instances_labels': instances_labels,
+                            'instances_bbox': instances_bbox
+                            }
 
         if self.mode == 'test':
             return {'image': image, 'inv_K_p': inv_K_p, 'focal': focal}
@@ -361,14 +381,10 @@ class ToTensor(object):
         if self.mode == 'train':
             depth = self.to_tensor(depth)
 
-            return {'image': image, 'depth': depth, 'focal': focal, 'instances_masks': instances_masks, 'segmentation_map': segmentation_map, 'instances_labels': instances_labels,
-                    'instances_bbox': instances_bbox
-                    }
+            return {'image': image, 'depth': depth, 'focal': focal}
         else:
             has_valid_depth = sample['has_valid_depth']
-            return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth, 'instances_masks': instances_masks, 'segmentation_map': segmentation_map, 'instances_labels': instances_labels,
-                    'instances_bbox': instances_bbox
-                    }
+            return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth}
 
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):

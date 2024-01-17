@@ -105,7 +105,7 @@ if sys.argv.__len__() == 2:
 else:
     args = parser.parse_args()
 
-if args.dataset == 'kitti' or args.dataset == 'nyu':
+if args.dataset == 'kitti' or args.dataset == 'nyu' or args.dataset == 'nyud':
     from dataloaders.dataloader import NewDataLoader
 
 def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, post_process=False):
@@ -167,7 +167,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             elif args.eigen_crop:
                 if args.dataset == 'kitti':
                     eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height), int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
-                elif args.dataset == 'nyu':
+                elif args.dataset == 'nyu' or args.dataset == 'nyud':
                     eval_mask[45:471, 41:601] = 1
 
             valid_mask = np.logical_and(valid_mask, eval_mask)
@@ -185,7 +185,6 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
         eval_measures[:measures_size - 1] += torch.tensor(measures).cuda(device=gpu)
         eval_measures[measures_size - 1] += 1
 
-        break
     if args.multiprocessing_distributed:
         # group = dist.new_group([i for i in range(ngpus)])
         dist.all_reduce(tensor=eval_measures, op=dist.ReduceOp.SUM, group=group)
@@ -403,7 +402,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 unc_d3vo = result["unc_d3vo"]
             max_tree_depth = len(pred_depths_r_list)
             
-            if args.dataset == 'nyu':
+            if args.dataset == 'nyu' or args.dataset == 'nyud':
                 mask = depth_gt > 0.1
             else:
                 mask = depth_gt > 1.0

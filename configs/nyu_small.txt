@@ -2,11 +2,11 @@
 --model_name iebins_nyu
 --encoder tiny07
 --pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
---dataset nyud
---data_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/sync/
---gt_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/sync/
---filenames_file /usr/stud/petp/code/thesis/data_splits/nyudepthv2_train_files_with_gt_dense.txt
---batch_size 1
+--dataset nyu
+--data_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
+--gt_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
+--filenames_file /usr/stud/petp/code/thesis/data_splits/nyudepthv2_train_files_with_gt.txt
+--batch_size 8
 --num_epochs 20
 --learning_rate 2e-5
 --weight_decay 1e-2
@@ -35,7 +35,7 @@
 
 --log_freq 50
 --do_online_eval
---eval_freq 50
+--eval_freq 300
 --data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
 --gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
 --filenames_file_eval /usr/stud/petp/code/thesis/data_splits/nyudepthv2_test_files_with_gt.txt
