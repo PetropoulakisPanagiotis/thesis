@@ -19,7 +19,7 @@ from tqdm import tqdm
 from networks.NewCRFDepth import NewCRFDepth
 from networks.depth_update import *
 from datetime import datetime
-from utils import post_process_depth, flip_lr, silog_loss, l1_loss, l1_unc_loss, l1_unc_const_beta_loss, silog_unc_loss, silog_unc_beta_loss, silog_unc_beta_2_loss, compute_errors, compute_errors_uncertainty, eval_metrics, entropy_loss, colormap, \
+from utils import post_process_depth, flip_lr, silog_loss, l1_loss, l1_d3vo_loss, compute_errors, compute_errors_uncertainty, eval_metrics, entropy_loss, colormap, \
                        block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args
 
 parser = argparse.ArgumentParser(description='IEBins PyTorch implementation.', fromfile_prefix_chars='@')
@@ -41,11 +41,9 @@ parser.add_argument('--max_depth',                 type=float, help='maximum dep
 parser.add_argument('--min_depth',                 type=float, help='minimum depth in estimation', default=0.1)
 
 # Bins 
-parser.add_argument('--update_block',              type=int,   help='update block: iebins (0), canonical(1), canonica with uncertainty(2)', default='1')
+parser.add_argument('--update_block',              type=int,   help='update block: iebins (0), canonical one scale per pixel (1),  with uncertainty prediction (from GRU) (2), # Canonical - one scale with uncertainty (from decoder) concatenation (3), Canonical. one scale per image (4)', default='1')
 parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
 parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
-parser.add_argument('--bin_min',                   type=float, help='min value for bin initialization', default='0')
-parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='10')
 parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
 parser.add_argument('--predict_unc_d3vo',          dest='predict_unc_d3vo',help='True to predict uncertainty d3vo from the decoder', action='store_true')
 
@@ -59,7 +57,7 @@ parser.add_argument('--save_freq',                 type=int,   help='Checkpoint 
 # Training
 parser.add_argument('--train_decoder',             type=int,   help='how many layers to train from the decoder', default=1)
 parser.add_argument('--weight_decay',              type=float, help='weight decay factor for optimization', default=1e-2)
-parser.add_argument('--loss_type',                 type=int,   help='0 for silog, 1 for l1, 2 for l1 d3vo, 3 for silog d3vo, 4 for beta-d3vo, 5 silog beta-d3vo, 6 silog beta-d3vo log', default=0)
+parser.add_argument('--loss_type',                 type=int,   help='0 for silog, 1 for l1, 2 for l1 and d3vo uncertainty', default=0)
 parser.add_argument('--uncertainty_weight',        type=float, help='weight for uncertainty loss', default=1), 
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
 parser.add_argument('--adam_eps',                  type=float, help='epsilon in Adam optimizer', default=1e-6)
@@ -226,8 +224,9 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
     # Model #
-    model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, bin_min=args.bin_min, bin_max=args.bin_max, 
-                        update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo)
+    model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth, max_depth=args.max_depth, 
+                        update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain, 
+                        predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -335,8 +334,8 @@ def main_worker(gpu, ngpus_per_node, args):
             "update_block": args.update_block,
             "max_tree_depth": args.max_tree_depth,
             "bin_num": args.bin_num,
-            "bin_min": args.bin_min,
-            "bin_max": args.bin_max,
+            "min_depth": args.min_depth,
+            "max_depth": args.max_depth,
             "train_decoder": args.train_decoder,
             "predict_unc": args.predict_unc,
         }
@@ -345,12 +344,8 @@ def main_worker(gpu, ngpus_per_node, args):
     
     # Losses #
     silog_criterion = silog_loss(variance_focus=args.variance_focus)
-    silog_d3vo_criterion = silog_unc_loss(variance_focus=args.variance_focus)
-    silog_d3vo_beta_criterion = silog_unc_beta_loss(variance_focus=args.variance_focus)
-    silog_d3vo_beta_2_criterion = silog_unc_beta_2_loss(variance_focus=args.variance_focus)
     l1_criterion = l1_loss()
-    l1_d3vo_criterion = l1_unc_loss()
-    l1_d3vo_beta_criterion = l1_unc_const_beta_loss()
+    l1_d3vo_criterion = l1_d3vo_loss()
     
     start_time = time.time()
     duration = 0
@@ -415,17 +410,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     current_loss_d += l1_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
                 elif args.loss_type == 2:
                     current_loss_d += l1_d3vo_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
-                elif args.loss_type == 3:
-                    current_loss_d += silog_d3vo_criterion(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
-                elif args.loss_type == 4:
-                    current_loss_d += l1_d3vo_beta_criterion(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
-                elif args.loss_type == 5:
-                    current_loss_d += silog_d3vo_beta_criterion(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
-                elif args.loss_type == 6:
-                    current_loss_d += silog_d3vo_beta_2_criterion(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
-                else:
-                    pass
-
+                
                 if args.update_block == 2:
                     u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[curr_tree_depth].detach()) / (depth_gt + pred_depths_r_list[curr_tree_depth].detach() + 1e-7))
                     current_loss_u += torch.abs(pred_depths_u_list[curr_tree_depth][mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 

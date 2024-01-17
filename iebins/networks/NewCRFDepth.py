@@ -14,33 +14,39 @@ class NewCRFDepth(nn.Module):
     Depth network based on neural window FC-CRFs architecture
     """
     def __init__(self, version=None, pretrained=None, 
-                    frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=6, bin_num=16, bin_min=0, bin_max=80, update_block=0, loss_type=0, train_decoder=0, predict_unc=False, predict_unc_d3vo=False, **kwargs):
+                    frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=6, 
+                    bin_num=16, update_block=0, loss_type=0, train_decoder=0, 
+                    predict_unc=False, predict_unc_d3vo=False, **kwargs):
         super().__init__()
 
         self.with_auxiliary_head = False
         self.with_neck = False
         
+        # 1 train last layer of decoder 
         self.freeze_backbone = True
-        self.train_decoder = train_decoder # 1 train last layer
+        self.train_decoder = train_decoder 
         
-        self.max_tree_depth = max_tree_depth # GRU iter
+        # GRU iter
+        self.max_tree_depth = max_tree_depth 
         self.bin_num = bin_num
-        self.bin_min = bin_min
-        self.bin_max = bin_max
+        self.min_depth = min_depth
+        self.max_depth = max_depth
       
+        # Uncertainty
         self.predict_unc = predict_unc
         self.predict_unc_d3vo = predict_unc_d3vo
 
-        # 0 iebins, 1 canonical, 2 canonical with metric uncertainty
+        # 0 silog loss relu 
         self.update_block = update_block  
-        if loss_type == 0 or loss_type == 3 or loss_type == 5 or loss_type == 6:
-            self.loss_type = 0 # relu positive depths prediction
+        if loss_type == 0:
+            self.loss_type = 0 
         else:
             self.loss_type = 1
         
         norm_cfg = dict(type='BN', requires_grad=True)
         window_size = int(version[-2:])
 
+        # Backbone dims #
         if version[:-2] == 'base':
             embed_dim = 128
             depths = [2, 2, 18, 2]
@@ -60,13 +66,13 @@ class NewCRFDepth(nn.Module):
         # Set update block #
         if self.update_block == 0: # IEBins
             self.update = BasicUpdateBlockDepth(hidden_dim=128, context_dim=embed_dim, bin_num=16)
-        elif self.update_block == 1: # Canonical
+        elif self.update_block == 1: # Canonical - one scale per pixel
             self.update = BasicUpdateBlockCDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
-        elif self.update_block == 2: # with metric uncertainty
+        elif self.update_block == 2: # with uncertainty prediction (from GRU) 
             self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
-        elif self.update_block == 3:
+        elif self.update_block == 3: # Canonical - one scale with uncertainty (from decoder) concatenation
             self.update = BasicUpdateBlockCUConcDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
-        elif self.update_block == 4: # Canonical + one scale
+        elif self.update_block == 4: # Canonical. one scale per image 
             self.update = BasicUpdateBlockCSDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         else:
             pass
@@ -105,7 +111,7 @@ class NewCRFDepth(nn.Module):
         self.crf3 = NewCRF(input_dim=in_channels[3], embed_dim=crf_dims[3], window_size=win, v_dim=v_dims[3], num_heads=32)
         self.crf2 = NewCRF(input_dim=in_channels[2], embed_dim=crf_dims[2], window_size=win, v_dim=v_dims[2], num_heads=16)
         self.crf1 = NewCRF(input_dim=in_channels[1], embed_dim=crf_dims[1], window_size=win, v_dim=v_dims[1], num_heads=8)
-        #self.crf0 = NewCRF(input_dim=in_channels[0], embed_dim=crf_dims[0], window_size=win, v_dim=v_dims[0], num_heads=4)
+        #self.crf0 = NewCRF(input_dim=in_channels[0], embed_dim=crf_dims[0], window_size=win, v_dim=v_dims[0], num_heads=4) # Used in NDDepth 
 
         # Last layer - "downsampling" encoder # 
         self.psp_module = PSP(**decoder_cfg)
@@ -119,17 +125,16 @@ class NewCRFDepth(nn.Module):
                 nn.Conv2d(64, 16*9, 1, padding=0))
 
         # GRU #
-        self.min_depth = min_depth
-        self.max_depth = max_depth
         self.hidden_dim = 128
         self.project = Projection(v_dims[0], self.hidden_dim) # Project features to GRU input  
 
-        if self.predict_unc:
+        # Predict uncertainty from decoder features #
+        if self.predict_unc: 
             self.uncer_head = UncerHead(input_dim=crf_dims[0])
         if self.predict_unc_d3vo:
             self.uncer_d3vo_head = D3VOUncerHead(input_dim=crf_dims[0])
  
-
+        # Initialize layers #
         self.init_weights(pretrained=pretrained)
 
 	    # Freeze some weights #
@@ -190,18 +195,18 @@ class NewCRFDepth(nn.Module):
         e2 = nn.PixelShuffle(2)(e2)
         e1 = self.crf1(feats[1], e2)
         e1 = nn.PixelShuffle(2)(e1) 
-        e0 = self.project(e1) # More crf instead of project? 
-        #e0 = self.crf0(feats[0], e1) # remove tanh after? we also need project after btw 
+        e0 = self.project(e1)
+        #e0 = self.crf0(feats[0], e1) # NDDepth - remove tanh after? we also need project after btw 
 
         max_tree_depth = self.max_tree_depth
 
         if self.up_mode == 'mask':
             mask = self.mask_head(e1)
 
+        # Uncertainty prediction from the decoder #
         if self.predict_unc:
             unc = self.uncer_head(e0)
-
-        if self.predict_unc_d3vo:
+        elif self.predict_unc_d3vo:
             unc_d3vo = self.uncer_d3vo_head(e0)
 
         b, c, h, w = e1.shape
@@ -212,13 +217,10 @@ class NewCRFDepth(nn.Module):
         gru_hidden = torch.tanh(e0)
 
         # Predict depth with GRU. context: early feature map and hidden: late feature map #
-        if self.update_block != 3:
-            result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.bin_min, self.bin_max)
-        elif self.predict_unc == True:
-            result = self.update(depth, unc, context, gru_hidden, max_tree_depth, self.bin_num, self.bin_min, self.bin_max)
+        if self.predict_unc == False and self.update_block != 3:
+            result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
         else:
-            print("With block 3, enable uncertainty prediction from the decoder")
-            exit()
+            result = self.update(depth, unc, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
 
         if self.up_mode == 'mask':
             for i in range(max_tree_depth):
@@ -227,13 +229,14 @@ class NewCRFDepth(nn.Module):
                 result["pred_depths_rc_list"][i] = self.upsample_mask(result["pred_depths_rc_list"][i], mask.detach())
                 result["uncertainty_maps_list"][i] = self.upsample_mask(result["uncertainty_maps_list"][i], mask.detach())
 
-            if self.update_block == 2:        
+            if self.update_block == 2: # Predict uncertainty from GRU       
                 for i in range(max_tree_depth):
                     result["pred_depths_u_list"][i] = self.upsample_mask(result["pred_depths_u_list"][i], mask.detach())
+
             if self.predict_unc:
                 unc = self.upsample_mask(unc, mask.detach())
                 result["unc"] = unc
-            if self.predict_unc_d3vo:
+            elif self.predict_unc_d3vo:
                 unc_d3vo = self.upsample_mask(unc_d3vo, mask.detach())
                 result["unc_d3vo"] = unc_d3vo
         else:
@@ -243,19 +246,22 @@ class NewCRFDepth(nn.Module):
                 result["pred_depths_rc_list"][i] = upsample(result["pred_depths_rc_list"][i], scale_factor=4) 
                 result["uncertainty_maps_list"][i] = upsample(result["uncertainty_maps_list"][i], scale_factor=4) 
 
-            if self.update_block == 2:        
+            if self.update_block == 2:  # Predict uncertainty from GRU      
                 for i in range(max_tree_depth):
                     result["pred_depths_u_list"][i] = upsample(result["pred_depths_u_list"][i], scale_factor=4)
             if self.predict_unc:
                 unc = upsample(unc, scale_factor=4)
                 result["unc"] = unc
-            if self.predict_unc_d3vo:
+            elif self.predict_unc_d3vo:
                 unc_d3vo = upsample(unc_d3vo, scale_factor=4)
                 result["unc_d3vo"] = unc_d3vo
 
         return result
 
 class UncerHead(nn.Module):
+    """
+    NDDepth uncertainty head [0,1]
+    """
     def __init__(self, input_dim=100):
         super(UncerHead, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
@@ -263,10 +269,12 @@ class UncerHead(nn.Module):
 
     def forward(self, x):
         x = self.sigmoid(self.conv1(x))
-
         return x 
 
 class D3VOUncerHead(nn.Module):
+    """
+    D3VO uncertainty head [0, inf]
+    """
     def __init__(self, input_dim=100):
         super(D3VOUncerHead, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)

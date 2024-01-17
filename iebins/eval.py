@@ -33,13 +33,12 @@ parser.add_argument('--dataset',                   type=str,   help='dataset to 
 parser.add_argument('--input_height',              type=int,   help='input height', default=480)
 parser.add_argument('--input_width',               type=int,   help='input width',  default=640)
 parser.add_argument('--max_depth',                 type=float, help='maximum depth in estimation', default=10)
+parser.add_argument('--min_depth',                 type=float, help='minimum depth in estimation', default=0)
 
 # Bins 
 parser.add_argument('--update_block',              type=int,   help='update block: iebins (0), canonical(1), canonical with uncertainty(2)', default='0')
 parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
 parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
-parser.add_argument('--bin_min',                   type=float, help='min value for bin initialization', default='0')
-parser.add_argument('--bin_max',                   type=float, help='max value for bin initialization', default='80')
 parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
 parser.add_argument('--predict_unc_d3vo',          dest='predict_unc_d3vo',help='True to predict uncertainty d3vo from the decoder', action='store_true')
 
@@ -278,7 +277,7 @@ def main_worker(args):
 
     # CRF model
     model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, 
-                        bin_min=args.bin_min, bin_max=args.bin_max, update_block=args.update_block, loss_type=args.loss_type, 
+                        max_depth=args.max_depth, min_depth=args.min_depth, update_block=args.update_block, loss_type=args.loss_type, 
                         train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo)
     model.train()
 

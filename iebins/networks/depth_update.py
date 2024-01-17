@@ -65,7 +65,7 @@ class BasicUpdateBlockDepth(nn.Module):
         return result
 
 """
-Canonical space basic block
+Canonical space basic block: one scale per pixel 
 """
 class BasicUpdateBlockCDepth(nn.Module):
     def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0):
@@ -156,7 +156,7 @@ class BasicUpdateBlockCDepth(nn.Module):
         return result
 
 """
-Canonical space basic block with single scale and shift 
+Canonical space basic block: single scale per image 
 """
 class BasicUpdateBlockCSDepth(nn.Module):
     def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0):
@@ -208,6 +208,7 @@ class BasicUpdateBlockCSDepth(nn.Module):
             # Canonical
             depth_rc = (pred_prob * current_depths.detach()).sum(1, keepdim=True) # 1, 88, 280 
             pred_depths_rc_list.append(depth_rc)
+
             # Metric
             if self.loss_type == 0:
                 depth_r = (self.relu(depth_rc * pred_scale[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale[:, 1:2].unsqueeze(1).unsqueeze(1))).clamp(min=1e-3)
@@ -255,7 +256,7 @@ class BasicUpdateBlockCUDepth(nn.Module):
         self.gru = SepConvGRU(hidden_dim=hidden_dim, input_dim=self.encoder.out_chs+context_dim)
 
         self.p_head = PHead(hidden_dim, hidden_dim, bin_num=bin_num) # propabilities canonical
-        self.s_head = SPHead(hidden_dim, hidden_dim)                 # scale and shift 
+        self.s_head = SSPHead(hidden_dim)                            # Global scale and shift 
         self.u_head = UPHead(hidden_dim, hidden_dim)                 # uncertainty
  
         self.relu = nn.ReLU(inplace=True)
@@ -294,8 +295,8 @@ class BasicUpdateBlockCUDepth(nn.Module):
              
             pred_prob = self.p_head(gru_hidden)        # 16, 88, 280
             pred_scale = self.s_head(gru_hidden)       # 2, 88, 280
-            pred_scale_list.append(pred_scale[:, 0:1, :, :])
-            pred_shift_list.append(pred_scale[:, 1:2, :, :])
+            pred_scale_list.append(pred_scale[:, 0:1])
+            pred_shift_list.append(pred_scale[:, 1:2])
             
             # Uncertainty 
             pred_u = self.u_head(gru_hidden)
@@ -307,9 +308,9 @@ class BasicUpdateBlockCUDepth(nn.Module):
             
             # Metric
             if self.loss_type == 0:
-                depth_r = (self.relu(depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :])).clamp(min=1e-3)
+                depth_r = (self.relu(depth_rc * pred_scale[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale[:, 1:2].unsqueeze(1).unsqueeze(1))).clamp(min=1e-3)
             else:
-                depth_r = depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :]
+                depth_r = depth_rc * pred_scale[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale[:, 1:2].unsqueeze(1).unsqueeze(1)
 
             pred_depths_r_list.append(depth_r)
 
@@ -341,6 +342,7 @@ class BasicUpdateBlockCUDepth(nn.Module):
         result["pred_shift_list"] = pred_shift_list
 
         return result
+
 """
 Canonical space basic block with uncertainty concatenation
 """
@@ -352,7 +354,7 @@ class BasicUpdateBlockCUConcDepth(nn.Module):
         self.gru = SepConvGRU(hidden_dim=hidden_dim, input_dim=self.encoder.out_chs+context_dim)
 
         self.p_head = PHead(hidden_dim, hidden_dim, bin_num=bin_num) # propabilities canonical
-        self.s_head = SPHead(hidden_dim, hidden_dim)                 # scale and shift 
+        self.s_head = SSPHead(hidden_dim)                            # Global scale and shift 
 
         self.relu = nn.ReLU(inplace=True)
         self.loss_type = loss_type
@@ -389,8 +391,8 @@ class BasicUpdateBlockCUConcDepth(nn.Module):
              
             pred_prob = self.p_head(gru_hidden)        # 16, 88, 280
             pred_scale = self.s_head(gru_hidden)       # 2, 88, 280
-            pred_scale_list.append(pred_scale[:, 0:1, :, :])
-            pred_shift_list.append(pred_scale[:, 1:2, :, :])
+            pred_scale_list.append(pred_scale[:, 0:1])
+            pred_shift_list.append(pred_scale[:, 1:2])
             
             # Canonical
             depth_rc = (pred_prob * current_depths.detach()).sum(1, keepdim=True) # 1, 88, 280 
@@ -398,9 +400,9 @@ class BasicUpdateBlockCUConcDepth(nn.Module):
             
             # Metric
             if self.loss_type == 0:
-                depth_r = (self.relu(depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :])).clamp(min=1e-3)
+                depth_r = (self.relu(depth_rc * pred_scale[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale[:, 1:2].unsqueeze(1).unsqueeze(1))).clamp(min=1e-3)
             else:
-                depth_r = depth_rc * pred_scale[:, 0:1, :, :] + pred_scale[:, 1:2, :, :]
+                depth_r = depth_rc * pred_scale[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale[:, 1:2].unsqueeze(1).unsqueeze(1)
 
             pred_depths_r_list.append(depth_r)
 
@@ -457,6 +459,7 @@ class SPHead(nn.Module):
     def forward(self, x):
         out = self.conv2(F.relu(self.conv1(x)))
         return out
+
 """
 SSHead: scale and shift prediction - single per image 
 """     
@@ -469,9 +472,7 @@ class SSPHead(nn.Module):
     
     def forward(self, x):
         out = F.relu(self.pool(self.conv1(x)))
-        
         out = torch.flatten(out, 1)
-        
         out = self.fc1(out)
         
         return out
