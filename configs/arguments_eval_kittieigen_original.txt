@@ -1,0 +1,16 @@
+--model_name iebins_kittieigen
+--encoder tiny07
+--dataset kitti
+--input_height 352
+--input_width 1216
+--max_depth 80
+--do_kb_crop
+
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/kitti_images/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/kitti_depth/val/
+--filenames_file_eval /usr/stud/petp/code/thesis/data_splits/eigen_test_files_with_gt_full.txt
+--min_depth_eval 1e-3
+--max_depth_eval 80
+--garg_crop
+
+--checkpoint_path /usr/stud/petp/code/saved_models/kittieigen_T.pth

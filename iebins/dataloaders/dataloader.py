@@ -1,15 +1,17 @@
-import torch
-from torch.utils.data import Dataset, DataLoader
-import torch.utils.data.distributed
-from torchvision import transforms
-
-import numpy as np
-from PIL import Image
 import os
 import random
 import copy
 
+import numpy as np
+from PIL import Image
+
+import torch
+from torch.utils.data import Dataset, DataLoader
+import torch.utils.data.distributed
+from torchvision import transforms
+import torch.nn.functional as F
 from utils import DistributedSamplerNoEvenlyDivisible
+import json
 
 
 def _is_pil_image(img):
@@ -61,7 +63,6 @@ class NewDataLoader(object):
         else:
             print('mode should be one of \'train, test, online_eval\'. Got {}'.format(mode))
             
-            
 class DataLoadPreprocess(Dataset):
     def __init__(self, args, mode, transform=None, is_for_online_eval=False):
         self.args = args
@@ -71,11 +72,12 @@ class DataLoadPreprocess(Dataset):
         else:
             with open(args.filenames_file, 'r') as f:
                 self.filenames = f.readlines()
-    
+
         self.mode = mode
         self.transform = transform
         self.to_tensor = ToTensor
         self.is_for_online_eval = is_for_online_eval
+
     def __getitem__(self, idx):
         sample_path = self.filenames[idx]
         # focal = float(sample_path.split()[2])
@@ -84,7 +86,8 @@ class DataLoadPreprocess(Dataset):
         if self.mode == 'train':
             if self.args.dataset == 'kitti':
                 rgb_file = sample_path.split()[0]
-                depth_file = os.path.join(sample_path.split()[0].split('/')[0], sample_path.split()[1])
+                depth_file = os.path.join(sample_path.split()[1])
+
                 if self.args.use_right is True and random.random() > 0.5:
                     rgb_file.replace('image_02', 'image_03')
                     depth_file.replace('image_02', 'image_03')
@@ -94,20 +97,27 @@ class DataLoadPreprocess(Dataset):
 
             image_path = os.path.join(self.args.data_path, rgb_file)
             depth_path = os.path.join(self.args.gt_path, depth_file)
-    
+
             image = Image.open(image_path)
             depth_gt = Image.open(depth_path)
-            
-            if self.args.do_kb_crop is True:
+
+            if self.args.dataset == 'nyu':
+                # Read segmentation mask #
+                annotations = os.path.join(self.args.data_path, sample_path.split()[0])
+                annotations = annotations.replace("rgb", "annotations")
+                annotations = annotations[:len(annotations)-4] + ".json"
+                instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas = load_annotations(annotations)
+
+            if self.args.do_kb_crop is True: # Not used in NYU
                 height = image.height
                 width = image.width
                 top_margin = int(height - 352)
                 left_margin = int((width - 1216) / 2)
                 depth_gt = depth_gt.crop((left_margin, top_margin, left_margin + 1216, top_margin + 352))
                 image = image.crop((left_margin, top_margin, left_margin + 1216, top_margin + 352))
-            
+
             # To avoid blank boundaries due to pixel registration
-            if self.args.dataset == 'nyu':
+            if self.args.dataset == 'nyu' or self.args.dataset == 'nyud':
                 if self.args.input_height == 480:
                     depth_gt = np.array(depth_gt)
                     valid_mask = np.zeros_like(depth_gt)
@@ -115,62 +125,76 @@ class DataLoadPreprocess(Dataset):
                     depth_gt[valid_mask==0] = 0
                     depth_gt = Image.fromarray(depth_gt)
                 else:
+                    print("Warn - height != 480")
                     depth_gt = depth_gt.crop((43, 45, 608, 472))
                     image = image.crop((43, 45, 608, 472))
-    
-            if self.args.do_random_rotate is True:
+
+            if self.args.do_random_rotate is True and self.args.dataset != 'nyu':
                 random_angle = (random.random() - 0.5) * 2 * self.args.degree
                 image = self.rotate_image(image, random_angle)
                 depth_gt = self.rotate_image(depth_gt, random_angle, flag=Image.NEAREST)
-            
+
+            # Normalize image #
             image = np.asarray(image, dtype=np.float32) / 255.0
+
             depth_gt = np.asarray(depth_gt, dtype=np.float32)
             depth_gt = np.expand_dims(depth_gt, axis=2)
 
-            if self.args.dataset == 'nyu':
+            if self.args.dataset == 'nyu' or self.args.dataset == 'nyud':
                 depth_gt = depth_gt / 1000.0
             else:
                 depth_gt = depth_gt / 256.0
 
-            if image.shape[0] != self.args.input_height or image.shape[1] != self.args.input_width:
+            # Random crop #
+            if(image.shape[0] != self.args.input_height or image.shape[1] != self.args.input_width) and self.args.dataset != 'nyu':
                 image, depth_gt = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width)
-            image, depth_gt = self.train_preprocess(image, depth_gt)
+
+            # General augmentations #
+            image, depth_gt = self.train_preprocess(image, depth_gt, self.args.dataset)
+
             # https://github.com/ShuweiShao/URCDC-Depth
-            image, depth_gt = self.Cut_Flip(image, depth_gt)
+            if self.args.dataset != 'nyu':
+                image, depth_gt = self.Cut_Flip(image, depth_gt)
+
             sample = {'image': image, 'depth': depth_gt, 'focal': focal}
-        
         else:
             if self.mode == 'online_eval':
                 data_path = self.args.data_path_eval
             else:
                 data_path = self.args.data_path
 
-            #image_path = os.path.join(data_path, "./" + sample_path.split()[0])
             image_path = os.path.join(data_path,  sample_path.split()[0])
+
             image = np.asarray(Image.open(image_path), dtype=np.float32) / 255.0
             if self.mode == 'online_eval':
                 gt_path = self.args.gt_path_eval
-                #depth_path = os.path.join(gt_path, "./" + sample_path.split()[1])
                 depth_path = os.path.join(gt_path, sample_path.split()[1])
                 if self.args.dataset == 'kitti':
-                    depth_path = os.path.join(gt_path, sample_path.split()[0].split('/')[0], sample_path.split()[1])
+                    depth_path = os.path.join(gt_path, sample_path.split()[1])
                 has_valid_depth = False
                 try:
                     depth_gt = Image.open(depth_path)
                     has_valid_depth = True
                 except IOError:
                     depth_gt = False
-                    # print('Missing gt for {}'.format(image_path))
+                    #print('Missing gt for {}'.format(image_path))
 
                 if has_valid_depth:
                     depth_gt = np.asarray(depth_gt, dtype=np.float32)
                     depth_gt = np.expand_dims(depth_gt, axis=2)
-                    if self.args.dataset == 'nyu':
+                    if self.args.dataset == 'nyu' or self.args.dataset == 'nyud':
                         depth_gt = depth_gt / 1000.0
                     else:
                         depth_gt = depth_gt / 256.0
 
-            if self.args.do_kb_crop is True:
+            # Read instances and semantic map #
+            if self.args.dataset == 'nyu':
+                annotations = os.path.join(data_path, sample_path.split()[0])
+                annotations = annotations.replace("rgb", "annotations")
+                annotations = annotations[:len(annotations)-4] + ".json"
+                instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas = load_annotations(annotations)
+
+            if self.args.do_kb_crop is True: # Not in nyu
                 height = image.shape[0]
                 width = image.shape[1]
                 top_margin = int(height - 352)
@@ -178,17 +202,23 @@ class DataLoadPreprocess(Dataset):
                 image = image[top_margin:top_margin + 352, left_margin:left_margin + 1216, :]
                 if self.mode == 'online_eval' and has_valid_depth:
                     depth_gt = depth_gt[top_margin:top_margin + 352, left_margin:left_margin + 1216, :]
-            
+
             if self.mode == 'online_eval':
                 sample = {'image': image, 'depth': depth_gt, 'focal': focal, 'has_valid_depth': has_valid_depth}
             else:
                 sample = {'image': image, 'focal': focal}
-        
+
+        if self.args.dataset == 'nyu':
+            sample['instances_masks'] = instances_masks
+            sample['segmentation_map'] = segmentation_map
+            sample['instances_labels'] = instances_labels
+            sample['instances_bbox'] = instances_bbox
+
         if self.transform:
             sample = self.transform([sample, self.args.dataset])
-        
+
         return sample
-    
+
     def rotate_image(self, image, angle, flag=Image.BILINEAR):
         result = image.rotate(angle, resample=flag)
         return result
@@ -198,36 +228,40 @@ class DataLoadPreprocess(Dataset):
         assert img.shape[1] >= width
         assert img.shape[0] == depth.shape[0]
         assert img.shape[1] == depth.shape[1]
+
         x = random.randint(0, img.shape[1] - width)
         y = random.randint(0, img.shape[0] - height)
         img = img[y:y + height, x:x + width, :]
         depth = depth[y:y + height, x:x + width, :]
+
         return img, depth
 
-    def train_preprocess(self, image, depth_gt):
+    def train_preprocess(self, image, depth_gt, dataset):
         # Random flipping
-        do_flip = random.random()
-        if do_flip > 0.5:
-            image = (image[:, ::-1, :]).copy()
-            depth_gt = (depth_gt[:, ::-1, :]).copy()
-    
+        if dataset != 'nyu':
+            do_flip = random.random()
+            if do_flip > 0.5:
+                image = (image[:, ::-1, :]).copy()
+                depth_gt = (depth_gt[:, ::-1, :]).copy()
+
         # Random gamma, brightness, color augmentation
         do_augment = random.random()
         if do_augment > 0.5:
             image = self.augment_image(image)
-    
+
         return image, depth_gt
-    
+
     def augment_image(self, image):
         # gamma augmentation
         gamma = random.uniform(0.9, 1.1)
         image_aug = image ** gamma
 
         # brightness augmentation
-        if self.args.dataset == 'nyu':
+        if self.args.dataset == 'nyu' or self.args.dataset == 'nyud':
             brightness = random.uniform(0.75, 1.25)
         else:
             brightness = random.uniform(0.9, 1.1)
+
         image_aug = image_aug * brightness
 
         # color augmentation
@@ -235,6 +269,7 @@ class DataLoadPreprocess(Dataset):
         white = np.ones((image.shape[0], image.shape[1]))
         color_image = np.stack([white * colors[i] for i in range(3)], axis=2)
         image_aug *= color_image
+
         image_aug = np.clip(image_aug, 0, 1)
 
         return image_aug
@@ -274,7 +309,8 @@ class ToTensor(object):
     def __init__(self, mode):
         self.mode = mode
         self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    
+        self.max_instances = 78
+ 
     def __call__(self, sample_dataset):
 
         sample = sample_dataset[0]
@@ -292,7 +328,7 @@ class ToTensor(object):
             inv_K_p = np.linalg.pinv(K_p)
             inv_K_p = torch.from_numpy(inv_K_p)
             
-        elif dataset == 'nyu':
+        elif dataset == 'nyu' or dataset == 'nyud':
             K_p = np.array([[518.8579, 0, 325.5824, 0],
                   [0, 518.8579, 253.7362, 0],
                   [0, 0, 1, 0],
@@ -300,17 +336,52 @@ class ToTensor(object):
             inv_K_p = np.linalg.pinv(K_p)
             inv_K_p = torch.from_numpy(inv_K_p)
 
-        if self.mode == 'test':
-            return {'image': image, 'inv_K_p': inv_K_p, 'focal': focal}
+        # Instances # 
+        if dataset == 'nyu':
+            instances_masks = torch.stack([torch.from_numpy(arr) for arr in sample['instances_masks']])
+            num_zeros_needed = self.max_instances - instances_masks.shape[0]
+            
+            zero_tensors = [torch.zeros(1, *instances_masks.shape[1:], dtype=torch.int32) for _ in range(num_zeros_needed)]
+            instances_masks = torch.cat([instances_masks] + zero_tensors, dim=0)
 
-        depth = sample['depth']
-        if self.mode == 'train':
-            depth = self.to_tensor(depth)
-            return {'image': image, 'depth': depth, 'focal': focal}
+            segmentation_map = torch.from_numpy(sample['segmentation_map'])
+           
+            instances_labels = torch.from_numpy(sample['instances_labels'])
+            zero_tensors = [-1 * torch.ones(1, dtype=torch.int32) for _ in range(num_zeros_needed)]
+            instances_labels = torch.cat([instances_labels] + zero_tensors, dim=0)
+
+            instances_bbox = torch.stack([torch.from_numpy(arr) for arr in sample['instances_bbox']])
+            zero_tensors = [torch.zeros((1, 4), dtype=torch.int32) for _ in range(num_zeros_needed)]
+            instances_bbox = torch.cat([instances_bbox] + zero_tensors, dim=0)
+
+            if self.mode == 'test':
+                return {'image': image, 'inv_K_p': inv_K_p, 'focal': focal}
+
+            depth = sample['depth']
+            if self.mode == 'train':
+                depth = self.to_tensor(depth)
+
+                return {'image': image, 'depth': depth, 'focal': focal, 'instances_masks': instances_masks, 'segmentation_map': segmentation_map, 'instances_labels': instances_labels,
+                        'instances_bbox': instances_bbox
+                        }
+            else:
+                has_valid_depth = sample['has_valid_depth']
+                return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth, 'instances_masks': instances_masks, 'segmentation_map': segmentation_map, 'instances_labels': instances_labels,
+                        'instances_bbox': instances_bbox
+                        }
         else:
-            has_valid_depth = sample['has_valid_depth']
-            return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth}
-    
+            if self.mode == 'test':
+                return {'image': image, 'inv_K_p': inv_K_p, 'focal': focal}
+
+            depth = sample['depth']
+            if self.mode == 'train':
+                depth = self.to_tensor(depth)
+
+                return {'image': image, 'depth': depth, 'focal': focal}
+            else:
+                has_valid_depth = sample['has_valid_depth']
+                return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth}
+
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):
             raise TypeError(
@@ -341,3 +412,38 @@ class ToTensor(object):
             return img.float()
         else:
             return img
+
+
+def load_annotations(json_file_path):
+    with open(json_file_path, 'r') as file:
+        coco_data = json.load(file)
+
+    # Initialize empty arrays
+    bounding_boxes_list = []
+    areas_list = []
+    segmentations = []
+    labels_map = np.array(coco_data.get("categories"), dtype=np.int32)
+    labels = []
+    h, w = labels_map.shape
+    # Iterate over annotations in the COCO-like format
+    for annotation in coco_data.get("annotations", []):
+        # Unpack segmentation (assuming it's a list)
+        segmentation = np.array(annotation.get("segmentation", []), dtype=np.int32)
+        segmentation_map = np.zeros((h,w), dtype=np.int32)
+        segmentation_map[segmentation[:, 1], segmentation[:, 0]] = 1
+
+        segmentations.append(segmentation_map)
+        # Unpack category_id, assuming it's the label in your semantic map
+        label = annotation.get("category_id", 0)
+        labels.append(label)
+
+        # Unpack bbox (bounding box) as a list
+        bbox = annotation.get("bbox", [])
+        bounding_boxes_list.append(bbox)
+
+        # Unpack area
+        area = annotation.get("area", 0)
+        areas_list.append(area)
+
+    return segmentations, labels_map, np.array(labels), np.asarray(bounding_boxes_list, dtype=np.int32), np.asarray(areas_list, dtype=np.int32)
+

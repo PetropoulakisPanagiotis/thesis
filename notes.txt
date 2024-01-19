@@ -1,0 +1,53 @@
+Cluster etc: 
+
+
+92 
+104 
+105 
+
+# 10GB  
+
+ssh -X -L 16006:127.0.0.1:6004 petp@atcremers92.mlr.in.tum.de -p 58022
+
+# 15GB
+ssh -X -L 16006:127.0.0.1:6004 petp@atcremers99.vision.in.tum.de -p 58022
+
+# 20GB
+export CUDA_VISIBLE_DEVICES=0
+ssh -X -L 16006:127.0.0.1:6004 petp@atcremers39.in.tum.de -p 58022
+
+
+SLURM 
+node11 - node16 
+   --begin=2010-01-20T12:34:00
+
+
+tensorboard --logdir=./ --port=6004
+http://127.0.0.1:16006
+
+
+conda create -n iebins python=3.8
+conda activate iebins
+conda install cudatoolkit=11.3
+conda install -c nvidia cuda-nvml-dev
+conda install cuda -c nvidia/label/cuda-11.3.0
+conda install pytorch==1.10.0 torchvision==0.11.0 torchaudio==0.10.0  -c pytorch
+pip install matplotlib  tqdm tensorboardX open3d matplotlib tqdm timm tensorboard
+pip install -U openmim
+mim install mmcv
+mim install mmcv==2.0.0
+
+ssh -L 16006:127.0.0.1:6004 petp@atcremers92.mlr.in.tum.de -p 58022 
+
+
+
+
+notes:
+add an overview slide: 
+
+dense monocular slam
+sensors cheap 
+calibration 
+monocular --> scale ii-posed 
+depth recover --> noisy --> uncertainty + classes instances + optimize in scale 
+same scale per object instance 
