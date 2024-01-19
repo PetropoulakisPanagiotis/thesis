@@ -10,7 +10,7 @@
 
 --do_online_eval
 --log_freq 50
---eval_freq 50
+--eval_freq 300
 --log_directory /usr/stud/petp/code/thesis/tmp/
 --data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
 --gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
@@ -21,7 +21,7 @@
 --input_height 480
 --input_width 640
 
---batch_size 1
+--batch_size 8
 --num_epochs 70
 --learning_rate 2e-5
 --weight_decay 1e-2
@@ -33,12 +33,12 @@
 
 --eigen_crop
 
---exp_name nyu-1
+--exp_name nyu-5
 --update_block 4
 
 --loss_type 0
 
 --bin_num 16
 --min_depth 0
---max_depth 10
+--max_depth 1
 --max_tree_depth 6

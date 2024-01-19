@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from networks.NewCRFDepth import NewCRFDepth
 from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, entropy_loss, colormap, \
-                       block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args
+                       block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args, eval_parser
 
 def convert_arg_line_to_args(arg_line):
     for arg in arg_line.split():
@@ -20,53 +20,11 @@ def convert_arg_line_to_args(arg_line):
             continue
         yield arg
 
-parser = argparse.ArgumentParser(description='IEBins PyTorch implementation.', fromfile_prefix_chars='@')
-parser.convert_arg_line_to_args = convert_arg_line_to_args
-
-parser.add_argument('--model_name',                type=str,   help='model name', default='iebins')
-parser.add_argument('--encoder',                   type=str,   help='type of encoder, base07, large07, tiny07', default='large07')
-parser.add_argument('--checkpoint_path',           type=str,   help='path to a checkpoint to load', default='')
-parser.add_argument('--pretrain',                  type=str,   help='path of pretrained encoder', default=None)
-
-# Dataset
-parser.add_argument('--dataset',                   type=str,   help='dataset to train on, kitti or nyu', default='nyu')
-parser.add_argument('--input_height',              type=int,   help='input height', default=480)
-parser.add_argument('--input_width',               type=int,   help='input width',  default=640)
-parser.add_argument('--max_depth',                 type=float, help='maximum depth in estimation', default=10)
-parser.add_argument('--min_depth',                 type=float, help='minimum depth in estimation', default=0)
-
-# Bins 
-parser.add_argument('--update_block',              type=int,   help='update block: iebins (0), canonical(1), canonical with uncertainty(2)', default='0')
-parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
-parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
-parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
-parser.add_argument('--predict_unc_d3vo',          dest='predict_unc_d3vo',help='True to predict uncertainty d3vo from the decoder', action='store_true')
-
-# Preprocessing
-parser.add_argument('--do_random_rotate',                      help='if set, will perform random rotation for augmentation', action='store_true')
-parser.add_argument('--degree',                    type=float, help='random rotation maximum degree', default=2.5)
-parser.add_argument('--do_kb_crop',                            help='if set, crop input images as kitti benchmark images', action='store_true')
-parser.add_argument('--use_right',                             help='if set, will randomly use right images when train on KITTI', action='store_true')
-
-# Eval
-parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='.')
-parser.add_argument('--exp_name',                  type=str,   help='directory to save checkpoints and summaries', default='exp-1')
-parser.add_argument('--data_path_eval',            type=str,   help='path to the data for evaluation', required=False)
-parser.add_argument('--gt_path_eval',              type=str,   help='path to the groundtruth data for evaluation', required=False)
-parser.add_argument('--filenames_file_eval',       type=str,   help='path to the filenames text file for evaluation', required=False)
-parser.add_argument('--min_depth_eval',            type=float, help='minimum depth for evaluation', default=1e-3)
-parser.add_argument('--max_depth_eval',            type=float, help='maximum depth for evaluation', default=80)
-parser.add_argument('--eigen_crop',                            help='if set, crops according to Eigen NIPS14', action='store_true')
-parser.add_argument('--garg_crop',                             help='if set, crops according to Garg  ECCV16', action='store_true')
-
-parser.add_argument('--loss_type',                 type=int,   help='0 for silog and 1 for l2', default=0)
-parser.add_argument('--train_decoder',             type=int,   help='how many layers to train from the decoder', default=0)
-
 if sys.argv.__len__() == 2:
     arg_filename_with_prefix = '@' + sys.argv[1]
-    args = parser.parse_args([arg_filename_with_prefix])
+    args = eval_parser.parse_args([arg_filename_with_prefix])
 else:
-    args = parser.parse_args()
+    args = eval_parser.parse_args()
 
 if args.dataset == 'kitti' or args.dataset == 'nyu':
     from dataloaders.dataloader import NewDataLoader
@@ -278,7 +236,7 @@ def main_worker(args):
     # CRF model
     model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, 
                         max_depth=args.max_depth, min_depth=args.min_depth, update_block=args.update_block, loss_type=args.loss_type, 
-                        train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo)
+                        pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])

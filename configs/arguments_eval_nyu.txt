@@ -5,9 +5,9 @@
 --input_width 640
 --max_depth 10
 
---data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/sync/
---gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/sync/
---filenames_file_eval ../../data_splits/nyu_train.txt
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
+--filenames_file_eval ../../data_splits/nyudepthv2_test_files_with_gt.txt
 --min_depth_eval 1e-3
 --max_depth_eval 10
 --eigen_crop

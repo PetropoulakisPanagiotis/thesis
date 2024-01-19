@@ -1,6 +1,6 @@
 import os, sys, time
 import gc
-#os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import torch
 import torch.nn as nn
@@ -19,89 +19,15 @@ from tqdm import tqdm
 from networks.NewCRFDepth import NewCRFDepth
 from networks.depth_update import *
 from datetime import datetime
-from utils import post_process_depth, flip_lr, silog_loss, l1_loss, l1_d3vo_loss, compute_errors, compute_errors_uncertainty, eval_metrics, entropy_loss, colormap, \
-                       block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args
-
-parser = argparse.ArgumentParser(description='IEBins PyTorch implementation.', fromfile_prefix_chars='@')
-parser.convert_arg_line_to_args = convert_arg_line_to_args
-
-parser.add_argument('--mode',                      type=str,   help='train or test', default='train')
-parser.add_argument('--model_name',                type=str,   help='model name', default='iebins')
-parser.add_argument('--encoder',                   type=str,   help='type of encoder, base07, large07, tiny07', default='tiny07')
-parser.add_argument('--pretrain',                  type=str,   help='path of pretrained encoder', default=None)
-
-# Dataset
-parser.add_argument('--dataset',                   type=str,   help='dataset to train on, kitti or nyu', default='nyu')
-parser.add_argument('--data_path',                 type=str,   help='path to the data', required=True)
-parser.add_argument('--gt_path',                   type=str,   help='path to the groundtruth data', required=True)
-parser.add_argument('--filenames_file',            type=str,   help='path to the filenames text file', required=True)
-parser.add_argument('--input_height',              type=int,   help='input height', default=480)
-parser.add_argument('--input_width',               type=int,   help='input width',  default=640)
-parser.add_argument('--max_depth',                 type=float, help='maximum depth in estimation', default=10)
-parser.add_argument('--min_depth',                 type=float, help='minimum depth in estimation', default=0.1)
-
-# Bins 
-parser.add_argument('--update_block',              type=int,   help='update block: iebins (0), canonical one scale per pixel (1),  with uncertainty prediction (from GRU) (2), # Canonical - one scale with uncertainty (from decoder) concatenation (3), Canonical. one scale per image (4)', default='1')
-parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
-parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
-parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
-parser.add_argument('--predict_unc_d3vo',          dest='predict_unc_d3vo',help='True to predict uncertainty d3vo from the decoder', action='store_true')
-
-# Log and save
-parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
-parser.add_argument('--exp_name',                  type=str,   help='directory to save checkpoints and summaries', default='exp-1')
-parser.add_argument('--checkpoint_path',           type=str,   help='path to a checkpoint to load', default='')
-parser.add_argument('--log_freq',                  type=int,   help='Logging frequency in global steps', default=100)
-parser.add_argument('--save_freq',                 type=int,   help='Checkpoint saving frequency in global steps', default=5000)
-
-# Training
-parser.add_argument('--train_decoder',             type=int,   help='how many layers to train from the decoder', default=1)
-parser.add_argument('--weight_decay',              type=float, help='weight decay factor for optimization', default=1e-2)
-parser.add_argument('--loss_type',                 type=int,   help='0 for silog, 1 for l1, 2 for l1 and d3vo uncertainty', default=0)
-parser.add_argument('--uncertainty_weight',        type=float, help='weight for uncertainty loss', default=1), 
-parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
-parser.add_argument('--adam_eps',                  type=float, help='epsilon in Adam optimizer', default=1e-6)
-parser.add_argument('--batch_size',                type=int,   help='batch size', default=4)
-parser.add_argument('--num_epochs',                type=int,   help='number of epochs', default=50)
-parser.add_argument('--learning_rate',             type=float, help='initial learning rate', default=1e-4)
-parser.add_argument('--end_learning_rate',         type=float, help='end learning rate', default=-1)
-parser.add_argument('--variance_focus',            type=float, help='lambda in paper: [0, 1], higher value more focus on minimizing variance of error', default=0.85)
-
-# Preprocessing
-parser.add_argument('--do_random_rotate',                      help='if set, will perform random rotation for augmentation', action='store_true')
-parser.add_argument('--degree',                    type=float, help='random rotation maximum degree', default=2.5)
-parser.add_argument('--do_kb_crop',                            help='if set, crop input images as kitti benchmark images', action='store_true')
-parser.add_argument('--use_right',                             help='if set, will randomly use right images when train on KITTI', action='store_true')
-
-# Multi-gpu training
-parser.add_argument('--num_threads',               type=int,   help='number of threads to use for data loading', default=1)
-parser.add_argument('--world_size',                type=int,   help='number of nodes for distributed training', default=1)
-parser.add_argument('--rank',                      type=int,   help='node rank for distributed training', default=0)
-parser.add_argument('--dist_url',                  type=str,   help='url used to set up distributed training', default='tcp://127.0.0.1:1234')
-parser.add_argument('--dist_backend',              type=str,   help='distributed backend', default='nccl')
-parser.add_argument('--gpu',                       type=int,   help='GPU id to use.', default=None)
-parser.add_argument('--multiprocessing_distributed',           help='Use multi-processing distributed training to launch '
-                                                                    'N processes per node, which has N GPUs. This is the '
-                                                                    'fastest way to use PyTorch for either single node or '
-                                                                    'multi node data parallel training', action='store_true',)
-# Online eval
-parser.add_argument('--do_online_eval',                        help='if set, perform online eval in every eval_freq steps', action='store_true')
-parser.add_argument('--data_path_eval',            type=str,   help='path to the data for online evaluation', required=False)
-parser.add_argument('--gt_path_eval',              type=str,   help='path to the groundtruth data for online evaluation', required=False)
-parser.add_argument('--filenames_file_eval',       type=str,   help='path to the filenames text file for online evaluation', required=False)
-parser.add_argument('--min_depth_eval',            type=float, help='minimum depth for evaluation', default=1e-3)
-parser.add_argument('--max_depth_eval',            type=float, help='maximum depth for evaluation', default=80)
-parser.add_argument('--eigen_crop',                            help='if set, crops according to Eigen NIPS14', action='store_true')
-parser.add_argument('--garg_crop',                             help='if set, crops according to Garg  ECCV16', action='store_true')
-parser.add_argument('--eval_freq',                 type=int,   help='Online evaluation frequency in global steps', default=500)
-parser.add_argument('--eval_summary_directory',    type=str,   help='output directory for eval summary,'
-                                                                    'if empty outputs to checkpoint folder', default='')
+from utils import post_process_depth, flip_lr, silog_loss, l1_loss, l1_d3vo_loss, compute_errors, compute_errors_uncertainty, \
+                    eval_metrics, entropy_loss, colormap, \
+                    block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args, train_parser
 
 if sys.argv.__len__() == 2:
     arg_filename_with_prefix = '@' + sys.argv[1]
-    args = parser.parse_args([arg_filename_with_prefix])
+    args = train_parser.parse_args([arg_filename_with_prefix])
 else:
-    args = parser.parse_args()
+    args = train_parser.parse_args()
 
 if args.dataset == 'kitti' or args.dataset == 'nyu' or args.dataset == 'nyud':
     from dataloaders.dataloader import NewDataLoader
@@ -120,14 +46,17 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                 # print('Invalid depth. continue.')
                 continue
 
+            # Predict #
             result = model(image)
             pred_depths_r_list = result["pred_depths_r_list"]
+            
+            # uncertainty #
             if args.predict_unc == True:
                 unc = result["unc"].cpu().numpy().squeeze()
-            if args.predict_unc_d3vo == True:
+            elif args.predict_unc_d3vo == True:
                 unc = result["unc_d3vo"].cpu().numpy().squeeze()
 
-            # IEBins true: predict depth of flipped image too and fuse
+            #  Predict depth of flipped image too and fuse - True
             if post_process:
                 image_flipped = flip_lr(image)
                 result = model(image_flipped)
@@ -140,7 +69,8 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                 pred_depth = pred_depths_r_list[-1].cpu().numpy().squeeze()
 
             gt_depth = gt_depth.cpu().numpy().squeeze()
-        if args.do_kb_crop:
+
+        if args.do_kb_crop: # Not in NYU
             height, width = gt_depth.shape
             top_margin = int(height - 352)
             left_margin = int((width - 1216) / 2)
@@ -148,6 +78,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             pred_depth_uncropped[top_margin:top_margin + 352, left_margin:left_margin + 1216] = pred_depth
             pred_depth = pred_depth_uncropped
 
+        # Filter depth #
         pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
         pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
         pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
@@ -162,7 +93,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             if args.garg_crop:
                 eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height), int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
 
-            elif args.eigen_crop:
+            elif args.eigen_crop: # NYU
                 if args.dataset == 'kitti':
                     eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height), int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
                 elif args.dataset == 'nyu' or args.dataset == 'nyud':
@@ -176,7 +107,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
         if args.predict_unc:
             unc_error = compute_errors_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], unc[valid_mask], 0)
             eval_measures_unc[0] += torch.tensor(unc_error).cuda(device=gpu)
-        if args.predict_unc_d3vo:
+        elif args.predict_unc_d3vo:
             unc_error = compute_errors_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], unc[valid_mask], 1)
             eval_measures_unc[0] += torch.tensor(unc_error).cuda(device=gpu)
 
@@ -224,9 +155,9 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
     # Model #
-    model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth, max_depth=args.max_depth, 
-                        update_block=args.update_block, loss_type=args.loss_type, train_decoder=args.train_decoder, pretrained=args.pretrain, 
-                        predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo)
+    model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
+                        max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
+                        train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -265,6 +196,7 @@ def main_worker(gpu, ngpus_per_node, args):
     optimizer = torch.optim.Adam([{'params': model.module.parameters()}],
                                 lr=args.learning_rate)
 
+    # Load checkpoint #
     model_just_loaded = False
     if args.checkpoint_path != '':
         if os.path.isfile(args.checkpoint_path):
@@ -274,8 +206,10 @@ def main_worker(gpu, ngpus_per_node, args):
             else:
                 loc = 'cuda:{}'.format(args.gpu)
                 checkpoint = torch.load(args.checkpoint_path, map_location=loc)
+            
+            # Fix weights #
             if args.update_block != 0:
-                # Canonical -> use IEBins weights else adapt #
+                # Canonical #
                 weights_to_remove = "update"
                 keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove in key]
                 for key_to_remove in keys_to_remove:
@@ -286,6 +220,7 @@ def main_worker(gpu, ngpus_per_node, args):
             else:
                 model.load_state_dict(checkpoint['model'])
                 optimizer.load_state_dict(checkpoint['optimizer'])
+            
             if not args.retrain:
                 try:
                     global_step = checkpoint['global_step']
@@ -303,6 +238,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     cudnn.benchmark = True
 
+    # Dataloaders #
     dataloader = NewDataLoader(args, 'train')
     dataloader_eval = NewDataLoader(args, 'online_eval')
 
@@ -385,18 +321,25 @@ def main_worker(gpu, ngpus_per_node, args):
             
             # Unpack #            
             pred_depths_r_list = result["pred_depths_r_list"]
-            pred_depths_c_list = result["pred_depths_c_list"]
-            uncertainty_maps_list = result["uncertainty_maps_list"]
-            if args.update_block != 0:
-                pred_depths_rc_list = result["pred_depths_rc_list"]
-            if args.update_block == 2:
-                pred_depths_u_list = result["pred_depths_u_list"]
-            if args.predict_unc == True:
-                unc = result["unc"]
-            if args.predict_unc_d3vo == True:
-                unc_d3vo = result["unc_d3vo"]
             max_tree_depth = len(pred_depths_r_list)
             
+            pred_depths_c_list = result["pred_depths_c_list"]
+            uncertainty_maps_list = result["uncertainty_maps_list"]
+            
+            # Canonical #
+            if args.update_block != 0:
+                pred_depths_rc_list = result["pred_depths_rc_list"]
+            
+            # uncertainty (GRU)
+            if args.update_block == 2:
+                pred_depths_u_list = result["pred_depths_u_list"]
+
+            if args.predict_unc == True:
+                unc = result["unc"]
+            elif args.predict_unc_d3vo == True:
+                unc_d3vo = result["unc_d3vo"]
+            
+            # gt_depth masking #
             if args.dataset == 'nyu' or args.dataset == 'nyud':
                 mask = depth_gt > 0.1
             else:
@@ -404,13 +347,15 @@ def main_worker(gpu, ngpus_per_node, args):
 
             # Loss #
             for curr_tree_depth in range(max_tree_depth):
+                # depth loss #
                 if args.loss_type == 0:
                     current_loss_d += silog_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
                 elif args.loss_type == 1:
                     current_loss_d += l1_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
-                elif args.loss_type == 2:
+                elif args.loss_type == 2: # l1 + d3vo 
                     current_loss_d += l1_d3vo_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
                 
+                # uncertainty loss #
                 if args.update_block == 2:
                     u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[curr_tree_depth].detach()) / (depth_gt + pred_depths_r_list[curr_tree_depth].detach() + 1e-7))
                     current_loss_u += torch.abs(pred_depths_u_list[curr_tree_depth][mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
@@ -431,6 +376,8 @@ def main_worker(gpu, ngpus_per_node, args):
                 current_lr = (args.learning_rate - end_learning_rate) * (1 - global_step / num_total_steps) ** 0.9 + end_learning_rate
                 param_group['lr'] = current_lr
             optimizer.step()
+
+            # LR + Loss #
             if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
                 if args.update_block == 2 or args.predict_unc:
                     print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}, depth_loss: {:.12f}, u_loss: {:.12f}'.format(epoch, step, steps_per_epoch, global_step, current_lr, loss, current_loss_d, current_loss_u))
@@ -464,38 +411,36 @@ def main_worker(gpu, ngpus_per_node, args):
                         writer.add_scalar('l1_loss', current_loss_d, global_step)
 
                     if args.update_block == 2 or args.predict_unc:
-                        writer.add_scalar('u_loss', current_loss_u, global_step)
+                        writer.add_scalar('u_loss_gru', current_loss_u, global_step)
 
                     # writer.add_scalar('var_loss', var_loss, global_step)
                     writer.add_scalar('learning_rate', current_lr, global_step)
-                    writer.add_scalar('var average', var_sum.item()/var_cnt, global_step)
+                    writer.add_scalar('var_average', var_sum.item()/var_cnt, global_step)
                     depth_gt = torch.where(depth_gt < 1e-3, depth_gt * 0 + 1e-3, depth_gt)
                     for i in range(num_images):
-                        writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
-                        
-                        for ii in range(max_tree_depth):
-                            writer.add_image('depth_r_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), global_step)
-                        for ii in range(max_tree_depth):
-                            writer.add_image('depth_c_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), global_step)
-
-                        if args.update_block != 0:
-                            for ii in range(max_tree_depth):
-                                writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data), name='magma'), global_step)
 
                         writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
+                        # Depth #
+                        writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
+                        for ii in range(max_tree_depth):
+                            writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), global_step)
+                        for ii in range(max_tree_depth):
+                            writer.add_image('depth_labels_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), global_step)
+                        if args.update_block != 0:
+                            for ii in range(max_tree_depth):
+                                writer.add_image('depth_canonical_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data), name='magma'), global_step)
 
+                        # uncertainty #
                         if args.update_block == 2:
                             for ii in range(max_tree_depth):
-                                writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap(pred_depths_u_list[ii][i, :, :, :].data), global_step)
-
+                                writer.add_image('uncer_depth_gru_est{}/image/{}'.format(ii, i), colormap(pred_depths_u_list[ii][i, :, :, :].data), global_step)
                         if args.predict_unc:
-                            writer.add_image('unc_head_est{}/image/{}'.format(ii, i), colormap(unc[i, :, :, :].data, name='viridis'), global_step)
-
-                        if args.predict_unc_d3vo:
-                            writer.add_image('unc_d3vo_head_est{}/image/{}'.format(ii, i), colormap(unc_d3vo[i, :, :, :].data, name='viridis'), global_step)
-
-                    for ii in range(max_tree_depth):
-                        writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), global_step)
+                            writer.add_image('uncer_depth_est{}/image/{}'.format(ii, i), colormap(unc[i, :, :, :].data, name='viridis'), global_step)
+                        elif args.predict_unc_d3vo:
+                            writer.add_image('uncer_depth_d3vo_est{}/image/{}'.format(ii, i), colormap(unc_d3vo[i, :, :, :].data, name='viridis'), global_step)
+                        # uncertainty bins #
+                        for ii in range(max_tree_depth):
+                            writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), global_step)
 
             # Evaluate #
             if args.do_online_eval and global_step and global_step % args.eval_freq == 0 and not model_just_loaded:
@@ -558,8 +503,10 @@ def main_worker(gpu, ngpus_per_node, args):
                     print("Best evals at global step: " + str(global_step))
                     print(best_eval_measures_higher_better)
                     print(best_eval_measures_lower_better)
+                    
                     if args.predict_unc or args.predict_unc_d3vo:
                         print(best_unc) 
+                
                 model.train()
                 block_print()
                 enable_print()
@@ -595,7 +542,6 @@ def main():
     args_out_path = os.path.join(args.log_directory, args.model_name)
     command = 'cp ' + sys.argv[1] + ' ' + args_out_path
     os.system(command)
-
     save_files = True
     if save_files:
         aux_out_path = os.path.join(args.log_directory, args.model_name)
@@ -607,7 +553,7 @@ def main():
         os.system(command)
         command = 'mkdir -p ' + dataloaders_savepath + ' && cp iebins/dataloaders/*.py ' + dataloaders_savepath
         os.system(command)
-
+        
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
 
     ngpus_per_node = torch.cuda.device_count()
