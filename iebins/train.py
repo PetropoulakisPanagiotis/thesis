@@ -154,10 +154,15 @@ def main_worker(gpu, ngpus_per_node, args):
             args.rank = args.rank * ngpus_per_node + gpu
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
+    # Dataloaders #
+    dataloader = NewDataLoader(args, 'train')
+    dataloader_eval = NewDataLoader(args, 'online_eval')
+    num_semantic_classes = dataloader.num_semantic_classes
+
     # Model #
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
-                        train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo)
+                        train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -238,9 +243,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     cudnn.benchmark = True
 
-    # Dataloaders #
-    dataloader = NewDataLoader(args, 'train')
-    dataloader_eval = NewDataLoader(args, 'online_eval')
+
 
     # ===== Evaluation before training ======
     # model.eval()
@@ -274,6 +277,7 @@ def main_worker(gpu, ngpus_per_node, args):
             "max_depth": args.max_depth,
             "train_decoder": args.train_decoder,
             "predict_unc": args.predict_unc,
+            "num_semantic_classes": num_semantic_classes,
         }
 
         writer.add_hparams(hparam_dict=hparams, metric_dict={})
@@ -300,6 +304,8 @@ def main_worker(gpu, ngpus_per_node, args):
     ii = 0
     group = dist.new_group([i for i in range(ngpus_per_node)])
 
+
+
     while epoch < args.num_epochs:
         if args.distributed:
             dataloader.train_sampler.set_epoch(epoch)
@@ -313,16 +319,19 @@ def main_worker(gpu, ngpus_per_node, args):
 
             image = torch.autograd.Variable(sample_batched['image'].cuda(args.gpu, non_blocking=True))
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
-            
-            num_images = image.shape[0]
+            b, _, h, w = depth_gt.shape
 
+            if args.dataset == 'nyu':
+                segmentation_map = torch.autograd.Variable(sample_batched['segmentation_map'].cuda(args.gpu, non_blocking=True))
+
+            num_images = image.shape[0]
+            
             # Predict #            
             result = model(image, epoch, step)
             
             # Unpack #            
             pred_depths_r_list = result["pred_depths_r_list"]
             max_tree_depth = len(pred_depths_r_list)
-            
             pred_depths_c_list = result["pred_depths_c_list"]
             uncertainty_maps_list = result["uncertainty_maps_list"]
             
@@ -347,14 +356,27 @@ def main_worker(gpu, ngpus_per_node, args):
 
             # Loss #
             for curr_tree_depth in range(max_tree_depth):
-                # depth loss #
-                if args.loss_type == 0:
-                    current_loss_d += silog_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
-                elif args.loss_type == 1:
-                    current_loss_d += l1_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, mask.to(torch.bool))
-                elif args.loss_type == 2: # l1 + d3vo 
-                    current_loss_d += l1_d3vo_criterion.forward(pred_depths_r_list[curr_tree_depth], depth_gt, unc_d3vo, mask.to(torch.bool))
+                if num_semantic_classes != 1:
+                    #print(pred_depths_r_list[curr_tree_depth].shape)
+                    #print(torch.min(pred_depths_r_list[curr_tree_depth]))
+                    for i in range(num_semantic_classes):
+                        print(segmentation_map.shape)
+                        print("hi\n")
+                        print(torch.max(segmentation_map[0, i, :,:]))
+                    exit()
+                    pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * segmentation_map), dim=1).unsqueeze(0)
+                    print(torch.max(pred_d))
+                    print(torch.min(pred_d))
+                else:
+                    pred_d = pred_depths_r_list[curr_tree_depth]
                 
+                if args.loss_type == 0:
+                    current_loss_d += silog_criterion.forward(pred_d, depth_gt, mask.to(torch.bool))
+                elif args.loss_type == 1:
+                    current_loss_d += l1_criterion.forward(pred_d, depth_gt, mask.to(torch.bool))
+                elif args.loss_type == 2: # l1 + d3vo 
+                    current_loss_d += l1_d3vo_criterion.forward(pred_d, depth_gt, unc_d3vo, mask.to(torch.bool))
+           
                 # uncertainty loss #
                 if args.update_block == 2:
                     u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[curr_tree_depth].detach()) / (depth_gt + pred_depths_r_list[curr_tree_depth].detach() + 1e-7))
@@ -417,30 +439,47 @@ def main_worker(gpu, ngpus_per_node, args):
                     writer.add_scalar('learning_rate', current_lr, global_step)
                     writer.add_scalar('var_average', var_sum.item()/var_cnt, global_step)
                     depth_gt = torch.where(depth_gt < 1e-3, depth_gt * 0 + 1e-3, depth_gt)
-                    for i in range(num_images):
-
-                        writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
-                        # Depth #
-                        writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
-                        for ii in range(max_tree_depth):
-                            writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), global_step)
-                        for ii in range(max_tree_depth):
-                            writer.add_image('depth_labels_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), global_step)
-                        if args.update_block != 0:
+                    
+                    if self.update_block == 5:
+                        for i in range(num_images):
+                            writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
+                            writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
+                            
+                            for j in range(num_semantic_classes):
+                                # Depth #
+                                for ii in range(max_tree_depth):
+                                    writer.add_image('depth_metric_est{}/image/{}/class{}'.format(ii, i, j), colormap(torch.log10(pred_depths_r_list[ii][i, j, :, :].data), name='magma'), global_step)
+                                for ii in range(max_tree_depth):
+                                    writer.add_image('depth_labels_est{}/image/{}/class{}'.format(ii, i, j), colormap(torch.log10(pred_depths_c_list[ii][i, j, :, :].data), name='magma'), global_step)
+                                if args.update_block != 0:
+                                    for ii in range(max_tree_depth):
+                                        writer.add_image('depth_canonical_est{}/image/{}/class{}'.format(ii, i, j), colormap(torch.log10(pred_depths_rc_list[ii][i, j, :, :].data), name='magma'), global_step)
+                                # uncertainty bins #
+                                for ii in range(max_tree_depth):
+                                    writer.add_image('uncer_bins_est{}/image/{}/class{}'.format(ii, i, j), colormap(uncertainty_maps_list[ii][i, j, :, :].data), global_step)
+                    else:
+                        for i in range(num_images):
+                            writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
+                            # Depth #
+                            writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
                             for ii in range(max_tree_depth):
-                                writer.add_image('depth_canonical_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data), name='magma'), global_step)
-
-                        # uncertainty #
-                        if args.update_block == 2:
+                                writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), global_step)
                             for ii in range(max_tree_depth):
-                                writer.add_image('uncer_depth_gru_est{}/image/{}'.format(ii, i), colormap(pred_depths_u_list[ii][i, :, :, :].data), global_step)
-                        if args.predict_unc:
-                            writer.add_image('uncer_depth_est{}/image/{}'.format(ii, i), colormap(unc[i, :, :, :].data, name='viridis'), global_step)
-                        elif args.predict_unc_d3vo:
-                            writer.add_image('uncer_depth_d3vo_est{}/image/{}'.format(ii, i), colormap(unc_d3vo[i, :, :, :].data, name='viridis'), global_step)
-                        # uncertainty bins #
-                        for ii in range(max_tree_depth):
-                            writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), global_step)
+                                writer.add_image('depth_labels_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), global_step)
+                            if args.update_block != 0:
+                                for ii in range(max_tree_depth):
+                                    writer.add_image('depth_canonical_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data), name='magma'), global_step)
+                            # uncertainty #
+                            if args.update_block == 2:
+                                for ii in range(max_tree_depth):
+                                    writer.add_image('uncer_depth_gru_est{}/image/{}'.format(ii, i), colormap(pred_depths_u_list[ii][i, :, :, :].data), global_step)
+                            if args.predict_unc:
+                                writer.add_image('uncer_depth_est{}/image/{}'.format(ii, i), colormap(unc[i, :, :, :].data, name='viridis'), global_step)
+                            elif args.predict_unc_d3vo:
+                                writer.add_image('uncer_depth_d3vo_est{}/image/{}'.format(ii, i), colormap(unc_d3vo[i, :, :, :].data, name='viridis'), global_step)
+                            # uncertainty bins #
+                            for ii in range(max_tree_depth):
+                                writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), global_step)
 
             # Evaluate #
             if args.do_online_eval and global_step and global_step % args.eval_freq == 0 and not model_just_loaded:

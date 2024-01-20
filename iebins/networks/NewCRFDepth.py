@@ -16,7 +16,7 @@ class NewCRFDepth(nn.Module):
     def __init__(self, version=None, pretrained=None, 
                     frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=6, 
                     bin_num=16, update_block=0, loss_type=0, train_decoder=0, 
-                    predict_unc=False, predict_unc_d3vo=False, **kwargs):
+                    predict_unc=False, predict_unc_d3vo=False, num_semantic_classes=13, **kwargs):
         super().__init__()
 
         self.with_auxiliary_head = False
@@ -31,7 +31,8 @@ class NewCRFDepth(nn.Module):
         self.bin_num = bin_num
         self.min_depth = min_depth
         self.max_depth = max_depth
-      
+        self.num_semantic_classes = num_semantic_classes
+
         # Uncertainty
         self.predict_unc = predict_unc
         self.predict_unc_d3vo = predict_unc_d3vo
@@ -75,7 +76,7 @@ class NewCRFDepth(nn.Module):
         elif self.update_block == 4: # Canonical - one scale per image 
             self.update = BasicUpdateBlockCSDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         elif self.update_block == 5: # Canonical - one scale per semantic class and instance 
-            self.update = BasicUpdateBlockCSIDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+            self.update = BasicUpdateBlockCSIDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
         else:
             pass
 

@@ -315,15 +315,18 @@ class BasicUpdateBlockCSIDepth(nn.Module):
             
             # revert back 
             gru_hidden = gru_hidden.view(b*self.num_semantic_classes, self.hidden_dim, h,w) # b*c, 128, 88, 280           
-            pred_scale_list.append(list(pred_scale[:, ::2]))  # b, c
-            pred_shift_list.append(list(pred_scale[:, 1::2])) # b, c
+            pred_scale_list.append(pred_scale[:, ::2])  # b, c
+            pred_shift_list.append(pred_scale[:, 1::2]) # b, c
             
             # Canonical
             # b, 16*c, h, w - c*b, 16, h, w
             # b*c, 16, h, w
             pred_prob = pred_prob.view(b * self.num_semantic_classes, bin_num, h, w)
             depth_rc = (pred_prob * current_depths.detach()).sum(1, keepdim=True) # b*c, 1, h, w
+            
+            depth_rc = depth_rc.view(b, self.num_semantic_classes, h, w)
             pred_depths_rc_list.append(depth_rc)
+            depth_rc = depth_rc.view(b * self.num_semantic_classes, 1, h, w)
        
             # Before: b*c, 1, h, w - b, c
             # After: b, c, h, w - b, c
@@ -343,15 +346,24 @@ class BasicUpdateBlockCSIDepth(nn.Module):
             # depth_rc:  b, c, h, w  -> b*c, 1, h, w
             depth_rc = depth_rc.view(b * self.num_semantic_classes, 1, h, w)
             uncertainty_map = torch.sqrt((pred_prob * ((current_depths.detach() - depth_rc.repeat(1, bin_num, 1, 1))**2)).sum(1, keepdim=True))
+            
             # b*c, 1, h, w    
+            uncertainty_map = uncertainty_map.view(b, self.num_semantic_classes, h, w)
             uncertainty_maps_list.append(uncertainty_map)
+            uncertainty_map = uncertainty_map.view(b * self.num_semantic_classes, 1, h, w)
             
             # label 
             # depth_rc:  b*c, 1, h, w
             # current_depths: c*b, 16, h, w
             pred_label = get_label(torch.squeeze(depth_rc, 1), bin_edges, bin_num).unsqueeze(1) # b*c, 1, h, w 
             depth_c = torch.gather(current_depths.detach(), 1, pred_label.detach())
+
+
+            depth_c = depth_c.view(b, self.num_semantic_classes, h, w)
             pred_depths_c_list.append(depth_c)
+            depth_c = depth_c.view(b * self.num_semantic_classes, 1, h, w)
+
+            depth_rc = depth_rc.view(b*self.num_semantic_classes, 1, h, w)
             
             # select bin canditate
             label_target_bin_left = pred_label
@@ -366,8 +378,6 @@ class BasicUpdateBlockCSIDepth(nn.Module):
             # unc:      : b*c, 1, w
             bin_edges, current_depths = update_sample(bin_edges, target_bin_left, target_bin_right, depth_rc.detach(), pred_label.detach(), bin_num, min_depth, max_depth, uncertainty_map)
       
-            print(current_depths.shape) 
-        print("hi\n")
         result = {}
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list

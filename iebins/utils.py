@@ -442,7 +442,7 @@ eval_parser.add_argument('--input_width',               type=int,   help='input 
 eval_parser.add_argument('--max_depth',                 type=float, help='maximum depth in estimation', default=10)
 eval_parser.add_argument('--min_depth',                 type=float, help='minimum depth in estimation', default=0)
 
-# Bins 
+# Bins
 eval_parser.add_argument('--update_block',              type=int,   help='update block: iebins (0), canonical one scale per pixel (1),  with uncertainty prediction (from GRU) (2), # Canonical - one scale with uncertainty (from decoder) concatenation (3), Canonical. one scale per image (4)', default='0')
 eval_parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
 eval_parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')

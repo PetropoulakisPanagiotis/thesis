@@ -32,6 +32,7 @@ class NewDataLoader(object):
     def __init__(self, args, mode):
         if mode == 'train':
             self.training_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode))
+            self.num_semantic_classes = self.training_samples.num_semantic_classes
             if args.distributed:
                 self.train_sampler = torch.utils.data.distributed.DistributedSampler(self.training_samples)
             else:
@@ -45,6 +46,7 @@ class NewDataLoader(object):
 
         elif mode == 'online_eval':
             self.testing_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode))
+            self.num_semantic_classes = self.testing_samples.num_semantic_classes
             if args.distributed:
                 # self.eval_sampler = torch.utils.data.distributed.DistributedSampler(self.testing_samples, shuffle=False)
                 self.eval_sampler = DistributedSamplerNoEvenlyDivisible(self.testing_samples, shuffle=False)
@@ -58,6 +60,7 @@ class NewDataLoader(object):
         
         elif mode == 'test':
             self.testing_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode))
+            self.num_semantic_classes = self.testing_samples.num_semantic_classes
             self.data = DataLoader(self.testing_samples, 1, shuffle=False, num_workers=1)
 
         else:
@@ -77,6 +80,7 @@ class DataLoadPreprocess(Dataset):
         self.transform = transform
         self.to_tensor = ToTensor
         self.is_for_online_eval = is_for_online_eval
+        self.num_semantic_classes = 5
 
     def __getitem__(self, idx):
         sample_path = self.filenames[idx]
@@ -106,7 +110,7 @@ class DataLoadPreprocess(Dataset):
                 annotations = os.path.join(self.args.data_path, sample_path.split()[0])
                 annotations = annotations.replace("rgb", "annotations")
                 annotations = annotations[:len(annotations)-4] + ".json"
-                instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas = load_annotations(annotations)
+                instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas, num_semantic_classes = load_annotations(annotations)
 
             if self.args.do_kb_crop is True: # Not used in NYU
                 height = image.height
@@ -192,7 +196,7 @@ class DataLoadPreprocess(Dataset):
                 annotations = os.path.join(data_path, sample_path.split()[0])
                 annotations = annotations.replace("rgb", "annotations")
                 annotations = annotations[:len(annotations)-4] + ".json"
-                instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas = load_annotations(annotations)
+                instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas, num_semantic_classes = load_annotations(annotations)
 
             if self.args.do_kb_crop is True: # Not in nyu
                 height = image.shape[0]
@@ -213,7 +217,8 @@ class DataLoadPreprocess(Dataset):
             sample['segmentation_map'] = segmentation_map
             sample['instances_labels'] = instances_labels
             sample['instances_bbox'] = instances_bbox
-
+            self.num_semantic_classes = num_semantic_classes
+ 
         if self.transform:
             sample = self.transform([sample, self.args.dataset])
 
@@ -309,8 +314,8 @@ class ToTensor(object):
     def __init__(self, mode):
         self.mode = mode
         self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        self.max_instances = 78
- 
+        self.max_instances = 40 # 63/13, 40/5
+        self.max_classes = 5     
     def __call__(self, sample_dataset):
 
         sample = sample_dataset[0]
@@ -423,8 +428,13 @@ def load_annotations(json_file_path):
     areas_list = []
     segmentations = []
     labels_map = np.array(coco_data.get("categories"), dtype=np.int32)
+    num_semantic_classes = int(coco_data.get("num_categories"))
+    num_semantic_classes = 5
+
+    labels_map = create_one_hot_mask_np(labels_map, num_semantic_classes)
+    
     labels = []
-    h, w = labels_map.shape
+    c, h, w = labels_map.shape
     # Iterate over annotations in the COCO-like format
     for annotation in coco_data.get("annotations", []):
         # Unpack segmentation (assuming it's a list)
@@ -445,5 +455,14 @@ def load_annotations(json_file_path):
         area = annotation.get("area", 0)
         areas_list.append(area)
 
-    return segmentations, labels_map, np.array(labels), np.asarray(bounding_boxes_list, dtype=np.int32), np.asarray(areas_list, dtype=np.int32)
+    return segmentations, labels_map, np.array(labels), np.asarray(bounding_boxes_list, dtype=np.int32), np.asarray(areas_list, dtype=np.int32), num_semantic_classes
 
+def create_one_hot_mask_np(binary_mask, num_classes):
+    # Create a zero-filled tensor with shape [C, h, w]
+    one_hot_mask = np.zeros((num_classes, *binary_mask.shape), dtype=np.float32)
+
+    # Set the corresponding class index to 1
+    for class_idx in range(num_classes):
+        one_hot_mask[class_idx] = (binary_mask == class_idx).astype(np.float32)
+
+    return one_hot_mask
