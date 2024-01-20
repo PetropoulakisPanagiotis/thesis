@@ -246,6 +246,139 @@ class BasicUpdateBlockCSDepth(nn.Module):
         return result
 
 """
+Canonical space basic block: one scale per semantic class and instance 
+"""
+class BasicUpdateBlockCSIDepth(nn.Module):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5):
+        super(BasicUpdateBlockCSIDepth, self).__init__()
+        self.num_semantic_classes = num_semantic_classes
+        self.hidden_dim = hidden_dim
+        self.context_dim = context_dim
+
+        self.encoder = ProjectionInputDepth(hidden_dim=hidden_dim, out_chs=hidden_dim * 2, bin_num=bin_num)
+
+        self.gru = SepConvGRU(hidden_dim=hidden_dim, input_dim=self.encoder.out_chs+context_dim)
+        self.grus = []
+
+        self.p_head = PHead(hidden_dim*self.num_semantic_classes, hidden_dim*self.num_semantic_classes, bin_num=bin_num * self.num_semantic_classes) # 16 propabilities canonical
+        self.s_head = SSPHead(hidden_dim*self.num_semantic_classes, num_classes=self.num_semantic_classes)                 # Global scale and shift 
+
+        self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
+
+    def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth):
+        """
+         depth:      is typically zeros #
+         context:    feature map from early layers 
+         gru_hidden: feature map from late layers  
+        """
+        pred_depths_r_list = []    # metric 
+        pred_depths_rc_list = []   # canonical
+        pred_depths_c_list = []    # labels canonical
+        uncertainty_maps_list = [] # std canonical 
+
+        pred_scale_list = []
+        pred_shift_list = []
+
+        b, _, h, w = depth.shape
+        
+        depth_range = max_depth - min_depth
+        interval = depth_range / bin_num
+        interval = interval * torch.ones_like(depth)
+        interval = interval.repeat(1, bin_num, 1, 1)
+        interval = torch.cat([torch.ones_like(depth) * min_depth, interval], 1)
+
+        bin_edges = torch.cumsum(interval, 1)
+        current_depths = 0.5 * (bin_edges[:, :-1] + bin_edges[:, 1:])
+       
+        bin_edges = torch.cat([bin_edges] * self.num_semantic_classes, dim=0)
+        bin_edges = bin_edges.view(b * self.num_semantic_classes, bin_num + 1, h, w)   
+
+        # current_depths c*b, 16, h, w
+        current_depths = torch.cat([current_depths] * self.num_semantic_classes, dim=0)
+        current_depths = current_depths.view(b * self.num_semantic_classes, bin_num, h, w) 
+
+        context = torch.cat([context] * self.num_semantic_classes, dim=0)
+        context = context.view(b * self.num_semantic_classes, self.context_dim, h, w)   
+
+        gru_hidden = torch.cat([gru_hidden] * self.num_semantic_classes, dim=0)
+        gru_hidden = gru_hidden.view(b * self.num_semantic_classes, self.hidden_dim, h, w)          
+
+        for i in range(seq_len):
+            input_features = self.encoder(current_depths.detach()) # c*b, x, h, w
+            input_c = torch.cat([input_features, context], dim=1)  # c*b, h, h, w
+            
+            gru_hidden = self.gru(gru_hidden, input_c) # c*b, 128, 88, 280
+            gru_hidden = gru_hidden.view(b, self.num_semantic_classes * self.hidden_dim, h,w) # b, c*128, 88, 280           
+            pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
+            pred_scale = self.s_head(gru_hidden)       # b, 2*c
+            
+            # revert back 
+            gru_hidden = gru_hidden.view(b*self.num_semantic_classes, self.hidden_dim, h,w) # b*c, 128, 88, 280           
+            pred_scale_list.append(list(pred_scale[:, ::2]))  # b, c
+            pred_shift_list.append(list(pred_scale[:, 1::2])) # b, c
+            
+            # Canonical
+            # b, 16*c, h, w - c*b, 16, h, w
+            # b*c, 16, h, w
+            pred_prob = pred_prob.view(b * self.num_semantic_classes, bin_num, h, w)
+            depth_rc = (pred_prob * current_depths.detach()).sum(1, keepdim=True) # b*c, 1, h, w
+            pred_depths_rc_list.append(depth_rc)
+       
+            # Before: b*c, 1, h, w - b, c
+            # After: b, c, h, w - b, c
+            depth_rc = depth_rc.view(b, self.num_semantic_classes, h, w)
+            # Metric
+            if self.loss_type == 0:
+                depth_r = (self.relu(depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+            else:
+                depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
+            
+            # depth_r: b, c, h, w
+            pred_depths_r_list.append(depth_r)
+
+            # std 
+            # pred_prob: b*c, 16, h, w
+            # current_depths: c*b, 16, h, w
+            # depth_rc:  b, c, h, w  -> b*c, 1, h, w
+            depth_rc = depth_rc.view(b * self.num_semantic_classes, 1, h, w)
+            uncertainty_map = torch.sqrt((pred_prob * ((current_depths.detach() - depth_rc.repeat(1, bin_num, 1, 1))**2)).sum(1, keepdim=True))
+            # b*c, 1, h, w    
+            uncertainty_maps_list.append(uncertainty_map)
+            
+            # label 
+            # depth_rc:  b*c, 1, h, w
+            # current_depths: c*b, 16, h, w
+            pred_label = get_label(torch.squeeze(depth_rc, 1), bin_edges, bin_num).unsqueeze(1) # b*c, 1, h, w 
+            depth_c = torch.gather(current_depths.detach(), 1, pred_label.detach())
+            pred_depths_c_list.append(depth_c)
+            
+            # select bin canditate
+            label_target_bin_left = pred_label
+            target_bin_left = torch.gather(bin_edges, 1, label_target_bin_left)
+            label_target_bin_right = (pred_label.float() + 1).long()
+            target_bin_right = torch.gather(bin_edges, 1, label_target_bin_right)
+
+            # update edges and centers 
+            # depth_rc: b*c, 1, h, w
+            # bin_edges: b*c, 17, h, w
+            # pred_label: b*c, 1, h, w
+            # unc:      : b*c, 1, w
+            bin_edges, current_depths = update_sample(bin_edges, target_bin_left, target_bin_right, depth_rc.detach(), pred_label.detach(), bin_num, min_depth, max_depth, uncertainty_map)
+      
+            print(current_depths.shape) 
+        print("hi\n")
+        result = {}
+        result["pred_depths_r_list"] = pred_depths_r_list
+        result["pred_depths_rc_list"] = pred_depths_rc_list
+        result["pred_depths_c_list"] = pred_depths_c_list
+        result["uncertainty_maps_list"] = uncertainty_maps_list
+        result["pred_scale_list"] = pred_scale_list
+        result["pred_shift_list"] = pred_shift_list
+
+        return result
+
+"""
 Canonical space with uncertainty metric prediction
 """
 class BasicUpdateBlockCUDepth(nn.Module):
@@ -464,11 +597,11 @@ class SPHead(nn.Module):
 SSHead: scale and shift prediction - single per image 
 """     
 class SSPHead(nn.Module):
-    def __init__(self, input_dim=128):
+    def __init__(self, input_dim=128, num_classes=1):
         super(SSPHead, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, 1, kernel_size=1)
         self.pool = nn.AdaptiveAvgPool2d(88)
-        self.fc1= nn.Linear(88 * 88, 2) # Scale and shift 
+        self.fc1= nn.Linear(88 * 88, num_classes * 2) # Scale and shift 
     
     def forward(self, x):
         out = F.relu(self.pool(self.conv1(x)))

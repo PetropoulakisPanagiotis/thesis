@@ -21,6 +21,7 @@ class ProjectionInputDepth(nn.Module):
         d = F.relu(self.convd4(d))
                 
         return d
+
 """
 Projection: same convolution (x1 cnv)
 """

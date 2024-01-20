@@ -72,8 +72,10 @@ class NewCRFDepth(nn.Module):
             self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         elif self.update_block == 3: # Canonical - one scale with uncertainty (from decoder) concatenation
             self.update = BasicUpdateBlockCUConcDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
-        elif self.update_block == 4: # Canonical. one scale per image 
+        elif self.update_block == 4: # Canonical - one scale per image 
             self.update = BasicUpdateBlockCSDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+        elif self.update_block == 5: # Canonical - one scale per semantic class and instance 
+            self.update = BasicUpdateBlockCSIDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         else:
             pass
 

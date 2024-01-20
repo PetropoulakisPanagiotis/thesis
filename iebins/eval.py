@@ -235,7 +235,7 @@ def main_worker(args):
 
     # CRF model
     model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, 
-                        max_depth=args.max_depth, min_depth=args.min_depth, update_block=args.update_block, loss_type=args.loss_type, 
+                        min_depth=args.min_depth, update_block=args.update_block, loss_type=args.loss_type, 
                         pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo)
     model.train()
 
