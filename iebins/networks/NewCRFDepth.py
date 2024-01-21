@@ -75,8 +75,10 @@ class NewCRFDepth(nn.Module):
             self.update = BasicUpdateBlockCUConcDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         elif self.update_block == 4: # Canonical - one scale per image 
             self.update = BasicUpdateBlockCSDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
-        elif self.update_block == 5: # Canonical - one scale per semantic class and instance 
-            self.update = BasicUpdateBlockCSIDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
+        elif self.update_block == 5: # Canonical - one scale per semantic class 
+            self.update = BasicUpdateBlockCSemanticDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
+        elif self.update_block == 6: # Canonical - one scale per image and no projection 
+            self.update = BasicUpdateBlockCSNoProjectDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         else:
             pass
 

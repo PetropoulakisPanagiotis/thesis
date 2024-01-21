@@ -384,7 +384,7 @@ train_parser.add_argument('--max_tree_depth',            type=int,   help='max G
 train_parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 train_parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
 train_parser.add_argument('--predict_unc_d3vo',          dest='predict_unc_d3vo',help='True to predict uncertainty d3vo from the decoder', action='store_true')
-train_parser.add_argument('--segmentation',              dest='segmentation', help='segmentation variation', action='store_true', default=True)
+train_parser.add_argument('--segmentation',              dest='segmentation', help='segmentation variation', action='store_true')
 
 # Log and save
 train_parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
@@ -457,7 +457,7 @@ eval_parser.add_argument('--max_tree_depth',            type=int,   help='max GR
 eval_parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 eval_parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
 eval_parser.add_argument('--predict_unc_d3vo',          dest='predict_unc_d3vo',help='True to predict uncertainty d3vo from the decoder', action='store_true')
-eval_parser.add_argument('--segmentation',              dest='segmentation',help='segmentation variation', action='store_true', default=True)
+eval_parser.add_argument('--segmentation',              dest='segmentation',help='segmentation variation', action='store_true')
 
 # Preprocessing
 eval_parser.add_argument('--do_random_rotate',                      help='if set, will perform random rotation for augmentation', action='store_true')
