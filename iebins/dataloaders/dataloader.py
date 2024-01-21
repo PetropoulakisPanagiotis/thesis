@@ -10,9 +10,9 @@ from torch.utils.data import Dataset, DataLoader
 import torch.utils.data.distributed
 from torchvision import transforms
 import torch.nn.functional as F
-from utils import DistributedSamplerNoEvenlyDivisible
+from utils import *
 import json
-
+import cv2
 
 def _is_pil_image(img):
     return isinstance(img, Image.Image)
@@ -22,17 +22,20 @@ def _is_numpy_image(img):
     return isinstance(img, np.ndarray) and (img.ndim in {2, 3})
 
 
-def preprocessing_transforms(mode):
+def preprocessing_transforms(mode, segmentation):
     return transforms.Compose([
-        ToTensor(mode=mode)
+        ToTensor(mode=mode, segmentation=segmentation)
     ])
 
 
 class NewDataLoader(object):
     def __init__(self, args, mode):
+        if args.dataset == 'nyu':
+            self.semantic_classes = json.load(open(args.data_path.split('train')[0] + 'labels.json', 'r'))
+            self.num_semantic_classes = len(self.semantic_classes)
+        
         if mode == 'train':
-            self.training_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode))
-            self.num_semantic_classes = self.training_samples.num_semantic_classes
+            self.training_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation))
             if args.distributed:
                 self.train_sampler = torch.utils.data.distributed.DistributedSampler(self.training_samples)
             else:
@@ -45,8 +48,7 @@ class NewDataLoader(object):
                                    sampler=self.train_sampler)
 
         elif mode == 'online_eval':
-            self.testing_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode))
-            self.num_semantic_classes = self.testing_samples.num_semantic_classes
+            self.testing_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation))
             if args.distributed:
                 # self.eval_sampler = torch.utils.data.distributed.DistributedSampler(self.testing_samples, shuffle=False)
                 self.eval_sampler = DistributedSamplerNoEvenlyDivisible(self.testing_samples, shuffle=False)
@@ -59,8 +61,7 @@ class NewDataLoader(object):
                                    sampler=self.eval_sampler)
         
         elif mode == 'test':
-            self.testing_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode))
-            self.num_semantic_classes = self.testing_samples.num_semantic_classes
+            self.testing_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation))
             self.data = DataLoader(self.testing_samples, 1, shuffle=False, num_workers=1)
 
         else:
@@ -80,7 +81,6 @@ class DataLoadPreprocess(Dataset):
         self.transform = transform
         self.to_tensor = ToTensor
         self.is_for_online_eval = is_for_online_eval
-        self.num_semantic_classes = 5
 
     def __getitem__(self, idx):
         sample_path = self.filenames[idx]
@@ -105,7 +105,7 @@ class DataLoadPreprocess(Dataset):
             image = Image.open(image_path)
             depth_gt = Image.open(depth_path)
 
-            if self.args.dataset == 'nyu':
+            if self.args.dataset == 'nyu' and self.args.segmentation:
                 # Read segmentation mask #
                 annotations = os.path.join(self.args.data_path, sample_path.split()[0])
                 annotations = annotations.replace("rgb", "annotations")
@@ -192,7 +192,7 @@ class DataLoadPreprocess(Dataset):
                         depth_gt = depth_gt / 256.0
 
             # Read instances and semantic map #
-            if self.args.dataset == 'nyu':
+            if self.args.dataset == 'nyu' and self.args.segmentation:
                 annotations = os.path.join(data_path, sample_path.split()[0])
                 annotations = annotations.replace("rgb", "annotations")
                 annotations = annotations[:len(annotations)-4] + ".json"
@@ -211,14 +211,13 @@ class DataLoadPreprocess(Dataset):
                 sample = {'image': image, 'depth': depth_gt, 'focal': focal, 'has_valid_depth': has_valid_depth}
             else:
                 sample = {'image': image, 'focal': focal}
-
-        if self.args.dataset == 'nyu':
+        
+        if self.args.dataset == 'nyu' and self.args.segmentation:
             sample['instances_masks'] = instances_masks
             sample['segmentation_map'] = segmentation_map
             sample['instances_labels'] = instances_labels
             sample['instances_bbox'] = instances_bbox
-            self.num_semantic_classes = num_semantic_classes
- 
+        
         if self.transform:
             sample = self.transform([sample, self.args.dataset])
 
@@ -311,11 +310,12 @@ class DataLoadPreprocess(Dataset):
 
 
 class ToTensor(object):
-    def __init__(self, mode):
+    def __init__(self, mode, segmentation):
         self.mode = mode
         self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        self.max_instances = 40 # 63/13, 40/5
-        self.max_classes = 5     
+        self.max_instances = 40 # 40/5
+        self.segmentation = segmentation
+
     def __call__(self, sample_dataset):
 
         sample = sample_dataset[0]
@@ -342,7 +342,7 @@ class ToTensor(object):
             inv_K_p = torch.from_numpy(inv_K_p)
 
         # Instances # 
-        if dataset == 'nyu':
+        if dataset == 'nyu' and self.segmentation:
             instances_masks = torch.stack([torch.from_numpy(arr) for arr in sample['instances_masks']])
             num_zeros_needed = self.max_instances - instances_masks.shape[0]
             
@@ -429,8 +429,6 @@ def load_annotations(json_file_path):
     segmentations = []
     labels_map = np.array(coco_data.get("categories"), dtype=np.int32)
     num_semantic_classes = int(coco_data.get("num_categories"))
-    num_semantic_classes = 5
-
     labels_map = create_one_hot_mask_np(labels_map, num_semantic_classes)
     
     labels = []
@@ -457,12 +455,17 @@ def load_annotations(json_file_path):
 
     return segmentations, labels_map, np.array(labels), np.asarray(bounding_boxes_list, dtype=np.int32), np.asarray(areas_list, dtype=np.int32), num_semantic_classes
 
-def create_one_hot_mask_np(binary_mask, num_classes):
+def create_one_hot_mask_np(label_map, num_classes):
     # Create a zero-filled tensor with shape [C, h, w]
-    one_hot_mask = np.zeros((num_classes, *binary_mask.shape), dtype=np.float32)
+    one_hot_mask = np.zeros((num_classes, *label_map.shape), dtype=np.float32)
 
+    #data = custom_cmap_instances(label_map / np.max(label_map))  # Normalize the data to [0, 1]
+    #data = data[:, :] * 255
+    #cv2.imshow("i", data[:, :].astype(np.uint8))
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
     # Set the corresponding class index to 1
     for class_idx in range(num_classes):
-        one_hot_mask[class_idx] = (binary_mask == class_idx).astype(np.float32)
+        one_hot_mask[class_idx] = (label_map == class_idx).astype(np.float32)
 
     return one_hot_mask

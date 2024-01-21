@@ -1,7 +1,8 @@
-import matplotlib.pyplot as plt
 import os, sys
 import argparse
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import math
 
 import torch
@@ -18,6 +19,13 @@ inv_normalize = transforms.Normalize(
 
 
 eval_metrics = ['silog', 'abs_rel', 'log10', 'rms', 'sq_rel', 'log_rms', 'd1', 'd2', 'd3']
+
+colors = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]  # Replace with your desired colors
+n_bins = [15]  # Number of bins, can be adjusted based on your data
+
+cmap_name = "custom_colormap"
+custom_cmap_labels = LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins[0])
+custom_cmap_instances = LinearSegmentedColormap.from_list(cmap_name, colors, N=40)
 
 def convert_arg_line_to_args(arg_line):
     for arg in arg_line.split():
@@ -376,6 +384,7 @@ train_parser.add_argument('--max_tree_depth',            type=int,   help='max G
 train_parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 train_parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
 train_parser.add_argument('--predict_unc_d3vo',          dest='predict_unc_d3vo',help='True to predict uncertainty d3vo from the decoder', action='store_true')
+train_parser.add_argument('--segmentation',              dest='segmentation', help='segmentation variation', action='store_true', default=True)
 
 # Log and save
 train_parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
@@ -448,6 +457,7 @@ eval_parser.add_argument('--max_tree_depth',            type=int,   help='max GR
 eval_parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 eval_parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
 eval_parser.add_argument('--predict_unc_d3vo',          dest='predict_unc_d3vo',help='True to predict uncertainty d3vo from the decoder', action='store_true')
+eval_parser.add_argument('--segmentation',              dest='segmentation',help='segmentation variation', action='store_true', default=True)
 
 # Preprocessing
 eval_parser.add_argument('--do_random_rotate',                      help='if set, will perform random rotation for augmentation', action='store_true')
