@@ -63,22 +63,24 @@ class NewCRFDepth(nn.Module):
             depths = [2, 2, 6, 2]
             num_heads = [3, 6, 12, 24]
             in_channels = [96, 192, 384, 768]
-       
+        
+        self.hidden_dim = 32   #128
+        self.context_dim = 32  #96 
         # Set update block #
         if self.update_block == 0: # IEBins
-            self.update = BasicUpdateBlockDepth(hidden_dim=128, context_dim=embed_dim, bin_num=16)
+            self.update = BasicUpdateBlockDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=16)
         elif self.update_block == 1: # Canonical - one scale per pixel
-            self.update = BasicUpdateBlockCDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+            self.update = BasicUpdateBlockCDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         elif self.update_block == 2: # with uncertainty prediction (from GRU) 
-            self.update = BasicUpdateBlockCUDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+            self.update = BasicUpdateBlockCUDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         elif self.update_block == 3: # Canonical - one scale with uncertainty (from decoder) concatenation
-            self.update = BasicUpdateBlockCUConcDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+            self.update = BasicUpdateBlockCUConcDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         elif self.update_block == 4: # Canonical - one scale per image 
-            self.update = BasicUpdateBlockCSDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+            self.update = BasicUpdateBlockCSDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         elif self.update_block == 5: # Canonical - one scale per semantic class 
-            self.update = BasicUpdateBlockCSemanticDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
+            self.update = BasicUpdateBlockCSemanticDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
         elif self.update_block == 6: # Canonical - one scale per image and no projection 
-            self.update = BasicUpdateBlockCSNoProjectDepth(hidden_dim=128, context_dim=embed_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+            self.update = BasicUpdateBlockCSNoProjectDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         else:
             pass
 
@@ -130,8 +132,8 @@ class NewCRFDepth(nn.Module):
                 nn.Conv2d(64, 16*9, 1, padding=0))
 
         # GRU #
-        self.hidden_dim = 128
-        self.project = Projection(v_dims[0], self.hidden_dim) # Project features to GRU input  
+        self.project = ProjectionCustom(v_dims[0], self.hidden_dim) # Project features to GRU input  
+        self.project_context = ProjectionCustom(in_channels[0], self.hidden_dim) # Project features to GRU input  
 
         # Predict uncertainty from decoder features #
         if self.predict_unc: 
@@ -143,6 +145,7 @@ class NewCRFDepth(nn.Module):
         self.init_weights(pretrained=pretrained)
 
 	    # Freeze some weights #
+        # Also train project  #
         if self.freeze_backbone:
             for param in self.backbone.parameters():
                 param.requires_grad = False
@@ -219,6 +222,7 @@ class NewCRFDepth(nn.Module):
  
         depth = torch.zeros([b, 1, h, w]).to(device)
         context = feats[0]
+        context = self.project_context(context)
         gru_hidden = torch.tanh(e0)
 
         # Predict depth with GRU. context: early feature map and hidden: late feature map #

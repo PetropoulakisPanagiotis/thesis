@@ -35,6 +35,20 @@ class Projection(nn.Module):
                 
         return out
 
+"""
+ProjectionCustom: same convolution (x3 cnv)
+"""
+class ProjectionCustom(nn.Module):
+    def __init__(self, in_chs, out_chs, hidden_dim=96):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_chs, hidden_dim, 3, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, out_chs, 3, padding=1)
+        
+    def forward(self, x):
+        out = self.conv2(F.relu(self.conv1(x)))
+                
+        return out
+
 def upsample(x, scale_factor=2, mode="bilinear", align_corners=False):
     """
     Upsample input tensor by a factor of 2

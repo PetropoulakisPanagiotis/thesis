@@ -1,6 +1,6 @@
 import os, sys, time
 import gc
-#os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import torch
 import torch.nn as nn
@@ -227,8 +227,11 @@ def main_worker(gpu, ngpus_per_node, args):
             # Fix weights #
             if args.update_block != 0:
                 # Canonical #
-                weights_to_remove = "update"
-                keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove in key]
+                weights_to_remove_1 = "update"
+                weights_to_remove_2 = "project"
+                keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove_1 in key]
+                keys_to_remove.extend([key for key in checkpoint['model'].keys() if weights_to_remove_2 in key]) 
+
                 for key_to_remove in keys_to_remove:
                     checkpoint['model'].pop(key_to_remove)
 
