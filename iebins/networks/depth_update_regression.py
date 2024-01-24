@@ -7,6 +7,125 @@ import torch.nn.functional as F
 from .utils import *
 
 """
+Canonical space basic block: single scale per image 
+"""
+class RegressionConcact(nn.Module):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0):
+        super(RegressionConcact, self).__init__()
+
+        self.p_head = CRHead(hidden_dim+context_dim, hidden_dim) # propabilities canonical
+        self.s_head = SSPHead(hidden_dim+context_dim)                            # Global scale and shift 
+
+        self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
+
+    def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth):
+        """
+         depth:      is typically zeros #
+         context:    feature map from early layers 
+         gru_hidden: feature map from late layers  
+        """
+        pred_depths_r_list = []    # metric 
+        pred_depths_rc_list = []   # canonical
+
+        pred_scale_list = []
+        pred_shift_list = []
+        
+        input_c = torch.cat([gru_hidden, context], dim=1)  # input_c        352, 88, 280
+        
+         
+        pred_rc = self.p_head(input_c)        # 16, 88, 280
+        pred_scale = self.s_head(input_c)       # 2
+        pred_scale_list.append(pred_scale[:, 0:1])
+        pred_shift_list.append(pred_scale[:, 1:2])
+        
+        # Canonical
+        depth_rc = pred_rc
+        pred_depths_rc_list.append(depth_rc)
+
+        # Metric
+        if self.loss_type == 0:
+            depth_r = (self.relu(depth_rc * pred_scale[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale[:, 1:2].unsqueeze(1).unsqueeze(1))).clamp(min=1e-3)
+        else:
+            depth_r = depth_rc * pred_scale[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale[:, 1:2].unsqueeze(1).unsqueeze(1)
+
+        pred_depths_r_list.append(depth_r)
+
+        result = {}
+        result["pred_depths_r_list"] = pred_depths_r_list
+        result["pred_depths_rc_list"] = pred_depths_rc_list
+        result["pred_scale_list"] = pred_scale_list
+        result["pred_shift_list"] = pred_shift_list
+
+        return result
+
+"""
+Canonical space basic block: single scale per image 
+"""
+class Regression(nn.Module):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0):
+        super(Regression, self).__init__()
+
+        self.p_head = CRHead(hidden_dim, hidden_dim) # propabilities canonical
+        self.s_head = SSPHead(hidden_dim)            # Global scale and shift 
+
+        self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
+
+    def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth):
+        """
+         depth:      is typically zeros #
+         context:    feature map from early layers 
+         gru_hidden: feature map from late layers  
+        """
+        pred_depths_r_list = []    # metric 
+        pred_depths_rc_list = []   # canonical
+
+        pred_scale_list = []
+        pred_shift_list = []
+        
+         
+        pred_rc = self.p_head(gru_hidden)        # 16, 88, 280
+        pred_scale = self.s_head(gru_hidden)       # 2
+        pred_scale_list.append(pred_scale[:, 0:1])
+        pred_shift_list.append(pred_scale[:, 1:2])
+        
+        # Canonical
+        depth_rc = pred_rc
+        pred_depths_rc_list.append(depth_rc)
+
+        # Metric
+        if self.loss_type == 0:
+            depth_r = (self.relu(depth_rc * pred_scale[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale[:, 1:2].unsqueeze(1).unsqueeze(1))).clamp(min=1e-3)
+        else:
+            depth_r = depth_rc * pred_scale[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale[:, 1:2].unsqueeze(1).unsqueeze(1)
+
+        pred_depths_r_list.append(depth_r)
+
+        result = {}
+        result["pred_depths_r_list"] = pred_depths_r_list
+        result["pred_depths_rc_list"] = pred_depths_rc_list
+        result["pred_scale_list"] = pred_scale_list
+        result["pred_shift_list"] = pred_shift_list
+
+        return result
+
+
+"""
+PHead: propabilities bin prediction
+"""        
+class CRHead(nn.Module):
+    def __init__(self, input_dim=128, hidden_dim=128):
+        super(CRHead, self).__init__()
+        self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, 1, 3, padding=1)
+
+    def forward(self, x):
+        out = torch.sigmoid(self.conv2(F.relu(self.conv1(x))))
+        return out
+
+
+"""
 IEBins metric depth implementation 
 """
 class BasicUpdateBlockDepth(nn.Module):

@@ -313,7 +313,7 @@ class ToTensor(object):
     def __init__(self, mode, segmentation):
         self.mode = mode
         self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        self.max_instances = 40 # 40/5
+        self.max_instances = 63 # 40/5, 63/13
         self.segmentation = segmentation
 
     def __call__(self, sample_dataset):
@@ -429,6 +429,7 @@ def load_annotations(json_file_path):
     segmentations = []
     labels_map = np.array(coco_data.get("categories"), dtype=np.int32)
     num_semantic_classes = int(coco_data.get("num_categories"))
+    num_semantic_classes = 14
     labels_map = create_one_hot_mask_np(labels_map, num_semantic_classes)
     
     labels = []
