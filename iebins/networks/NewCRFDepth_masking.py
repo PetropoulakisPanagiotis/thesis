@@ -5,18 +5,18 @@ import torch.nn.functional as F
 from .swin_transformer import SwinTransformer
 from .newcrf_layers import NewCRF
 from .uper_crf_head import PSP
-from .depth_update  import *
+from .depth_update_masking  import *
 from .utils import *
 
 
-class NewCRFDepth(nn.Module):
+class NewCRFDepthMasking(nn.Module):
     """
     Depth network based on neural window FC-CRFs architecture
     """
     def __init__(self, version=None, pretrained=None, 
                     frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=6, 
                     bin_num=16, update_block=0, loss_type=0, train_decoder=0, 
-                    predict_unc=False, predict_unc_d3vo=False, num_semantic_classes=13, **kwargs):
+                    predict_unc=False, predict_unc_d3vo=False, num_semantic_classes=14, **kwargs):
         super().__init__()
 
         self.with_auxiliary_head = False
@@ -81,14 +81,6 @@ class NewCRFDepth(nn.Module):
             self.update = BasicUpdateBlockCSemanticDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
         elif self.update_block == 6: # Canonical - one scale per image and no projection 
             self.update = BasicUpdateBlockCSNoProjectDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
-        elif self.update_block == 7: # Canonical - one scale per image and NO GRU
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
-            self.update = RegressionConcact(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
-        elif self.update_block == 8: # Canonical - one scale per image and NO GRU
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
-            self.update = Regression(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         elif self.update_block == 9: # Canonical - one scale per image and no projection 
             self.update = BasicUpdateBlockCSemanticMaskingDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
         else:
@@ -142,9 +134,8 @@ class NewCRFDepth(nn.Module):
                 nn.Conv2d(64, 16*9, 1, padding=0))
 
         # GRU #
-        self.project = ProjectionCustom(v_dims[0], self.hidden_dim) # Project features to GRU input 
-        if self.update_block != 7 and self.update_block != 8:
-            self.project_context = ProjectionCustom(in_channels[0], self.hidden_dim) # Project features to GRU input  
+        self.project = ProjectionCustom(v_dims[0], self.hidden_dim) # Project features to GRU input  
+        self.project_context = ProjectionCustom(in_channels[0], self.hidden_dim) # Project features to GRU input  
 
         # Predict uncertainty from decoder features #
         if self.predict_unc: 
@@ -233,9 +224,7 @@ class NewCRFDepth(nn.Module):
  
         depth = torch.zeros([b, 1, h, w]).to(device)
         context = feats[0]
-
-        if self.update_block != 7 and self.update_block != 8:
-            context = self.project_context(context)
+        context = self.project_context(context)
         gru_hidden = torch.tanh(e0)
 
         # Predict depth with GRU. context: early feature map and hidden: late feature map #
@@ -248,15 +237,13 @@ class NewCRFDepth(nn.Module):
                 result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
         else:
             result = self.update(depth, unc, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
-           
 
         if self.up_mode == 'mask':
             for i in range(max_tree_depth):
                 result["pred_depths_r_list"][i] = self.upsample_mask(result["pred_depths_r_list"][i], mask)  
+                result["pred_depths_c_list"][i] = self.upsample_mask(result["pred_depths_c_list"][i], mask.detach())
                 result["pred_depths_rc_list"][i] = self.upsample_mask(result["pred_depths_rc_list"][i], mask.detach())
-                if self.update_block != 7 and self.update_block != 8:
-                    result["uncertainty_maps_list"][i] = self.upsample_mask(result["uncertainty_maps_list"][i], mask.detach())
-                    result["pred_depths_c_list"][i] = self.upsample_mask(result["pred_depths_c_list"][i], mask.detach())
+                result["uncertainty_maps_list"][i] = self.upsample_mask(result["uncertainty_maps_list"][i], mask.detach())
 
             if self.update_block == 2: # Predict uncertainty from GRU       
                 for i in range(max_tree_depth):
@@ -271,10 +258,9 @@ class NewCRFDepth(nn.Module):
         else:
             for i in range(max_tree_depth):
                 result["pred_depths_r_list"][i] = upsample(result["pred_depths_r_list"][i], scale_factor=4)
+                result["pred_depths_c_list"][i] = upsample(result["pred_depths_c_list"][i], scale_factor=4) 
                 result["pred_depths_rc_list"][i] = upsample(result["pred_depths_rc_list"][i], scale_factor=4) 
-                if self.update_block != 7 and self.update_block != 8:
-                    result["pred_depths_c_list"][i] = upsample(result["pred_depths_c_list"][i], scale_factor=4) 
-                    result["uncertainty_maps_list"][i] = upsample(result["uncertainty_maps_list"][i], scale_factor=4) 
+                result["uncertainty_maps_list"][i] = upsample(result["uncertainty_maps_list"][i], scale_factor=4) 
 
             if self.update_block == 2:  # Predict uncertainty from GRU      
                 for i in range(max_tree_depth):
