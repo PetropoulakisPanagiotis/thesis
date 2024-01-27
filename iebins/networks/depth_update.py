@@ -527,6 +527,143 @@ class BasicUpdateBlockCSemanticMaskingDepth(nn.Module):
 
         return result
 
+"""
+Canonical space basic block: one scale per semantic class and instance 
+"""
+class RegressionSemanticMasking(nn.Module):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5):
+        super(RegressionSemanticMasking, self).__init__()
+        self.num_semantic_classes = num_semantic_classes
+        self.hidden_dim = hidden_dim
+        self.context_dim = context_dim
+
+        self.p_head = CRHead(hidden_dim * self.num_semantic_classes, hidden_dim*self.num_semantic_classes, num_classes=self.num_semantic_classes) # 16 propabilities canonical
+        self.s_head = SSPHead(hidden_dim*self.num_semantic_classes, num_classes=self.num_semantic_classes)                 # Global scale and shift 
+
+        self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
+
+    def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth, masks):
+        """
+         depth:      is typically zeros #
+         context:    feature map from early layers 
+         gru_hidden: feature map from late layers  
+        """
+        pred_depths_r_list = []    # metric 
+        pred_depths_rc_list = []   # canonical
+
+        pred_scale_list = []
+        pred_shift_list = []
+
+        b, _, h, w = depth.shape
+        
+        masks = masks.view(b * self.num_semantic_classes, 1, h, w)
+
+        gru_hidden = torch.cat([gru_hidden] * self.num_semantic_classes, dim=0)
+        gru_hidden = gru_hidden.view(b * self.num_semantic_classes, self.hidden_dim, h, w)          
+        gru_hidden = gru_hidden * masks
+           
+        gru_hidden = gru_hidden.view(b, self.num_semantic_classes * self.hidden_dim, h,w) # b*c, 128, 88, 280           
+        pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
+        pred_scale = self.s_head(gru_hidden)       # b, 2*c
+       
+          
+        # revert back 
+        pred_scale_list.append(pred_scale[:, ::2])  # b, c
+        pred_shift_list.append(pred_scale[:, 1::2]) # b, c
+        
+        # Canonical
+        # b, 16*c, h, w - c*b, 16, h, w
+        # b*c, 16, h, w
+        depth_rc = pred_prob
+        pred_depths_rc_list.append(depth_rc)
+        
+        # Metric
+        if self.loss_type == 0:
+            depth_r = (self.relu(depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+        else:
+            depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
+        
+        # depth_r: b, c, h, w
+        pred_depths_r_list.append(depth_r)
+        
+        result = {}
+        result["pred_depths_r_list"] = pred_depths_r_list
+        result["pred_depths_rc_list"] = pred_depths_rc_list
+        result["pred_scale_list"] = pred_scale_list
+        result["pred_shift_list"] = pred_shift_list
+
+        return result
+
+"""
+Canonical space basic block: one scale per semantic class and instance 
+"""
+class RegressionSemanticMaskingExp(nn.Module):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5):
+        super(RegressionSemanticMaskingExp, self).__init__()
+        self.num_semantic_classes = num_semantic_classes
+        self.hidden_dim = hidden_dim
+        self.context_dim = context_dim
+
+        self.p_head = CRHead(hidden_dim, hidden_dim, num_classes=1) # 16 propabilities canonical
+        self.s_head = SSPHead(hidden_dim, num_classes=self.num_semantic_classes)                 # Global scale and shift 
+
+        self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
+
+    def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth, masks):
+        """
+         depth:      is typically zeros #
+         context:    feature map from early layers 
+         gru_hidden: feature map from late layers  
+        """
+        pred_depths_r_list = []    # metric 
+        pred_depths_rc_list = []   # canonical
+
+        pred_scale_list = []
+        pred_shift_list = []
+
+        b, _, h, w = depth.shape
+        
+        masks = masks.view(b * self.num_semantic_classes, 1, h, w)
+
+        #gru_hidden = torch.cat([gru_hidden] * self.num_semantic_classes, dim=0)
+        #gru_hidden = gru_hidden.view(b * self.num_semantic_classes, self.hidden_dim, h, w)          
+        #gru_hidden = gru_hidden * masks
+           
+        pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
+        pred_prob = torch.cat([pred_prob] * self.num_semantic_classes, dim=0)
+        pred_prob = pred_prob.view(b, self.num_semantic_classes, h, w)
+        #gru_hidden = gru_hidden * masks
+        pred_scale = self.s_head(gru_hidden)       # b, 2*c
+       
+          
+        # revert back 
+        pred_scale_list.append(pred_scale[:, ::2])  # b, c
+        pred_shift_list.append(pred_scale[:, 1::2]) # b, c
+        
+        # Canonical
+        # b, 16*c, h, w - c*b, 16, h, w
+        # b*c, 16, h, w
+        depth_rc = pred_prob
+        pred_depths_rc_list.append(depth_rc)
+        
+        # Metric
+        if self.loss_type == 0:
+            depth_r = (self.relu(depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+        else:
+            depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
+        
+        # depth_r: b, c, h, w
+        pred_depths_r_list.append(depth_r)
+        
+        result = {}
+        result["pred_depths_r_list"] = pred_depths_r_list
+        result["pred_depths_rc_list"] = pred_depths_rc_list
+        result["pred_scale_list"] = pred_scale_list
+        result["pred_shift_list"] = pred_shift_list
+
+        return result
 
 
 """
@@ -1153,17 +1290,14 @@ class BasicUpdateBlockCSemanticMaskingDepth(nn.Module):
 PHead: propabilities bin prediction
 """        
 class CRHead(nn.Module):
-    def __init__(self, input_dim=128, hidden_dim=128):
+    def __init__(self, input_dim=128, hidden_dim=128, num_classes=1):
         super(CRHead, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
-        self.conv2 = nn.Conv2d(hidden_dim, 1, 3, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, num_classes, 3, padding=1)
 
     def forward(self, x):
         out = torch.sigmoid(self.conv2(F.relu(self.conv1(x))))
         return out
-
-
-
 
 """
 PHead: propabilities bin prediction
@@ -1204,8 +1338,8 @@ class SSPHead(nn.Module):
     def forward(self, x):
         out = F.relu(self.pool(self.conv1(x)))
         out = torch.flatten(out, 1)
-        out = self.fc1(out)
-        
+        #out = torch.sigmoid(self.fc1(out)) * 20
+        out = self.fc1(out)        
         return out
 
 """

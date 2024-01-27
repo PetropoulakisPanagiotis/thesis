@@ -3,13 +3,24 @@
 --dataset nyu
 --input_height 480
 --input_width 640
---max_depth 10
+
+--data_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
 
 --data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
 --gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
---filenames_file_eval ../../data_splits/nyudepthv2_test_files_with_gt.txt
+--filenames_file_eval /usr/stud/petp/code/thesis/data_splits/nyudepthv2_test_files_with_gt.txt
 --min_depth_eval 1e-3
 --max_depth_eval 10
 --eigen_crop
 
---checkpoint_path /usr/stud/petp/code/saved_models/nyu_T.pth
+--update_block 9
+--bin_num 16
+--min_depth 0
+--max_depth 1
+--max_tree_depth 4
+
+--segmentation
+--loss_type 0
+--exp_name eval
+
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/masking/nyu/model-4500-best_d1_0.58076

@@ -32,10 +32,13 @@ if args.dataset == 'kitti' or args.dataset == 'nyu':
 def eval(model, dataloader_eval, post_process=False):
     eval_measures = torch.zeros(10).cuda()
 
+    num_semantic_classes = dataloader_eval.num_semantic_classes
+    num_semantic_classes = 14
+
     writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
    
     image_counter = 0
-    eval_images = 2
+    eval_images = 10
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         image_counter += 1
         if image_counter == eval_images:
@@ -46,18 +49,25 @@ def eval(model, dataloader_eval, post_process=False):
             num_log_images = image.shape[0]
             gt_depth = eval_sample_batched['depth']
 
+            if args.dataset == 'nyu' and args.segmentation:
+                segmentation_map = torch.autograd.Variable(eval_sample_batched['segmentation_map'].cuda())
+
             has_valid_depth = eval_sample_batched['has_valid_depth']
             if not has_valid_depth:
                 print('Invalid depth. continue.')
                 continue
 
             # Predict #
-            result = model(image)
+            if args.update_block == 9:
+                result = model(image, masks=segmentation_map)
+            else:
+                result = model(image)
             
             # Unpack #            
             pred_depths_r_list = result["pred_depths_r_list"]
-            pred_depths_c_list = result["pred_depths_c_list"]
-            uncertainty_maps_list = result["uncertainty_maps_list"]
+            if args.update_block != 7 and args.update_block != 8:            
+                pred_depths_c_list = result["pred_depths_c_list"]
+                uncertainty_maps_list = result["uncertainty_maps_list"]
             if args.update_block != 0:
                 pred_depths_rc_list = result["pred_depths_rc_list"]
                 pred_scale_list = result["pred_scale_list"] 
@@ -76,18 +86,10 @@ def eval(model, dataloader_eval, post_process=False):
                 if args.dataset == 'nyu':
                     writer.add_image('gt_depth/image/{}'.format(i), colormap(torch.where(gt_depth < 1e-3, gt_depth * 0 + 1e-3, gt_depth)[i, :, :, :].data), step)
                     writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, step)
-                    writer.add_image('depth_r_est0/image/{}'.format(i), colormap(pred_depths_r_list[0][i, :, :, :].data), step)
-                    writer.add_image('depth_r_est1/image/{}'.format(i), colormap(pred_depths_r_list[1][i, :, :, :].data), step)
-                    writer.add_image('depth_r_est2/image/{}'.format(i), colormap(pred_depths_r_list[2][i, :, :, :].data), step)
-                    writer.add_image('depth_r_est3/image/{}'.format(i), colormap(pred_depths_r_list[3][i, :, :, :].data), step)
-                    writer.add_image('depth_r_est4/image/{}'.format(i), colormap(pred_depths_r_list[4][i, :, :, :].data), step)
-                    writer.add_image('depth_r_est5/image/{}'.format(i), colormap(pred_depths_r_list[5][i, :, :, :].data), step)
-                    writer.add_image('depth_c_est0/image/{}'.format(i), colormap(pred_depths_c_list[0][i, :, :, :].data), step)
-                    writer.add_image('depth_c_est1/image/{}'.format(i), colormap(pred_depths_c_list[1][i, :, :, :].data), step)
-                    writer.add_image('depth_c_est2/image/{}'.format(i), colormap(pred_depths_c_list[2][i, :, :, :].data), step)
-                    writer.add_image('depth_c_est3/image/{}'.format(i), colormap(pred_depths_c_list[3][i, :, :, :].data), step)
-                    writer.add_image('depth_c_est4/image/{}'.format(i), colormap(pred_depths_c_list[4][i, :, :, :].data), step)
-                    writer.add_image('depth_c_est5/image/{}'.format(i), colormap(pred_depths_c_list[5][i, :, :, :].data), step)
+                    for ii in range(max_tree_depth):
+
+                        pred_depths_r_list[ii] = torch.sum((pred_depths_r_list[ii] * segmentation_map), dim=1).unsqueeze(1)
+                        writer.add_image('depth_r_est0/image/{}'.format(i), colormap(pred_depths_r_list[ii][i, :, :, :].data), step)
                 else:
                     gt_depth_viz  = torch.where(gt_depth < 1e-3, gt_depth * 0 + 1e-3, gt_depth)
                     gt_depth_viz = gt_depth_viz.permute(0, 3, 1, 2)
@@ -121,8 +123,14 @@ def eval(model, dataloader_eval, post_process=False):
             max_tree_depth = len(pred_depths_r_list)
             if post_process:
                 image_flipped = flip_lr(image)
-                result = model(image_flipped)
-                pred_depths_r_list_flipped  = result["pred_depths_r_list"]
+                if args.update_block == 9:
+                    result = model(image_flipped, masks = segmentation_map)
+                else:
+                    result = model(image_flipped)
+                pred_depths_r_list_flipped = result["pred_depths_r_list"]
+
+                pred_depths_r_list_flipped[-1] = torch.sum((pred_depths_r_list_flipped[-1] * segmentation_map), dim=1).unsqueeze(1)
+
                 pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
 
                 pred_depth = pred_depth.cpu().numpy().squeeze()
@@ -179,64 +187,69 @@ def eval(model, dataloader_eval, post_process=False):
     print('{:7.4f}'.format(eval_measures_cpu[8]))
 
     return eval_measures_cpu
+
 def debug(result, gt_depth):
     if True: 
         # Debug #
         if True:
             print("depth")
-            print(torch.max(result['pred_depths_r_list'][5][0, :, :, :]))
-            print(torch.min(result['pred_depths_r_list'][5][0, :, :, :]))
+            print(torch.max(result['pred_depths_r_list'][-1][0, :, :, :]))
+            print(torch.min(result['pred_depths_r_list'][-1][0, :, :, :]))
         
         if True:
             print("canonical")
-            print(torch.max(result['pred_depths_rc_list'][5][0, 0, :, :]))
-            print(torch.min(result['pred_depths_rc_list'][5][0, 0, :, :]))
-            print(torch.mean(result['pred_depths_rc_list'][5][0, 0, :, :]))
-            print(torch.std(result['pred_depths_rc_list'][5][0, 0, :, :]))
+            print(torch.max(result['pred_depths_rc_list'][-1][0, 0, :, :]))
+            print(torch.min(result['pred_depths_rc_list'][-1][0, 0, :, :]))
+            print(torch.mean(result['pred_depths_rc_list'][-1][0, 0, :, :]))
+            print(torch.std(result['pred_depths_rc_list'][-1][0, 0, :, :]))
         if True:
             print("uncertainty (std)")
-            print(torch.max(result['uncertainty_maps_list'][5][0, 0, :, :]))
-            print(torch.min(result['uncertainty_maps_list'][5][0, 0, :, :]))
-            print(torch.mean(result['uncertainty_maps_list'][5][0, 0, :, :]))
-            print(torch.std(result['uncertainty_maps_list'][5][0, 0, :, :]))            
+            print(torch.max(result['uncertainty_maps_list'][-1][0, 0, :, :]))
+            print(torch.min(result['uncertainty_maps_list'][-1][0, 0, :, :]))
+            print(torch.mean(result['uncertainty_maps_list'][-1][0, 0, :, :]))
+            print(torch.std(result['uncertainty_maps_list'][-1][0, 0, :, :]))            
         if True:
             print("scale")
-            print(torch.max(result['pred_scale_list'][5][0, 0]))
-            print(torch.min(result['pred_scale_list'][5][0, 0]))
-            print(torch.mean(result['pred_scale_list'][5][0, 0]))
-            print(torch.std(result['pred_scale_list'][5][0, 0]))  
+            print(torch.max(result['pred_scale_list'][-1][0, 0]))
+            print(torch.min(result['pred_scale_list'][-1][0, 0]))
+            print(torch.mean(result['pred_scale_list'][-1][0, 0]))
+            print(torch.std(result['pred_scale_list'][-1][0, 0]))  
             #print(torch.max(result['pred_scale_list'][5][0, 0, :, :]))
             #print(torch.min(result['pred_scale_list'][5][0, 0, :, :]))
             #print(torch.mean(result['pred_scale_list'][5][0, 0, :, :]))
             #print(torch.std(result['pred_scale_list'][5][0, 0, :, :]))            
         if True:
             print("shift")
-            print(torch.max(result['pred_shift_list'][5][0, 0]))
-            print(torch.min(result['pred_shift_list'][5][0, 0]))
-            print(torch.mean(result['pred_shift_list'][5][0, 0]))
-            print(torch.std(result['pred_shift_list'][5][0, 0]))       
+            print(torch.max(result['pred_shift_list'][-1][0, 0]))
+            print(torch.min(result['pred_shift_list'][-1][0, 0]))
+            print(torch.mean(result['pred_shift_list'][-1][0, 0]))
+            print(torch.std(result['pred_shift_list'][-1][0, 0]))       
             #print(torch.max(result['pred_shift_list'][5][0, 0, :, :]))
             #print(torch.min(result['pred_shift_list'][5][0, 0, :, :]))
             #print(torch.mean(result['pred_shift_list'][5][0, 0, :, :]))
             #print(torch.std(result['pred_shift_list'][5][0, 0, :, :]))
-        if True:
+        if False:
             print("unc_d3vo")
             print(torch.max(result['unc_d3vo'][0, 0, :, :]))
             print(torch.min(result['unc_d3vo'][0, 0, :, :]))
             print(torch.mean(result['unc_d3vo'][0, 0, :, :]))
             print(torch.std(result['unc_d3vo'][0, 0, :, :]))
-        if True:
+        if False:
             print("sample")
-            print(result['pred_depths_r_list'][5][0, 0, 120, 701])
+            print(result['pred_depths_r_list'][-1][0, 0, 120, 701])
             print(result['unc_d3vo'][0, 0, 120, 701])
             print(gt_depth[0, 120, 701, 0])
 
 def main_worker(args):
-
+    
+    dataloader_eval = NewDataLoader(args, 'online_eval')
+    
+    num_semantic_classes = dataloader_eval.num_semantic_classes
+    num_semantic_classes = 14
     # CRF model
-    model = NewCRFDepth(version=args.encoder, max_depth=args.max_depth, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, 
-                        min_depth=args.min_depth, update_block=args.update_block, loss_type=args.loss_type, 
-                        pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo)
+    model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
+                        max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
+                        predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -263,7 +276,6 @@ def main_worker(args):
 
     cudnn.benchmark = True
 
-    dataloader_eval = NewDataLoader(args, 'online_eval')
 
     # ===== Evaluation ======
     model.eval()

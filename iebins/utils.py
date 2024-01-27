@@ -469,6 +469,7 @@ eval_parser.add_argument('--use_right',                             help='if set
 eval_parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='.')
 eval_parser.add_argument('--exp_name',                  type=str,   help='directory to save checkpoints and summaries', default='exp-1')
 eval_parser.add_argument('--data_path_eval',            type=str,   help='path to the data for evaluation', required=False)
+eval_parser.add_argument('--data_path',                 type=str,   help='path to the data', required=True)
 eval_parser.add_argument('--gt_path_eval',              type=str,   help='path to the groundtruth data for evaluation', required=False)
 eval_parser.add_argument('--filenames_file_eval',       type=str,   help='path to the filenames text file for evaluation', required=False)
 eval_parser.add_argument('--min_depth_eval',            type=float, help='minimum depth for evaluation', default=1e-3)
