@@ -50,7 +50,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                 continue
 
             # Predict #
-            if args.update_block == 9 or args.update_block == 10 or args.update_block == 11:
+            if args.update_block == 9 or args.update_block == 10 or args.update_block == 11 or args.update_block == 12:
                 result = model(image, masks=segmentation_map)
             else:
                 result = model(image)
@@ -66,7 +66,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             if post_process and False:
                 image_flipped = flip_lr(image)
                 segmentation_map_flipped = flip_lr(segmentation_map)
-                if args.update_block == 9 or args.update_block == 10 or args.update_block == 11:
+                if args.update_block == 9 or args.update_block == 10 or args.update_block == 11 or args.update_block == 12:
                     result = model(image_flipped, masks = segmentation_map_flipped)
                 else:
                     result = model(image_flipped)
@@ -350,7 +350,7 @@ def main_worker(gpu, ngpus_per_node, args):
             num_images = image.shape[0]
             
             # Predict #            
-            if args.update_block == 9 or args.update_block == 10 or args.update_block == 11:
+            if args.update_block == 9 or args.update_block == 10 or args.update_block == 11 or args.update_block == 12:
                 result = model(image, epoch, step, segmentation_map)
             else:
                 result = model(image, epoch, step)
@@ -358,7 +358,7 @@ def main_worker(gpu, ngpus_per_node, args):
             # Unpack #            
             pred_depths_r_list = result["pred_depths_r_list"]
             max_tree_depth = len(pred_depths_r_list)
-            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11:            
+            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11 and args.update_block != 12:            
                 pred_depths_c_list = result["pred_depths_c_list"]
                 uncertainty_maps_list = result["uncertainty_maps_list"]
             
@@ -384,8 +384,11 @@ def main_worker(gpu, ngpus_per_node, args):
             # Loss #
             for curr_tree_depth in range(max_tree_depth):
                 if args.segmentation:
+                    #print(pred_depths_r_list[curr_tree_depth].shape)
+                    #print(segmentation_map.shape)
                     pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * segmentation_map), dim=1).unsqueeze(1)
-                    pred_d_d = torch.sum((torch.ones_like(pred_depths_r_list[curr_tree_depth]) * segmentation_map), dim=1).unsqueeze(1)
+                    #pred_d = pred_depths_r_list[curr_tree_depth][:, 0, :, :].unsqueeze(1)
+                    #pred_d = pred_depths_r_list[curr_tree_depth]
                 else:
                     pred_d = pred_depths_r_list[curr_tree_depth]
                 
@@ -467,7 +470,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                 writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), 
                                                  colormap(torch.log10(torch.sum(pred_depths_r_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
                             
-                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11:            
+                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11 and args.update_block != 12:            
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
                                                      colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
@@ -502,7 +505,7 @@ def main_worker(gpu, ngpus_per_node, args):
                             writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
                             for ii in range(max_tree_depth):
                                 writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), global_step)
-                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11:            
+                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11 and args.update_block != 12:            
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_labels_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), global_step)
                                     writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), global_step)
