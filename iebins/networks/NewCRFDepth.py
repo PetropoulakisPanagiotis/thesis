@@ -102,7 +102,22 @@ class NewCRFDepth(nn.Module):
         elif self.update_block == 12: # Canonical - one scale per image and no projection segmentation
             self.hidden_dim = 128   #128
             self.context_dim = 96
-            self.update = RegressionSemanticNoMaskingCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
+            self.update = RegressionSemanticNoMaskingCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)        
+        elif self.update_block == 13: # Canonical - one scale per image and no projection segmentation
+            self.hidden_dim = 128   #128
+            self.context_dim = 96
+            self.update = RegressionSemanticNoMaskingCanonicalConc(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
+        elif self.update_block == 14: # Canonical - one scale per image and no projection segmentation
+            self.hidden_dim = 128   #128
+            self.context_dim = 96
+            self.update = RegressionSemanticNoMaskingCanonicalConcProj(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
+        elif self.update_block == 15 or self.update_block == 16 or self.update_block == 17: # Canonical - one scale per image and no projection segmentation
+            self.hidden_dim = 128   #128
+            self.context_dim = 96
+            if self.update_block == 17:
+                self.update = RegressionSemanticNoMaskingCanonicalConcProjMask(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, operation_mask='+')
+            else:
+                self.update = RegressionSemanticNoMaskingCanonicalConcProjMask(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
         else:
             pass
 
@@ -252,9 +267,9 @@ class NewCRFDepth(nn.Module):
 
         # Predict depth with GRU. context: early feature map and hidden: late feature map #
         if self.predict_unc == False and self.update_block != 3:
-            if self.update_block == 9 or self.update_block == 10 or self.update_block == 11 or self.update_block == 12:
+            if self.update_block >= 9:
                 masks = upsample(masks, scale_factor=1/4)
-                if self.update_block != 11:
+                if self.update_block != 11 and self.update_block != 13 and self.update_block != 14 and self.update_block != 16 and self.update_block != 17:
                     masks = (masks > 0.4).float()
                 result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks)
             else:
@@ -267,7 +282,7 @@ class NewCRFDepth(nn.Module):
             for i in range(max_tree_depth):
                 result["pred_depths_r_list"][i] = self.upsample_mask(result["pred_depths_r_list"][i], mask)  
                 result["pred_depths_rc_list"][i] = self.upsample_mask(result["pred_depths_rc_list"][i], mask.detach())
-                if self.update_block != 7 and self.update_block != 8 and self.update_block != 10 and self.update_block != 11 and self.update_block != 12:
+                if self.update_block != 7 and self.update_block != 8 and self.update_block != 10 and self.update_block != 11 and self.update_block != 12 and self.update_block != 13 and self.update_block != 14 and self.update_block != 15 and self.update_block != 16 and self.update_block != 17:
                     result["uncertainty_maps_list"][i] = self.upsample_mask(result["uncertainty_maps_list"][i], mask.detach())
                     result["pred_depths_c_list"][i] = self.upsample_mask(result["pred_depths_c_list"][i], mask.detach())
 
@@ -285,7 +300,7 @@ class NewCRFDepth(nn.Module):
             for i in range(max_tree_depth):
                 result["pred_depths_r_list"][i] = upsample(result["pred_depths_r_list"][i], scale_factor=4)
                 result["pred_depths_rc_list"][i] = upsample(result["pred_depths_rc_list"][i], scale_factor=4) 
-                if self.update_block != 7 and self.update_block != 8 and self.update_block != 10 and self.update_block != 11 and self.update_block != 12:
+                if self.update_block != 7 and self.update_block != 8 and self.update_block != 10 and self.update_block != 11 and self.update_block != 12 and self.update_block != 13 and self.update_block != 14 and self.update_block != 15 and self.update_block != 16 and self.update_block != 17:
                     result["pred_depths_c_list"][i] = upsample(result["pred_depths_c_list"][i], scale_factor=4) 
                     result["uncertainty_maps_list"][i] = upsample(result["uncertainty_maps_list"][i], scale_factor=4) 
 

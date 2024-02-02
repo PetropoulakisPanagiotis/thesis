@@ -1341,6 +1341,72 @@ class RegressionConcact(nn.Module):
 """
 Canonical space basic block: single scale per image 
 """
+class UniformSingle(nn.Module):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0):
+        super(UniformSingle, self).__init__()
+
+        self.p_head = PHead(hidden_dim, hidden_dim, bin_num + 1) # propabilities canonical
+        self.s_head = SSPHead(hidden_dim)                        # Global scale and shift 
+
+        self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
+
+    def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth):
+        """
+         depth:      is typically zeros #
+         context:    feature map from early layers 
+         gru_hidden: feature map from late layers  
+        """
+        pred_depths_r_list = []    # metric 
+        pred_depths_rc_list = []   # canonical
+
+        bins_map = get_uniform_bins(depth, min_depth, max_depth, bin_num)
+
+        pred_scale_list = []
+        pred_shift_list = []
+        uncertainty_maps_list = []
+        pred_depths_c_list = [] 
+        
+        pred_rc = self.p_head(gru_hidden)        # 16, 88, 280
+        pred_scale = self.s_head(gru_hidden)       # 2
+        pred_scale_list.append(pred_scale[:, 0:1])
+        pred_shift_list.append(pred_scale[:, 1:2])
+       
+        # Canonical
+        
+        depth_rc = (pred_rc * bins_map.detach()).sum(1, keepdim=True)
+        pred_depths_rc_list.append(depth_rc)
+
+        uncertainty_map = torch.sqrt((pred_rc * ((bins_map.detach() - depth_rc.repeat(1, bin_num+1, 1, 1))**2)).sum(1, keepdim=True))
+        uncertainty_maps_list.append(uncertainty_map)
+
+        # Label #
+        pred_label = get_label(torch.squeeze(depth_rc, 1), bins_map, bin_num).unsqueeze(1)
+        depth_c = torch.gather(bins_map.detach(), 1, pred_label.detach())
+        pred_depths_c_list.append(depth_c)
+
+        # Metric
+        if self.loss_type == 0:
+            depth_r = (self.relu(depth_rc * pred_scale[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale[:, 1:2].unsqueeze(1).unsqueeze(1))).clamp(min=1e-3)
+        else:
+            depth_r = depth_rc * pred_scale[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale[:, 1:2].unsqueeze(1).unsqueeze(1)
+
+        pred_depths_r_list.append(depth_r)
+
+        result = {}
+        result["pred_depths_r_list"] = pred_depths_r_list
+        result["pred_depths_rc_list"] = pred_depths_rc_list
+        result["pred_depths_c_list"] = pred_depths_c_list
+        result["uncertainty_maps_list"] = uncertainty_maps_list
+        result["pred_scale_list"] = pred_scale_list
+        result["pred_shift_list"] = pred_shift_list
+
+        return result
+
+
+"""
+Canonical space basic block: single scale per image 
+"""
 class Regression(nn.Module):
     def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0):
         super(Regression, self).__init__()
@@ -1710,3 +1776,16 @@ def get_label(depth_prediction, bin_edges, depth_num):
             label_bin[bin_mask] = i
         
         return label_bin
+
+def get_uniform_bins(map, min_depth=0, max_depth=0, bin_num=5):
+    """
+    Update bins 
+    """ 
+    with torch.no_grad():    
+        b, _, h, w = map.shape
+
+        interval = (max_depth - min_depth) / bin_num
+        interval = torch.ones(b, bin_num + 1, h, w, device=map.device) * interval
+        bins = torch.cumsum(interval, 1).clamp(min_depth, max_depth)
+
+    return bins

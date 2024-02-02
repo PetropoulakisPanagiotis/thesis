@@ -111,7 +111,7 @@ class DataLoadPreprocess(Dataset):
                 annotations = annotations.replace("rgb", "annotations")
                 annotations = annotations[:len(annotations)-4] + ".json"
                 instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas, num_semantic_classes = load_annotations(annotations)
-
+            
             if self.args.do_kb_crop is True: # Not used in NYU
                 height = image.height
                 width = image.width
@@ -154,10 +154,10 @@ class DataLoadPreprocess(Dataset):
                 image, depth_gt = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width)
 
             # General augmentations #
-            if self.args.dataset != 'nyu':
-                image, depth_gt = self.train_preprocess(image, depth_gt, self.args.dataset)
+            if self.args.dataset != 'nyu' or self.args.segmentation == False:
+                image, depth_gt = self.train_preprocess(image, depth_gt, self.args)
             else:
-                image, depth_gt = self.train_preprocess(image, depth_gt, self.args.dataset, segmentation_map)
+                image, depth_gt = self.train_preprocess(image, depth_gt, self.args, segmentation_map)
 
             # https://github.com/ShuweiShao/URCDC-Depth
             if self.args.dataset != 'nyu':
@@ -243,13 +243,13 @@ class DataLoadPreprocess(Dataset):
 
         return img, depth
 
-    def train_preprocess(self, image, depth_gt, dataset, segmentation_map):
+    def train_preprocess(self, image, depth_gt, args, segmentation_map=None):
         # Random flipping
         do_flip = random.random()
         if do_flip > 0.5 and False:
             image = (image[:, ::-1, :]).copy()
             depth_gt = (depth_gt[:, ::-1, :]).copy()
-            if dataset == 'nyu':
+            if args.dataset == 'nyu' and args.segmentation:
                 segmentation_map = (segmentation_map[:, ::-1, :]).copy()
 
         # Random gamma, brightness, color augmentation
