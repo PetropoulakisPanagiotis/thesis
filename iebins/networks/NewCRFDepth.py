@@ -117,7 +117,11 @@ class NewCRFDepth(nn.Module):
             if self.update_block == 17:
                 self.update = RegressionSemanticNoMaskingCanonicalConcProjMask(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, operation_mask='+')
             else:
-                self.update = RegressionSemanticNoMaskingCanonicalConcProjMask(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
+                self.update = RegressionSemanticNoMaskingCanonicalConcProjMask(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)        
+        elif self.update_block == 20: # Canonical - one scale per image and no projection segmentation
+            self.hidden_dim = 128   #128
+            self.context_dim = 96
+            self.update = RegressionSemanticInstancesNoMaskingCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes) 
         else:
             pass
 
@@ -229,7 +233,7 @@ class NewCRFDepth(nn.Module):
         up_disp = up_disp.permute(0, 1, 4, 2, 5, 3)
         return up_disp.reshape(N, C, 4*H, 4*W)
 
-    def forward(self, imgs, epoch=1, step=100, masks=None):
+    def forward(self, imgs, epoch=1, step=100, masks=None, instances=None, boxes=None, labels=None):
 
         feats = self.backbone(imgs)
         psp_out = self.psp_module(feats)

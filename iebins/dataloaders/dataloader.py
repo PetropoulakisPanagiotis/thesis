@@ -111,7 +111,7 @@ class DataLoadPreprocess(Dataset):
                 annotations = annotations.replace("rgb", "annotations")
                 annotations = annotations[:len(annotations)-4] + ".json"
                 instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas, num_semantic_classes = load_annotations(annotations)
-            
+
             if self.args.do_kb_crop is True: # Not used in NYU
                 height = image.height
                 width = image.width
@@ -347,8 +347,20 @@ class ToTensor(object):
 
         # Instances # 
         if dataset == 'nyu' and self.segmentation:
-            instances_masks = torch.stack([torch.from_numpy(arr) for arr in sample['instances_masks']])
+            instances_masks = torch.stack([torch.from_numpy(arr.astype(np.uint8)) for arr in sample['instances_masks']])
             num_zeros_needed = self.max_instances - instances_masks.shape[0]
+          
+            """ 
+            img = sample['instances_masks'][2].astype(np.uint8)
+            colored = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            colored[img == 1] = [255, 255, 255]
+            bbox = sample['instances_bbox'][2]
+            y1, x1, y2, x2 = bbox
+            cv2.rectangle(colored, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.imshow("instance", colored)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+            """ 
             
             zero_tensors = [torch.zeros(1, *instances_masks.shape[1:], dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_masks = torch.cat([instances_masks] + zero_tensors, dim=0)
@@ -430,7 +442,7 @@ def load_annotations(json_file_path):
     # Initialize empty arrays
     bounding_boxes_list = []
     areas_list = []
-    segmentations = []
+    instances = []
     labels_map = np.array(coco_data.get("categories"), dtype=np.int32)
     num_semantic_classes = int(coco_data.get("num_categories"))
     num_semantic_classes = 14
@@ -441,11 +453,11 @@ def load_annotations(json_file_path):
     # Iterate over annotations in the COCO-like format
     for annotation in coco_data.get("annotations", []):
         # Unpack segmentation (assuming it's a list)
-        segmentation = np.array(annotation.get("segmentation", []), dtype=np.int32)
-        segmentation_map = np.zeros((h,w), dtype=np.int32)
-        segmentation_map[segmentation[:, 1], segmentation[:, 0]] = 1
+        instance = np.array(annotation.get("segmentation", []), dtype=np.int32)
+        instance_map = np.zeros((h,w), dtype=np.int32)
+        instance_map[instance[:, 1], instance[:, 0]] = 1
 
-        segmentations.append(segmentation_map)
+        instances.append(instance_map)
         # Unpack category_id, assuming it's the label in your semantic map
         label = annotation.get("category_id", 0)
         labels.append(label)
@@ -458,7 +470,7 @@ def load_annotations(json_file_path):
         area = annotation.get("area", 0)
         areas_list.append(area)
 
-    return segmentations, labels_map, np.array(labels), np.asarray(bounding_boxes_list, dtype=np.int32), np.asarray(areas_list, dtype=np.int32), num_semantic_classes
+    return instances, labels_map, np.array(labels), np.asarray(bounding_boxes_list, dtype=np.int32), np.asarray(areas_list, dtype=np.int32), num_semantic_classes
 
 def create_one_hot_mask_np(label_map, num_classes):
     # Create a zero-filled tensor with shape [C, h, w]

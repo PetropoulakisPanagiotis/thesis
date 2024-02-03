@@ -42,6 +42,10 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda(gpu, non_blocking=True))
             if args.dataset == 'nyu' and args.segmentation:
                 segmentation_map = torch.autograd.Variable(eval_sample_batched['segmentation_map'].cuda(args.gpu, non_blocking=True))
+                if args.instances:
+                    instances = torch.autograd.Variable(eval_sample_batched['instances_masks'].cuda(args.gpu, non_blocking=True))
+                    boxes = torch.autograd.Variable(eval_sample_batched['instances_bbox'].cuda(args.gpu, non_blocking=True))
+                    labels = torch.autograd.Variable(eval_sample_batched['instances_labels'].cuda(args.gpu, non_blocking=True))
 
             gt_depth = eval_sample_batched['depth']
             has_valid_depth = eval_sample_batched['has_valid_depth']
@@ -50,8 +54,11 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                 continue
 
             # Predict #
-            if args.update_block >= 9 and args.update_block < 18:
-                result = model(image, masks=segmentation_map)
+            if args.update_block >= 9 and args.update_block < 18 or args.update_block == 20:
+                if args.instances:
+                    result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
+                else:
+                    result = model(image, masks=segmentation_map)
             else:
                 result = model(image)
             pred_depths_r_list = result["pred_depths_r_list"]
@@ -177,11 +184,11 @@ def main_worker(gpu, ngpus_per_node, args):
     dataloader_eval = NewDataLoader(args, 'online_eval')
     num_semantic_classes = dataloader.num_semantic_classes
     num_semantic_classes = 14
- 
+    num_instances = 63
     # Model #
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
-                        train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes)
+                        train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes, num_instances=num_instances)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -301,6 +308,7 @@ def main_worker(gpu, ngpus_per_node, args):
             "predict_unc": args.predict_unc,
             "num_semantic_classes": num_semantic_classes,
             "segmentation": args.segmentation,
+            "instances": args.instances,
         }
 
         writer.add_hparams(hparam_dict=hparams, metric_dict={})
@@ -346,21 +354,29 @@ def main_worker(gpu, ngpus_per_node, args):
 
             if args.dataset == 'nyu' and args.segmentation:
                 segmentation_map = torch.autograd.Variable(sample_batched['segmentation_map'].cuda(args.gpu, non_blocking=True))
+                if args.instances:
+                    instances = torch.autograd.Variable(sample_batched['instances_masks'].cuda(args.gpu, non_blocking=True))
+                    boxes = torch.autograd.Variable(sample_batched['instances_bbox'].cuda(args.gpu, non_blocking=True))
+                    labels = torch.autograd.Variable(sample_batched['instances_labels'].cuda(args.gpu, non_blocking=True))
 
             num_images = image.shape[0]
             
             # Predict #            
-            if args.update_block >= 9 and args.update_block < 18:
-                result = model(image, epoch, step, segmentation_map)
+            if args.update_block >= 9 and args.update_block < 18 or args.update_block == 20:
+                if args.instances:
+                    result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
+                else:
+                    result = model(image, masks=segmentation_map)
             else:
                 result = model(image, epoch, step)
             
             # Unpack #            
             pred_depths_r_list = result["pred_depths_r_list"]
             max_tree_depth = len(pred_depths_r_list)
-            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11 and args.update_block != 12 and args.update_block != 13 and args.update_block != 14 and args.update_block != 15 and args.update_block != 16 and args.update_block != 17:            
+            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20:
                 pred_depths_c_list = result["pred_depths_c_list"]
                 uncertainty_maps_list = result["uncertainty_maps_list"]
+
             # Canonical #
             if args.update_block != 0:
                 pred_depths_rc_list = result["pred_depths_rc_list"]
@@ -469,7 +485,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                 writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), 
                                                  colormap(torch.log10(torch.sum(pred_depths_r_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
                             
-                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11 and args.update_block != 12 and args.update_block != 13 and args.update_block != 14 and args.update_block != 15 and args.update_block != 16 and args.update_block != 17:            
+                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20:
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
                                                      colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
@@ -504,7 +520,8 @@ def main_worker(gpu, ngpus_per_node, args):
                             writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
                             for ii in range(max_tree_depth):
                                 writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), global_step)
-                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11 and args.update_block != 12 and args.update_block != 13 and args.update_block != 14 and args.update_block != 15 and args.update_block != 16 and args.update_block != 17:            
+                            
+                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20:
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_labels_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), global_step)
                                     writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), global_step)
