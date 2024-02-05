@@ -857,9 +857,18 @@ class RegressionSemanticNoMaskingCanonicalConcProjMask(nn.Module):
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
         self.operation_mask = operation_mask
-        
-        self.p_head = CRHead(hidden_dim, hidden_dim, num_classes=1) # 16 propabilities canonical
-        self.s_head = SSPHead(hidden_dim, num_classes=1)                 # Global scale and shift 
+
+        self.p_heads = nn.ModuleList()
+        self.s_heads = nn.ModuleList()
+
+        if operation_mask == None:
+            extra_dim = 1
+        else:
+            extra_dim = 0
+
+        for i in range(num_semantic_classes):       
+            self.p_heads.append(CRHead(128 + extra_dim, 128, num_classes=1))
+            self.s_heads.append(SSPHead(128 + extra_dim, num_classes=1))                
 
         self.relu = nn.ReLU(inplace=True)
         self.loss_type = loss_type
@@ -877,19 +886,25 @@ class RegressionSemanticNoMaskingCanonicalConcProjMask(nn.Module):
 
         b, _, h, w = depth.shape
 
-        gru_hidden = torch.cat([gru_hidden] * self.num_semantic_classes, dim=0)
-        masks = masks.view(b * self.num_semantic_classes, 1, h, w)
-        
-        if self.operation_mask == '*':
-            gru_hidden = gru_hidden * masks
-        else:
-            gru_hidden = gru_hidden + masks
+        pred_prob = []
+        pred_scale = [] 
+        for i in range(self.num_semantic_classes):
+            if self.operation_mask == None:
+                gru_hidden_current = torch.cat((gru_hidden, masks[:, i, :, :].unsqueeze(1)), dim=1)
+            if self.operation_mask == '+':
+                gru_hidden_current = gru_hidden + masks[:, i, :, :].unsqueeze(1)
+            if self.operation_mask == '*':
+                gru_hidden_current = gru_hidden * masks[:, i, :, :].unsqueeze(1)
 
-        pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
-        pred_scale = self.s_head(gru_hidden)       # b, 2*c
-        pred_prob = pred_prob.view(b, self.num_semantic_classes, h, w)
-        pred_scale = pred_scale.view(b, self.num_semantic_classes * 2)
- 
+            prob = self.p_heads[i](gru_hidden_current)
+            scale = self.s_heads[i](gru_hidden_current)
+
+            pred_prob.append(prob)
+            pred_scale.append(scale)
+
+        pred_prob = torch.cat(pred_prob, dim=1) 
+        pred_scale = torch.cat(pred_scale, dim=1) 
+
         # revert back 
         pred_scale_list.append(pred_scale[:, ::2])  # b, c
         pred_shift_list.append(pred_scale[:, 1::2]) # b, c

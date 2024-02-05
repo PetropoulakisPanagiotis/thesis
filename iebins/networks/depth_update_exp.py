@@ -716,7 +716,7 @@ class RegressionSemanticNoMaskingCanonical(nn.Module):
         return result
 
 class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5, feature_map_instances_dim=32, num_instances):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5, feature_map_instances_dim=32, num_instances=63):
         super(RegressionInstancesSemanticNoMaskingCanonical, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -1799,7 +1799,7 @@ class ROISelect(nn.Module):
         out = F.relu(self.pool(self.conv1(x)))
 
         out = torch.flatten(out, 1)
-        out = torch.cat((out, normalized_box, dim=0))
+        out = torch.cat((out, normalized_box), dim=0)
         out = self.fc1(out) 
  
         return out

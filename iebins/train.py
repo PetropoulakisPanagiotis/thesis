@@ -384,11 +384,7 @@ def main_worker(gpu, ngpus_per_node, args):
             # Loss #
             for curr_tree_depth in range(max_tree_depth):
                 if args.segmentation:
-                    #print(pred_depths_r_list[curr_tree_depth].shape)
-                    #print(segmentation_map.shape)
                     pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * segmentation_map), dim=1).unsqueeze(1)
-                    #pred_d = pred_depths_r_list[curr_tree_depth][:, 0, :, :].unsqueeze(1)
-                    #pred_d = pred_depths_r_list[curr_tree_depth]
                 else:
                     pred_d = pred_depths_r_list[curr_tree_depth]
                 
