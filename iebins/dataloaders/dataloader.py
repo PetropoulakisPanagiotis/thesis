@@ -347,7 +347,7 @@ class ToTensor(object):
 
         # Instances # 
         if dataset == 'nyu' and self.segmentation:
-            instances_masks = torch.stack([torch.from_numpy(arr.astype(np.uint8)) for arr in sample['instances_masks']])
+            instances_masks = torch.stack([torch.from_numpy(arr.astype(np.float32)) for arr in sample['instances_masks']])
             num_zeros_needed = self.max_instances - instances_masks.shape[0]
           
             """ 

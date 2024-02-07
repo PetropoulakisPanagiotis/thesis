@@ -249,7 +249,7 @@ class BasicUpdateBlockCSDepth(nn.Module):
 Canonical space basic block: one scale per semantic class and instance 
 """
 class BasicUpdateBlockCSemanticDepth(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14):
         super(BasicUpdateBlockCSemanticDepth, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -390,7 +390,7 @@ class BasicUpdateBlockCSemanticDepth(nn.Module):
 Canonical space basic block: one scale per semantic class and instance 
 """
 class BasicUpdateBlockCSemanticMaskingDepth(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14):
         super(BasicUpdateBlockCSemanticMaskingDepth, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -531,7 +531,7 @@ class BasicUpdateBlockCSemanticMaskingDepth(nn.Module):
 Canonical space basic block: one scale per semantic class and instance 
 """
 class RegressionSemanticMasking(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14):
         super(RegressionSemanticMasking, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -598,7 +598,7 @@ class RegressionSemanticMasking(nn.Module):
 Canonical space basic block: one scale per semantic class and instance 
 """
 class RegressionSemanticNoMaskingSharedCanonical(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14):
         super(RegressionSemanticNoMaskingSharedCanonical, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -659,7 +659,7 @@ class RegressionSemanticNoMaskingSharedCanonical(nn.Module):
 Canonical space basic block: one scale per semantic class and instance 
 """
 class RegressionSemanticNoMaskingCanonical(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14):
         super(RegressionSemanticNoMaskingCanonical, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -716,21 +716,25 @@ class RegressionSemanticNoMaskingCanonical(nn.Module):
         return result
 
 class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5, feature_map_instances_dim=32, num_instances=63):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, feature_map_instances_dim=32, num_instances=63):
         super(RegressionInstancesSemanticNoMaskingCanonical, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
         self.feature_map_instances_dim = feature_map_instances_dim
+        self.num_instances = num_instances
 
-        self.instances_projection = ProjectionCustom(hidden_dim, self.feature_map_instances_dim, hidden_dim)
         # Get a feautre representation and predict canonical
-        self.instances_scale_and_shift = nn.ModuleList()
-        for i in range(self.num_instances):
-           self.instances_scale_and_shift.append(ROISelect(self.feature_map_instances_dim, hidden_dim=16, downsampling=4))
+        self.projection_head = ProjectionCustom(hidden_dim, self.feature_map_instances_dim, hidden_dim=96)
+
+        #self.instances_scale_and_shift = nn.ModuleList()
+        #self.instances_canonical = nn.ModuleList()
+        #for i in range(self.num_semantic_classes): 
+        #    self.instances_scale_and_shift.append(ROISelectScale(self.feature_map_instances_dim, downsampling=4, num_semantic_classes=1))
+        #    self.instances_canonical.append(ROISelectCanonical(hidden_dim, hidden_dim, num_classes=1))
         
-        self.instances_canonical = CRHead(hidden_dim, hidden_dim, num_classes=self.num_instances)
-        
+        self.instances_scale_and_shift = ROISelectScale(self.feature_map_instances_dim, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+        self.instances_canonical = ROISelectCanonical(hidden_dim, hidden_dim, num_semantic_classes=self.num_semantic_classes)
 
         self.p_head = CRHead(hidden_dim, hidden_dim, num_classes=self.num_semantic_classes) 
         self.s_head = SSPHead(hidden_dim, num_classes=self.num_semantic_classes)                 
@@ -749,14 +753,13 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
 
         pred_scale_list = []
         pred_shift_list = []
-        print("hi\n")
         b, _, h, w = depth.shape
 
+        map_for_instances = self.projection_head(gru_hidden)
 
-        instance_features = self.instances_projection(gru_hidden)        
-
-
-
+        self.instances_scale_and_shift(map_for_instances, instances, boxes)
+        self.instances_canonical(map_for_instances, instances, boxes)
+        
         pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
         pred_scale = self.s_head(gru_hidden)       # b, 2*c
        
@@ -791,7 +794,7 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
 Canonical space basic block: one scale per semantic class and instance 
 """
 class RegressionSemanticNoMaskingCanonicalConc(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14):
         super(RegressionSemanticNoMaskingCanonicalConc, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -852,7 +855,7 @@ class RegressionSemanticNoMaskingCanonicalConc(nn.Module):
 Canonical space basic block: one scale per semantic class and instance 
 """
 class RegressionSemanticNoMaskingCanonicalConcProj(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14):
         super(RegressionSemanticNoMaskingCanonicalConcProj, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -923,7 +926,7 @@ class RegressionSemanticNoMaskingCanonicalConcProj(nn.Module):
 Canonical space basic block: one scale per semantic class and instance 
 """
 class RegressionSemanticNoMaskingCanonicalConcProjMask(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5, operation_mask='*'):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, operation_mask='*'):
         super(RegressionSemanticNoMaskingCanonicalConcProjMask, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -1781,48 +1784,73 @@ class UPHead(nn.Module):
         out = self.sigmoid(self.conv2(F.relu(self.conv1(x))))
         return out
 
-class ROISelect(nn.Module):
-    def __init__(self, input_dim=32, hidden_dim=16, downsampling=4):
-        super(ROISelect, self).__init__()
-        self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
+class ROISelectScale(nn.Module):
+    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+        super(ROISelectScale, self).__init__()
+        self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1) # First preprocess ROI map 
         self.pool = nn.AdaptiveAvgPool2d(32)
-        self.fc1= nn.Linear((32 * 32) + 4, 2) # Scale and shift 
+        self.fc1= nn.Linear((32 * 32) + 4, 2*num_semantic_classes) # Scale and shift 
+        
         self.downsampling = downsampling   
- 
-    def forward(self, x, box):
+        self.num_semantic_classes = num_semantic_classes
 
-        y1, x1, y2, x2 = project_box_to_features(box, self.downsampling)
-        x = x[:, y1:y2, x1:x2]
+    def forward(self, x, instances, boxes):
+        #projected_box = project_box_to_features(box, self.downsampling)
+        normalized_box = normalize_box(boxes)
+        
+        b, i, h, w = instances.shape
 
-        normalized_box = torch.tensor(normalized_box(box)).view(1,4).float()
+        x = torch.cat([x] * i, dim=1)
+        x = x.view(b * i, 32, h, w)
+        instances = instances.view(b * i, 1, h, w)
+        out = instances * x # Can be another operation
 
-        out = F.relu(self.pool(self.conv1(x)))
-
+        out = F.relu(self.pool(self.conv1(out)))
         out = torch.flatten(out, 1)
-        out = torch.cat((out, normalized_box), dim=0)
+
+        normalized_box = normalized_box.view(b * i,  4)
+        out = torch.cat((out, normalized_box), dim=1)
         out = self.fc1(out) 
- 
+        out = out.view(b, i, 2*self.num_semantic_classes)
+        return out
+
+class ROISelectCanonical(nn.Module):
+    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+        super(ROISelectCanonical, self).__init__()
+              
+        self.canonical_head = CRHead(32, hidden_dim=32, num_classes=num_semantic_classes)
+        self.downsampling = downsampling   
+        self.num_semantic_classes = num_semantic_classes
+
+    def forward(self, x, instances, boxes):
+        #projected_box = project_box_to_features(box, self.downsampling)
+        normalized_box = normalize_box(boxes)
+        
+        b, i, h, w = instances.shape
+
+        x = torch.cat([x] * i, dim=1)
+        x = x.view(b * i, 32, h, w)
+        instances = instances.view(b * i, 1, h, w)
+        
+        out = instances * x # Can be another operation
+        
+        out = self.canonical_head(out)
+        out = out.view(b, 1*self.num_semantic_classes)
+        
         return out
 
 def normalize_box(box, height=480, width=640):
     with torch.no_grad():
-        y1, x1, y2, x2 = box
-        y1 /= height
-        x1 /= width
-        x2 /= height
-        y2 /= width
-
-    return y1, x1, y2, x2
+        return torch.stack(((box[:, :, 0] / height).float(), 
+                            (box[:, :, 1] / width).float(), 
+	                        (box[:, :, 2] / height).float(), 
+	                        (box[:, :, 3] / width).float()), dim=2)
 
 def project_box_to_features(box, downsampling):
     with torch.no_grad():
-        y1, x1, y2, x2 = box
-        y1 = torch.ceil(y1 / downsampling).int()
-        x1 = torch.ceil(x1 / downsampling).int()
-        y2 = torch.ceil(y2 / downsampling).int()
-        x2 = torch.ceil(x2 / downsampling).int()
+        return torch.ceil(box / downsampling).int()
     
-    return y1, x1, y2, x2
+
 
 class SepConvGRU(nn.Module):
     def __init__(self, hidden_dim=128, input_dim=128+192):

@@ -278,6 +278,8 @@ class NewCRFDepth(nn.Module):
         if self.predict_unc == False and self.update_block != 3:
             if (self.update_block >= 9 and self.update_block < 18) or self.update_block == 20:
                 masks = upsample(masks, scale_factor=1/4)
+                if instances != None:
+                    instances = upsample(instances, scale_factor=1/4)
                 if self.update_block != 11 and self.update_block != 13 and self.update_block != 14 and self.update_block != 16 and self.update_block != 17 and self.update_block != 18 and self.update_block != 20:
                     masks = (masks > 0.4).float()
                 if self.update_block == 20:
