@@ -349,7 +349,7 @@ class ToTensor(object):
         if dataset == 'nyu' and self.segmentation:
             instances_masks = torch.stack([torch.from_numpy(arr.astype(np.float32)) for arr in sample['instances_masks']])
             num_zeros_needed = self.max_instances - instances_masks.shape[0]
-          
+            
             """ 
             img = sample['instances_masks'][2].astype(np.uint8)
             colored = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
