@@ -9,8 +9,8 @@
 --filenames_file /usr/stud/petp/code/thesis/data_splits/nyudepthv2_debug.txt
 
 --do_online_eval
---log_freq 5
---eval_freq 5
+--log_freq 500
+--eval_freq 500
 --log_directory /usr/stud/petp/code/thesis/tmp/
 --data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
 --gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
@@ -23,7 +23,7 @@
 
 --batch_size 2 
 --num_epochs 150
---learning_rate 1e-4
+--learning_rate 5e-4
 --weight_decay 1e-2
 --adam_eps 1e-3
 

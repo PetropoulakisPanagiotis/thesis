@@ -8,6 +8,7 @@ import torch.nn.utils as utils
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
+import cv2
 
 from tensorboardX import SummaryWriter
 
@@ -414,6 +415,17 @@ def main_worker(gpu, ngpus_per_node, args):
                 if args.segmentation:
                     if args.instances:
                         pred_d = torch.sum((pred_depths_instances_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
+                        
+                        instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
+                        mask = mask * instances_gt_mask 
+
+                        #image_masked_with_instances = torch.sum(instances[0, :, :, :], dim=0)
+                        #depth_gt = depth_gt * instances_gt_mask
+                        #cv2.imshow("instances_mapped_image", depth_gt[0,0,:,:].cpu().numpy())
+                        #cv2.imshow("instances_mapped_ittmage", image_masked_with_instances.cpu().numpy())
+                        #cv2.waitKey(0)
+                        #cv2.destroyAllWindows()
+
                     else:
                         pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * segmentation_map), dim=1).unsqueeze(1)
                 else:
@@ -495,7 +507,7 @@ def main_worker(gpu, ngpus_per_node, args):
                             writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
                             for ii in range(max_tree_depth):
                                 writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), 
-                                                 colormap(torch.log10(torch.sum(pred_depths_r_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
+                                                 colormap(torch.log10(torch.sum(pred_depths_instances_r_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
                             
                             if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20:
                                 for ii in range(max_tree_depth):
