@@ -748,10 +748,14 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
          gru_hidden: feature map from late layers  
         """
         pred_depths_r_list = []    # metric 
+        pred_depths_instances_r_list = []
         pred_depths_rc_list = []   # canonical
+        pred_depths_instances_rc_list = []
 
         pred_scale_list = []
         pred_shift_list = []
+        pred_scale_instances_list = []
+        pred_shift_instances_list = []
         b, _, h, w = depth.shape
 
         map_for_instances = self.projection_head(gru_hidden)
@@ -759,17 +763,19 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         instances_canonical = self.instances_canonical(map_for_instances, instances, boxes)
 
         instances_scale, instances_shift = pick_predictions_instances_scale(instances_scale_shift, labels)
-        
+        pred_scale_instances_list.append(instances_scale)
+        pred_shift_instances_list.append(instances_shift)
+
         instances_canonical = pick_predictions_instances_canonical(instances_canonical, labels)
-        print(instances_canonical.shape)
-        exit() 
+        pred_depths_instances_rc_list.append(instances_canonical)
+    
         pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
         pred_scale = self.s_head(gru_hidden)       # b, 2*c
        
         # revert back 
         pred_scale_list.append(pred_scale[:, ::2])  # b, c
         pred_shift_list.append(pred_scale[:, 1::2]) # b, c
-          
+        
         # Canonical
         # b, 16*c, h, w - c*b, 16, h, w
         # b*c, 16, h, w
@@ -779,17 +785,25 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         # Metric
         if self.loss_type == 0:
             depth_r = (self.relu(depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+            depth_instances_r = (self.relu(instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
         else:
             depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
-        
+            depth_instances_r = instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1)
+       
         # depth_r: b, c, h, w
         pred_depths_r_list.append(depth_r)
+        pred_depths_instances_r_list.append(depth_instances_r)
         
         result = {}
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_scale_list"] = pred_scale_list
         result["pred_shift_list"] = pred_shift_list
+
+        result["pred_depths_instances_r_list"] = pred_depths_instances_r_list
+        result["pred_depths_instances_rc_list"] = pred_depths_instances_rc_list
+        result["pred_scale_instances_list"] = pred_scale_instances_list
+        result["pred_shift_instances_list"] = pred_shift_instances_list
 
         return result
 

@@ -326,6 +326,9 @@ class ToTensor(object):
         dataset = sample_dataset[1]
 
         image, focal = sample['image'], sample['focal']
+
+        image_numpy = image.copy()
+        
         image = self.to_tensor(image)
         image = self.normalize(image)
 
@@ -349,18 +352,18 @@ class ToTensor(object):
         if dataset == 'nyu' and self.segmentation:
             instances_masks = torch.stack([torch.from_numpy(arr.astype(np.float32)) for arr in sample['instances_masks']])
             num_zeros_needed = self.max_instances - instances_masks.shape[0]
-            
-            """ 
+
+            """
             img = sample['instances_masks'][2].astype(np.uint8)
             colored = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-            colored[img == 1] = [255, 255, 255]
+            image_numpy[img == 1] = [255, 255, 255]
             bbox = sample['instances_bbox'][2]
             y1, x1, y2, x2 = bbox
-            cv2.rectangle(colored, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.imshow("instance", colored)
+            cv2.rectangle(image_numpy, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.imshow("instance", image_numpy)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
-            """ 
+            """
             
             zero_tensors = [torch.zeros(1, *instances_masks.shape[1:], dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_masks = torch.cat([instances_masks] + zero_tensors, dim=0)
@@ -368,7 +371,7 @@ class ToTensor(object):
             segmentation_map = torch.from_numpy(sample['segmentation_map'])
            
             instances_labels = torch.from_numpy(sample['instances_labels'])
-            zero_tensors = [-1 * torch.ones(1, dtype=torch.int32) for _ in range(num_zeros_needed)]
+            zero_tensors = [0 * torch.ones(1, dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_labels = torch.cat([instances_labels] + zero_tensors, dim=0)
 
             instances_bbox = torch.stack([torch.from_numpy(arr) for arr in sample['instances_bbox']])
@@ -447,16 +450,15 @@ def load_annotations(json_file_path):
     num_semantic_classes = int(coco_data.get("num_categories"))
     num_semantic_classes = 14
     labels_map = create_one_hot_mask_np(labels_map, num_semantic_classes)
-    
     labels = []
     c, h, w = labels_map.shape
     # Iterate over annotations in the COCO-like format
-    for annotation in coco_data.get("annotations", []):
+    for ii, annotation in enumerate(coco_data.get("annotations", [])):
         # Unpack segmentation (assuming it's a list)
         instance = np.array(annotation.get("segmentation", []), dtype=np.int32)
         instance_map = np.zeros((h,w), dtype=np.int32)
         instance_map[instance[:, 1], instance[:, 0]] = 1
-
+        
         instances.append(instance_map)
         # Unpack category_id, assuming it's the label in your semantic map
         label = annotation.get("category_id", 0)
@@ -476,11 +478,14 @@ def create_one_hot_mask_np(label_map, num_classes):
     # Create a zero-filled tensor with shape [C, h, w]
     one_hot_mask = np.zeros((num_classes, *label_map.shape), dtype=np.float32)
 
-    #data = custom_cmap_instances(label_map / np.max(label_map))  # Normalize the data to [0, 1]
-    #data = data[:, :] * 255
-    #cv2.imshow("i", data[:, :].astype(np.uint8))
-    #cv2.waitKey(0)
-    #cv2.destroyAllWindows()
+    """
+    data = custom_cmap_instances(label_map / np.max(label_map))  # Normalize the data to [0, 1]
+    data = data[:, :] * 255
+    cv2.imshow("i", data[:, :].astype(np.uint8))
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    """
+
     # Set the corresponding class index to 1
     for class_idx in range(num_classes):
         one_hot_mask[class_idx] = (label_map == class_idx).astype(np.float32)

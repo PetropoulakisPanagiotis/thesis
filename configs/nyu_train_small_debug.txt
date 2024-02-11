@@ -21,7 +21,7 @@
 --input_height 480
 --input_width 640
 
---batch_size 4 
+--batch_size 2 
 --num_epochs 150
 --learning_rate 1e-4
 --weight_decay 1e-2
@@ -34,9 +34,11 @@
 --eigen_crop
 
 --exp_name debug
---update_block 17
+--update_block 20
+
 
 --segmentation
+--instances
 
 --loss_type 1
 

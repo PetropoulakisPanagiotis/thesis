@@ -359,6 +359,9 @@ class D_to_cloud(nn.Module):
         return cam_points.permute(0, 2, 1)
 
 
+def find_indexes_valid_instances(labels):
+    return torch.nonzero(labels!=0).squeeze()
+
 """Train parser"""
 train_parser = argparse.ArgumentParser(description='Scale PyTorch implementation.', fromfile_prefix_chars='@')
 train_parser.convert_arg_line_to_args = convert_arg_line_to_args
