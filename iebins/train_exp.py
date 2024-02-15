@@ -345,8 +345,6 @@ def main_worker(gpu, ngpus_per_node, args):
     ii = 0
     group = dist.new_group([i for i in range(ngpus_per_node)])
 
-
-
     while epoch < args.num_epochs:
         if args.distributed:
             dataloader.train_sampler.set_epoch(epoch)
@@ -418,7 +416,6 @@ def main_worker(gpu, ngpus_per_node, args):
                         
                         instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
                         mask = mask * instances_gt_mask 
-
                         #image_masked_with_instances = torch.sum(instances[0, :, :, :], dim=0)
                         #depth_gt = depth_gt * instances_gt_mask
                         #cv2.imshow("instances_mapped_image", depth_gt[0,0,:,:].cpu().numpy())
@@ -507,8 +504,8 @@ def main_worker(gpu, ngpus_per_node, args):
                             writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
                             for ii in range(max_tree_depth):
                                 writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), 
-                                                 colormap(torch.log10(torch.sum(pred_depths_instances_r_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
-                            
+                                                 colormap(torch.log10(torch.sum(pred_depths_instances_r_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
+
                             if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20:
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 

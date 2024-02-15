@@ -723,17 +723,9 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         self.context_dim = context_dim
         self.feature_map_instances_dim = feature_map_instances_dim
         self.num_instances = num_instances
-        # Get a feautre representation and predict canonical
-        self.projection_head = ProjectionCustom(hidden_dim, self.feature_map_instances_dim, hidden_dim=96)
 
-        #self.instances_scale_and_shift = nn.ModuleList()
-        #self.instances_canonical = nn.ModuleList()
-        #for i in range(self.num_semantic_classes): 
-        #    self.instances_scale_and_shift.append(ROISelectScale(self.feature_map_instances_dim, downsampling=4, num_semantic_classes=1))
-        #    self.instances_canonical.append(ROISelectCanonical(hidden_dim, hidden_dim, num_classes=1))
-        
-        self.instances_scale_and_shift = ROISelectScale(self.feature_map_instances_dim, downsampling=4, num_semantic_classes=self.num_semantic_classes - 1)
-        self.instances_canonical = ROISelectCanonical(self.feature_map_instances_dim, hidden_dim, num_semantic_classes=self.num_semantic_classes - 1)       # No void instance (TODO: I think)
+        self.instances_scale_and_shift = ROISelectScale(hidden_dim, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+        self.instances_canonical = ROISelectCanonical(hidden_dim, hidden_dim, num_semantic_classes=self.num_semantic_classes)       # No void instance
 
         self.p_head = CRHead(hidden_dim, hidden_dim, num_classes=self.num_semantic_classes) 
         self.s_head = SSPHead(hidden_dim, num_classes=self.num_semantic_classes)                 
@@ -758,9 +750,17 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         pred_shift_instances_list = []
         b, _, h, w = depth.shape
 
-        map_for_instances = self.projection_head(gru_hidden)
-        instances_scale_shift = self.instances_scale_and_shift(map_for_instances, instances, boxes)
-        instances_canonical = self.instances_canonical(map_for_instances, instances, boxes)
+        batch_size, i_dim, h, w = instances.shape
+        hidd_size, h_hid, w_hid = gru_hidden.shape[1:]
+
+        gru_hidden = torch.cat([gru_hidden] * i_dim, dim=1)
+        gru_hidden = gru_hidden.view(batch_size * i_dim, hidd_size, h_hid, w_hid)
+        boxes = boxes.view(batch_size * i_dim, 4)
+        gru_hidden = roi_select_features(gru_hidden, boxes) 
+        
+        boxes = boxes.view(batch_size, i_dim, 4)
+        instances_scale_shift = self.instances_scale_and_shift(gru_hidden, boxes)
+        instances_canonical = self.instances_canonical(gru_hidden, boxes)
 
         instances_scale, instances_shift = pick_predictions_instances_scale(instances_scale_shift, labels)
         pred_scale_instances_list.append(instances_scale)
@@ -1812,17 +1812,13 @@ class ROISelectScale(nn.Module):
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
-    def forward(self, x, instances, boxes):
-        #projected_box = project_box_to_features(box, self.downsampling)
+    def forward(self, x, boxes):
         normalized_box = normalize_box(boxes)
+        h, w = x.shape[2:]
         
-        b, i, h, w = instances.shape
-        x = torch.cat([x] * i, dim=1)
-        x = x.view(b * i, self.input_dim, h, w)
-        instances = instances.view(b * i, 1, h, w)
-        out = instances * x # Can be another operation
+        b, i, _ = boxes.shape
 
-        out = F.relu(self.pool(self.conv1(out)))
+        out = F.relu(self.pool(self.conv1(x)))
         out = torch.flatten(out, 1)
 
         normalized_box = normalized_box.view(b * i,  4)
@@ -1836,24 +1832,18 @@ class ROISelectCanonical(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
         super(ROISelectCanonical, self).__init__()
               
-        self.canonical_head = CRHead(32, hidden_dim=32, num_classes=num_semantic_classes)
+        self.canonical_head = CRHead(input_dim, hidden_dim=32, num_classes=num_semantic_classes)
         self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
-    def forward(self, x, instances, boxes):
-        #projected_box = project_box_to_features(box, self.downsampling)
+    def forward(self, x, boxes):
         normalized_box = normalize_box(boxes)
         
-        b, i, h, w = instances.shape
-
-        x = torch.cat([x] * i, dim=1)
-        x = x.view(b * i, self.input_dim, h, w)
-        instances = instances.view(b * i, 1, h, w)
+        b, i, _ = boxes.shape
+        h, w = x.shape[2:]
         
-        out = instances * x # Can be another operation
-        
-        out = self.canonical_head(out)
+        out = self.canonical_head(x)
         out = out.view(b*i, self.num_semantic_classes, h, w)
         
         return out
@@ -1863,8 +1853,7 @@ def pick_predictions_instances_scale(predicion, labels):
     labels_fast = labels
     b, i = labels.shape[0:2]
 
-    labels_fast = torch.where(labels_fast == 0, 1, labels_fast)
-    labels_fast -= 1
+    labels_fast = torch.where(labels_fast == -1, 0, labels_fast)
     
     labels_fast = labels_fast.view(b*i)
 
@@ -1874,7 +1863,7 @@ def pick_predictions_instances_scale(predicion, labels):
     pred_scale = pred_scale[torch.arange(b*i), labels_fast]
     pred_shift = pred_shift[torch.arange(b*i), labels_fast]
     pred_scale = pred_scale.view(b, i)
-    pred_shift = pred_scale.view(b, i)
+    pred_shift = pred_shift.view(b, i)
 
     return pred_scale, pred_shift
     
@@ -1884,14 +1873,14 @@ def pick_predictions_instances_canonical(prediction, labels):
     b, i = labels.shape[0:2]
     h, w = prediction.shape[2:]
 
-    labels_fast = torch.where(labels_fast == 0, 1, labels_fast)
-    labels_fast -= 1
+    labels_fast = torch.where(labels_fast == -1, 0, labels_fast)
     
     labels_fast = labels_fast.view(b*i)
 
     canonical = prediction[torch.arange(b*i), labels_fast]
     canonical = canonical.unsqueeze(1)
     canonical = canonical.view(b, i, h, w)
+
     return canonical
 
 def normalize_box(box, height=480, width=640):
@@ -1904,8 +1893,27 @@ def normalize_box(box, height=480, width=640):
 def project_box_to_features(box, downsampling):
     with torch.no_grad():
         return torch.ceil(box / downsampling).int()
-    
+   
+def roi_select_features(feature_map, box_coordinates, downsampling=4):
+    with torch.no_grad():
+        batch_size = box_coordinates.size(0)
+        height, width = feature_map.size(-2), feature_map.size(-1)
 
+        ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
+
+        row_indices = torch.arange(height, device=feature_map.device).unsqueeze(0)
+        col_indices = torch.arange(width, device=feature_map.device).unsqueeze(0)
+
+        row_mask = (row_indices >= ymin) & (row_indices < ymax)
+        col_mask = (col_indices >= xmin) & (col_indices < xmax)
+
+        row_mask = row_mask.unsqueeze(1).unsqueeze(-1) 
+        col_mask = col_mask.unsqueeze(1).unsqueeze(2) 
+        masks = (torch.zeros_like(feature_map) + row_mask) * (torch.zeros_like(feature_map) + col_mask)
+        
+        masked_feature_map = feature_map * masks
+
+        return masked_feature_map
 
 class SepConvGRU(nn.Module):
     def __init__(self, hidden_dim=128, input_dim=128+192):

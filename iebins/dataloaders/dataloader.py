@@ -352,26 +352,26 @@ class ToTensor(object):
         if dataset == 'nyu' and self.segmentation:
             instances_masks = torch.stack([torch.from_numpy(arr.astype(np.float32)) for arr in sample['instances_masks']])
             num_zeros_needed = self.max_instances - instances_masks.shape[0]
-
+            
             """
-            img = sample['instances_masks'][2].astype(np.uint8)
+            img = sample['instances_masks'][0].astype(np.uint8)
             colored = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
             image_numpy[img == 1] = [255, 255, 255]
-            bbox = sample['instances_bbox'][2]
+            bbox = sample['instances_bbox'][0]
             y1, x1, y2, x2 = bbox
             cv2.rectangle(image_numpy, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.imshow("instance", image_numpy)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
             """
-            
+
             zero_tensors = [torch.zeros(1, *instances_masks.shape[1:], dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_masks = torch.cat([instances_masks] + zero_tensors, dim=0)
 
             segmentation_map = torch.from_numpy(sample['segmentation_map'])
            
             instances_labels = torch.from_numpy(sample['instances_labels'])
-            zero_tensors = [0 * torch.ones(1, dtype=torch.int32) for _ in range(num_zeros_needed)]
+            zero_tensors = [-1 * torch.ones(1, dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_labels = torch.cat([instances_labels] + zero_tensors, dim=0)
 
             instances_bbox = torch.stack([torch.from_numpy(arr) for arr in sample['instances_bbox']])
