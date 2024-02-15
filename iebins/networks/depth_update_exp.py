@@ -3,6 +3,7 @@ import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.ops import RoIAlign
 
 from .utils import *
 
@@ -724,8 +725,16 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         self.feature_map_instances_dim = feature_map_instances_dim
         self.num_instances = num_instances
 
-        self.instances_scale_and_shift = ROISelectScale(hidden_dim, downsampling=4, num_semantic_classes=self.num_semantic_classes)
-        self.instances_canonical = ROISelectCanonical(hidden_dim, hidden_dim, num_semantic_classes=self.num_semantic_classes)       # No void instance
+        self.project = ProjectionCustom(hidden_dim, 32, 96)
+        
+        output_size = (32, 32)
+        spatial_scale  = 1.0/4
+        sampling_ratio = 4
+        
+        self.roiAlign = RoIAlign(output_size, spatial_scale=spatial_scale, sampling_ratio=sampling_ratio)
+
+        self.instances_scale_and_shift = ROISelectScale(32, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+        self.instances_canonical = ROISelectCanonical(32, 4, num_semantic_classes=self.num_semantic_classes)       # No void instance
 
         self.p_head = CRHead(hidden_dim, hidden_dim, num_classes=self.num_semantic_classes) 
         self.s_head = SSPHead(hidden_dim, num_classes=self.num_semantic_classes)                 
@@ -751,16 +760,33 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         b, _, h, w = depth.shape
 
         batch_size, i_dim, h, w = instances.shape
-        hidd_size, h_hid, w_hid = gru_hidden.shape[1:]
 
-        gru_hidden = torch.cat([gru_hidden] * i_dim, dim=1)
-        gru_hidden = gru_hidden.view(batch_size * i_dim, hidd_size, h_hid, w_hid)
+        gru_hidden_instances = self.project(gru_hidden)
+
+        hidd_size, h_hid, w_hid = gru_hidden_instances.shape[1:]
+
+        gru_hidden_instances = torch.cat([gru_hidden_instances] * i_dim, dim=1)
+        gru_hidden_instances = gru_hidden_instances.view(batch_size * i_dim, hidd_size, h_hid, w_hid)
+
         boxes = boxes.view(batch_size * i_dim, 4)
-        gru_hidden = roi_select_features(gru_hidden, boxes) 
+
+        # Change boxes #
+        change_dim_tensor = torch.tensor([1, 0, 3, 2], device=boxes.device)
+        boxes_roi = torch.gather(boxes, 1, change_dim_tensor.unsqueeze(0).expand(boxes.size(0), -1))
+        boxes_roi = boxes_roi.view(batch_size, i_dim, 4)
+        boxes_roi = boxes_roi.to(torch.float32)
+        boxes_roi -= 0.5
+        boxes_roi = torch.unbind(boxes_roi, dim=0)
+    
+        # List of boxes split #
+        gru_hidden_instances_roi_align = self.roiAlign(gru_hidden_instances, boxes_roi) 
+        print(gru_hidden_instances_roi_align.shape)
+
+        gru_hidden_instances_roi = roi_select_features(gru_hidden_instances, boxes) 
         
         boxes = boxes.view(batch_size, i_dim, 4)
-        instances_scale_shift = self.instances_scale_and_shift(gru_hidden, boxes)
-        instances_canonical = self.instances_canonical(gru_hidden, boxes)
+        instances_scale_shift = self.instances_scale_and_shift(gru_hidden_instances_roi, boxes)
+        instances_canonical = self.instances_canonical(gru_hidden_instances, boxes)
 
         instances_scale, instances_shift = pick_predictions_instances_scale(instances_scale_shift, labels)
         pred_scale_instances_list.append(instances_scale)
@@ -1813,10 +1839,11 @@ class ROISelectScale(nn.Module):
         self.input_dim = input_dim
 
     def forward(self, x, boxes):
-        normalized_box = normalize_box(boxes)
         h, w = x.shape[2:]
-        
         b, i, _ = boxes.shape
+
+        boxes = project_box_to_features(boxes, self.downsampling)
+        normalized_box = normalize_box(boxes, height=h, width=w)
 
         out = F.relu(self.pool(self.conv1(x)))
         out = torch.flatten(out, 1)
@@ -1838,11 +1865,13 @@ class ROISelectCanonical(nn.Module):
         self.input_dim = input_dim
 
     def forward(self, x, boxes):
-        normalized_box = normalize_box(boxes)
-        
-        b, i, _ = boxes.shape
+
         h, w = x.shape[2:]
+        b, i, _ = boxes.shape
         
+        boxes = project_box_to_features(boxes, self.downsampling)
+        normalized_box = normalize_box(boxes, height=h, width=w)
+       
         out = self.canonical_head(x)
         out = out.view(b*i, self.num_semantic_classes, h, w)
         
@@ -1898,6 +1927,8 @@ def roi_select_features(feature_map, box_coordinates, downsampling=4):
     with torch.no_grad():
         batch_size = box_coordinates.size(0)
         height, width = feature_map.size(-2), feature_map.size(-1)
+
+        box_coordinates = project_box_to_features(box_coordinates, downsampling)
 
         ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
 
