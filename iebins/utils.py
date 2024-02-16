@@ -360,7 +360,7 @@ class D_to_cloud(nn.Module):
 
 
 def find_indexes_valid_instances(labels):
-    return torch.nonzero(labels!=0).squeeze()
+    return torch.nonzero(labels!=-1).squeeze()
 
 """Train parser"""
 train_parser = argparse.ArgumentParser(description='Scale PyTorch implementation.', fromfile_prefix_chars='@')

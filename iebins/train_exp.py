@@ -95,6 +95,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             else:
                 if args.segmentation:
                     if args.instances:
+                        instances[:, 1:, :, :] = 0
                         pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
                     else:
                         pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
@@ -103,7 +104,11 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
 
                 pred_depth = pred_depth.cpu().numpy().squeeze()
 
-            gt_depth = gt_depth.cpu().numpy().squeeze()
+            if args.instances:
+                mask = torch.sum(instances, dim=1).unsqueeze(-1).to(torch.bool).cpu()
+                gt_depth = (gt_depth * mask).cpu().numpy().squeeze()
+            else:
+                gt_depth = gt_depth.cpu().numpy().squeeze()
 
         if args.do_kb_crop: # Not in NYU
             height, width = gt_depth.shape
@@ -114,10 +119,16 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             pred_depth = pred_depth_uncropped
 
         # Filter depth #
-        pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
-        pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
-        pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
-        pred_depth[np.isnan(pred_depth)] = args.min_depth_eval
+        if args.instances:
+            pred_depth[pred_depth < args.min_depth_eval] = 0
+            pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
+            pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
+            pred_depth[np.isnan(pred_depth)] = 0
+        else:
+            pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
+            pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
+            pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
+            pred_depth[np.isnan(pred_depth)] = args.min_depth_eval
 
         valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
 
@@ -387,12 +398,25 @@ def main_worker(gpu, ngpus_per_node, args):
 
             if args.instances:
                 pred_depths_instances_rc_list = result["pred_depths_instances_rc_list"]
+                print(torch.max(pred_depths_instances_rc_list[0]))
+                print(torch.min(pred_depths_instances_rc_list[0]))
+                print(torch.mean(pred_depths_instances_rc_list[0]))
+                print(torch.std(pred_depths_instances_rc_list[0]))
                 pred_depths_instances_r_list = result["pred_depths_instances_r_list"]
+
+                pred_scale_instances_list = result["pred_scale_instances_list"]
+                pred_shift_instances_list = result["pred_shift_instances_list"]
+                
+                #non_zero_idx = (labels != -1).nonzero(as_tuple=False)
+                #print(pred_scale_instances_list[0][non_zero_idx[:,0], non_zero_idx[:,1]].detach().cpu().numpy())
+                #print(pred_shift_instances_list[0][non_zero_idx[:,0], non_zero_idx[:,1]].detach().cpu().numpy())
+                print(pred_scale_instances_list[0][0,0].detach().cpu().numpy())
+                print(pred_shift_instances_list[0][0,0].detach().cpu().numpy())
 
             # Canonical #
             if args.update_block != 0:
                 pred_depths_rc_list = result["pred_depths_rc_list"]
-            
+
             # uncertainty (GRU)
             if args.update_block == 2:
                 pred_depths_u_list = result["pred_depths_u_list"]
@@ -412,6 +436,7 @@ def main_worker(gpu, ngpus_per_node, args):
             for curr_tree_depth in range(max_tree_depth):
                 if args.segmentation:
                     if args.instances:
+                        instances[:, 1:, :, :] = 0
                         pred_d = torch.sum((pred_depths_instances_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
                         
                         instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
@@ -419,7 +444,11 @@ def main_worker(gpu, ngpus_per_node, args):
                         #image_masked_with_instances = torch.sum(instances[0, :, :, :], dim=0)
                         #depth_gt = depth_gt * instances_gt_mask
                         #cv2.imshow("instances_mapped_image", depth_gt[0,0,:,:].cpu().numpy())
-                        #cv2.imshow("instances_mapped_ittmage", image_masked_with_instances.cpu().numpy())
+                        #tmp = mask[0].permute(1,2,0).squeeze()
+                        #tmp = (tmp.cpu().detach().numpy() * 255).astype('uint8')
+                        #print(tmp.shape)
+                        #print(instances[0, :, :, :].shape)
+                        #cv2.imshow("instances_mapped_ittmage", tmp)
                         #cv2.waitKey(0)
                         #cv2.destroyAllWindows()
 
@@ -516,7 +545,7 @@ def main_worker(gpu, ngpus_per_node, args):
                             if args.update_block != 0:
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_canonical_est{}/image/{}/'.format(ii, i), 
-                                                      colormap(torch.log10(torch.sum(pred_depths_rc_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
+                                                      colormap(torch.log10(torch.sum(pred_depths_instances_rc_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
                             if True: # expensive
                                 for j in find_indexes_valid_instances(labels[i]):
                                     # Depth #
