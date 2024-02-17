@@ -189,7 +189,6 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
 
 def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
-
     if args.gpu is not None:
         print("== Use GPU: {} for training".format(args.gpu))
     
@@ -199,7 +198,7 @@ def main_worker(gpu, ngpus_per_node, args):
         if args.multiprocessing_distributed:
             args.rank = args.rank * ngpus_per_node + gpu
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
-
+    
     # Dataloaders #
     dataloader = NewDataLoader(args, 'train')
     dataloader_eval = NewDataLoader(args, 'online_eval')
@@ -232,7 +231,6 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         model = torch.nn.DataParallel(model)
         model.cuda()
-
     if args.distributed:
         print("== Model Initialized on GPU: {}".format(args.gpu))
     else:
@@ -724,7 +722,8 @@ def main():
         os.system(command)
         
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
-
+    args.distributed = False
+    args.multiprocessing_distributed = False
     ngpus_per_node = torch.cuda.device_count()
     if ngpus_per_node > 1 and not args.multiprocessing_distributed:
         print("This machine has more than 1 gpu. Please specify --multiprocessing_distributed, or set \'CUDA_VISIBLE_DEVICES=0\'")

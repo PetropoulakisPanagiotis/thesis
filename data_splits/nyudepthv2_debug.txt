@@ -1,4 +1,1 @@
 bookstore/rgb_00098.jpg bookstore/sync_depth_00098.png
-bookstore/rgb_00109.jpg bookstore/sync_depth_00109.png
-bookstore/rgb_00104.jpg bookstore/sync_depth_00104.png
-bookstore/rgb_00101.jpg bookstore/sync_depth_00101.png

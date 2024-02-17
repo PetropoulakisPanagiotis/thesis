@@ -33,14 +33,12 @@ class NewDataLoader(object):
         if args.dataset == 'nyu':
             self.semantic_classes = json.load(open(args.data_path.split('train')[0] + 'labels.json', 'r'))
             self.num_semantic_classes = len(self.semantic_classes)
-        
         if mode == 'train':
             self.training_samples = DataLoadPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation))
             if args.distributed:
                 self.train_sampler = torch.utils.data.distributed.DistributedSampler(self.training_samples)
             else:
                 self.train_sampler = None
-    
             self.data = DataLoader(self.training_samples, args.batch_size,
                                    shuffle=(self.train_sampler is None),
                                    num_workers=args.num_threads,

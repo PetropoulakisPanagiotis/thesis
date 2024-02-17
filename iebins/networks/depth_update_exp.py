@@ -734,7 +734,7 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         self.roiAlign = RoIAlign(output_size, spatial_scale=spatial_scale, sampling_ratio=sampling_ratio)
 
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
-        self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes)       # No void instance
+        self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes)       
 
         self.p_head = CRHead(hidden_dim, hidden_dim, num_classes=self.num_semantic_classes) 
         self.s_head = SSPHead(hidden_dim, num_classes=self.num_semantic_classes)                 
@@ -780,10 +780,11 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
     
         # List of boxes split #
         gru_hidden_instances_roi_align = self.roiAlign(gru_hidden, boxes_roi) 
-
         gru_hidden_instances_roi = roi_select_features(gru_hidden, boxes) 
         
         boxes = boxes.view(batch_size, i_dim, 4)
+
+
         instances_scale_shift = self.instances_scale_and_shift(gru_hidden_instances_roi_align, boxes)
         instances_canonical = self.instances_canonical(gru_hidden_instances_roi, boxes)
 
@@ -1876,7 +1877,7 @@ class ROISelectCanonical(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
         super(ROISelectCanonical, self).__init__()
               
-        self.canonical_head = CRIHead(input_dim + 4, hidden_dim=32, num_classes=num_semantic_classes)
+        self.canonical_head = CRIHead(input_dim + 4, hidden_dim=128, num_classes=num_semantic_classes)
         self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
@@ -1957,8 +1958,8 @@ def roi_select_features(feature_map, box_coordinates, downsampling=4):
         row_indices = torch.arange(height, device=feature_map.device).unsqueeze(0)
         col_indices = torch.arange(width, device=feature_map.device).unsqueeze(0)
 
-        row_mask = (row_indices >= ymin) & (row_indices < ymax)
-        col_mask = (col_indices >= xmin) & (col_indices < xmax)
+        row_mask = (row_indices >= ymin) & (row_indices <= ymax)
+        col_mask = (col_indices >= xmin) & (col_indices <= xmax)
 
         row_mask = row_mask.unsqueeze(1).unsqueeze(-1) 
         col_mask = col_mask.unsqueeze(1).unsqueeze(2) 

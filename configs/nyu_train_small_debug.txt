@@ -9,8 +9,8 @@
 --filenames_file /usr/stud/petp/code/thesis/data_splits/nyudepthv2_debug.txt
 
 --do_online_eval
---log_freq 500
---eval_freq 500
+--log_freq 10
+--eval_freq 25
 --log_directory /usr/stud/petp/code/thesis/tmp/
 --data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
 --gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
@@ -22,14 +22,14 @@
 --input_width 640
 
 --batch_size 2 
---num_epochs 150
---learning_rate 5e-4
+--num_epochs 5000
+--learning_rate 15e-4
 --weight_decay 1e-2
 --adam_eps 1e-3
 
 --num_threads 1
 --multiprocessing_distributed
---dist_url tcp://127.0.0.1:2345
+--dist_url tcp://127.0.0.1:2346
 
 --eigen_crop
 
