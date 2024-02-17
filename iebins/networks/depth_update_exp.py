@@ -816,7 +816,7 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
             depth_instances_r = (self.relu(instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
         else:
             depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
-            depth_instances_r = instances_canonical * 10 * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1)
+            depth_instances_r = instances_canonical * 20 * F.sigmoid(instances_scale.unsqueeze(-1).unsqueeze(-1)) + instances_shift.unsqueeze(-1).unsqueeze(-1)
        
         # depth_r: b, c, h, w
         pred_depths_r_list.append(depth_r)
@@ -1833,8 +1833,8 @@ class ROISelectScale(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
         super(ROISelectScale, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1) # First preprocess ROI map 
-        self.pool = nn.AdaptiveAvgPool2d(88)
-        self.fc1 = nn.Linear((88 * 88) + 4, 2*num_semantic_classes) # Scale and shift 
+        self.pool = nn.AdaptiveAvgPool2d(120)
+        self.fc1 = nn.Linear((120 * 120) + 4, 2*num_semantic_classes) # Scale and shift 
         
         self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
@@ -1846,7 +1846,6 @@ class ROISelectScale(nn.Module):
 
         boxes = project_box_to_features(boxes, self.downsampling)
         normalized_box = normalize_box(boxes, height=h, width=w)
-        print(self.conv1(x).shape)
         out = self.pool(F.relu(self.conv1(x)))
         out = torch.flatten(out, 1)
 

@@ -95,7 +95,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             else:
                 if args.segmentation:
                     if args.instances:
-                        instances[:, 1:, :, :] = 0
+                        #instances[:, 6:, :, :] = 0
                         pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
                     else:
                         pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
@@ -408,8 +408,8 @@ def main_worker(gpu, ngpus_per_node, args):
                 #non_zero_idx = (labels != -1).nonzero(as_tuple=False)
                 #print(pred_scale_instances_list[0][non_zero_idx[:,0], non_zero_idx[:,1]].detach().cpu().numpy())
                 #print(pred_shift_instances_list[0][non_zero_idx[:,0], non_zero_idx[:,1]].detach().cpu().numpy())
-                #print(pred_scale_instances_list[0][0,0].detach().cpu().numpy())
-                #print(pred_shift_instances_list[0][0,0].detach().cpu().numpy())
+                #print(pred_scale_instances_list[0].detach().cpu().numpy())
+                #print(pred_shift_instances_list[0].detach().cpu().numpy())
 
             # Canonical #
             if args.update_block != 0:
@@ -434,7 +434,7 @@ def main_worker(gpu, ngpus_per_node, args):
             for curr_tree_depth in range(max_tree_depth):
                 if args.segmentation:
                     if args.instances:
-                        instances[:, 1:, :, :] = 0
+                        #instances[:, 6:, :, :] = 0
                         pred_d = torch.sum((pred_depths_instances_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
                         
                         instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
