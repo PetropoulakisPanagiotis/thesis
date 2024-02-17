@@ -726,12 +726,14 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         self.num_instances = num_instances
 
         self.project = ProjectionCustom(hidden_dim, 32, 96)
-        
+       
+        """ 
         output_size = (32, 32)
         spatial_scale  = 1.0/4
         sampling_ratio = 4
             
         self.roiAlign = RoIAlign(output_size, spatial_scale=spatial_scale, sampling_ratio=sampling_ratio)
+        """
 
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
         self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes)       
@@ -762,15 +764,12 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         batch_size, i_dim, h, w = instances.shape
 
         gru_hidden_instances = gru_hidden#self.project(gru_hidden)
-
         hidd_size, h_hid, w_hid = gru_hidden_instances.shape[1:]
-
-        gru_hidden_instances = torch.cat([gru_hidden_instances] * i_dim, dim=1)
-        gru_hidden_instances = gru_hidden_instances.view(batch_size * i_dim, hidd_size, h_hid, w_hid)
 
         boxes = boxes.view(batch_size * i_dim, 4)
 
         # Change boxes #
+        """
         change_dim_tensor = torch.tensor([1, 0, 3, 2], device=boxes.device)
         boxes_roi = torch.gather(boxes, 1, change_dim_tensor.unsqueeze(0).expand(boxes.size(0), -1))
         boxes_roi = boxes_roi.view(batch_size, i_dim, 4)
@@ -779,13 +778,16 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         boxes_roi = torch.unbind(boxes_roi, dim=0)
     
         # List of boxes split #
-        gru_hidden_instances_roi_align = self.roiAlign(gru_hidden, boxes_roi) 
-        gru_hidden_instances_roi = roi_select_features(gru_hidden, boxes) 
+        gru_hidden_instances_roi_align = self.roiAlign(gru_hidden_instances, boxes_roi) 
         
+        #gru_hidden_instances = torch.cat([gru_hidden_instances] * i_dim, dim=1)
+        #gru_hidden_instances = gru_hidden_instances.view(batch_size * i_dim, hidd_size, h_hid, w_hid)
+        """
+        gru_hidden_instances_roi = roi_select_features(gru_hidden_instances, boxes) 
         boxes = boxes.view(batch_size, i_dim, 4)
 
 
-        instances_scale_shift = self.instances_scale_and_shift(gru_hidden_instances_roi_align, boxes)
+        instances_scale_shift = self.instances_scale_and_shift(gru_hidden_instances_roi, boxes)
         instances_canonical = self.instances_canonical(gru_hidden_instances_roi, boxes)
 
         instances_scale, instances_shift = pick_predictions_instances_scale(instances_scale_shift, labels)
@@ -1830,8 +1832,7 @@ class UPHead(nn.Module):
 class ROISelectScale(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
         super(ROISelectScale, self).__init__()
-        self.conv1 = nn.Conv2d(input_dim, 96, 3, padding=1) # First preprocess ROI map 
-        self.conv2 = nn.Conv2d(96, 1, 3, padding=1) # First preprocess ROI map 
+        self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1) # First preprocess ROI map 
         self.pool = nn.AdaptiveAvgPool2d(88)
         self.fc1 = nn.Linear((88 * 88) + 4, 2*num_semantic_classes) # Scale and shift 
         
@@ -1845,9 +1846,8 @@ class ROISelectScale(nn.Module):
 
         boxes = project_box_to_features(boxes, self.downsampling)
         normalized_box = normalize_box(boxes, height=h, width=w)
-
-        out = F.relu(self.conv1(x))
-        out = F.relu(self.pool(self.conv2(out)))
+        print(self.conv1(x).shape)
+        out = self.pool(F.relu(self.conv1(x)))
         out = torch.flatten(out, 1)
 
         normalized_box = normalized_box.view(b * i,  4)
@@ -1861,15 +1861,11 @@ class CRIHead(nn.Module):
     def __init__(self, input_dim=128, hidden_dim=128, num_classes=1):
         super(CRIHead, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
-        self.conv2 = nn.Conv2d(hidden_dim, hidden_dim, 3, padding=1)
-        self.conv3 = nn.Conv2d(hidden_dim, 96, 3, padding=1)
-        self.conv4 = nn.Conv2d(96, num_classes, 3, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, num_classes, 3, padding=1)
 
     def forward(self, x):
         out = F.relu(self.conv1(x))
-        out = F.relu(self.conv2(out))
-        out = F.relu(self.conv3(out))
-        out = torch.sigmoid(self.conv4(out))
+        out = torch.sigmoid(self.conv2(out))
 
         return out
 
@@ -1966,6 +1962,13 @@ def roi_select_features(feature_map, box_coordinates, downsampling=4):
         masks = (torch.zeros_like(feature_map) + row_mask) * (torch.zeros_like(feature_map) + col_mask)
         
         masked_feature_map = feature_map * masks
+        #x = upsample(masked_feature_map, 4)
+        #x = x[0, 0, :, :].unsqueeze(0).permute(1,2,0)
+        #x = (x - torch.min(x))/(torch.max(x) - torch.min(x))
+        #x = (x.cpu().detach().numpy() * 255).astype('uint8')
+        #cv2.imshow("instances_mapped_ittmage", x)
+        #cv2.waitKey(0)
+        #cv2.destroyAllWindows()
 
         return masked_feature_map
 

@@ -396,10 +396,10 @@ def main_worker(gpu, ngpus_per_node, args):
 
             if args.instances:
                 pred_depths_instances_rc_list = result["pred_depths_instances_rc_list"]
-                print(torch.max(pred_depths_instances_rc_list[0]))
-                print(torch.min(pred_depths_instances_rc_list[0]))
-                print(torch.mean(pred_depths_instances_rc_list[0]))
-                print(torch.std(pred_depths_instances_rc_list[0]))
+                #print(torch.max(pred_depths_instances_rc_list[0]))
+                #print(torch.min(pred_depths_instances_rc_list[0]))
+                #print(torch.mean(pred_depths_instances_rc_list[0]))
+                #print(torch.std(pred_depths_instances_rc_list[0]))
                 pred_depths_instances_r_list = result["pred_depths_instances_r_list"]
 
                 pred_scale_instances_list = result["pred_scale_instances_list"]
@@ -408,8 +408,8 @@ def main_worker(gpu, ngpus_per_node, args):
                 #non_zero_idx = (labels != -1).nonzero(as_tuple=False)
                 #print(pred_scale_instances_list[0][non_zero_idx[:,0], non_zero_idx[:,1]].detach().cpu().numpy())
                 #print(pred_shift_instances_list[0][non_zero_idx[:,0], non_zero_idx[:,1]].detach().cpu().numpy())
-                print(pred_scale_instances_list[0][0,0].detach().cpu().numpy())
-                print(pred_shift_instances_list[0][0,0].detach().cpu().numpy())
+                #print(pred_scale_instances_list[0][0,0].detach().cpu().numpy())
+                #print(pred_shift_instances_list[0][0,0].detach().cpu().numpy())
 
             # Canonical #
             if args.update_block != 0:
@@ -714,16 +714,14 @@ def main():
         aux_out_path = os.path.join(args.log_directory, args.model_name)
         networks_savepath = os.path.join(aux_out_path, 'networks')
         dataloaders_savepath = os.path.join(aux_out_path, 'dataloaders')
-        command = 'cp iebins/train.py ' + aux_out_path
+        command = 'cp ../iebins/train.py ' + aux_out_path
         os.system(command)
-        command = 'mkdir -p ' + networks_savepath + ' && cp iebins/networks/*.py ' + networks_savepath
+        command = 'mkdir -p ' + networks_savepath + ' && cp ../iebins/networks/*.py ' + networks_savepath
         os.system(command)
-        command = 'mkdir -p ' + dataloaders_savepath + ' && cp iebins/dataloaders/*.py ' + dataloaders_savepath
+        command = 'mkdir -p ' + dataloaders_savepath + ' && cp ../iebins/dataloaders/*.py ' + dataloaders_savepath
         os.system(command)
         
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
-    args.distributed = False
-    args.multiprocessing_distributed = False
     ngpus_per_node = torch.cuda.device_count()
     if ngpus_per_node > 1 and not args.multiprocessing_distributed:
         print("This machine has more than 1 gpu. Please specify --multiprocessing_distributed, or set \'CUDA_VISIBLE_DEVICES=0\'")
