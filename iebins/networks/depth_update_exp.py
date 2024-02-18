@@ -725,7 +725,7 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         self.feature_map_instances_dim = feature_map_instances_dim
         self.num_instances = num_instances
 
-        self.project = ProjectionCustom(hidden_dim, 32, 96)
+        self.project = ProjectionCustom(hidden_dim, 32, 128)
        
         """ 
         output_size = (32, 32)
@@ -766,7 +766,7 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         gru_hidden_instances = gru_hidden#self.project(gru_hidden)
         hidd_size, h_hid, w_hid = gru_hidden_instances.shape[1:]
 
-        boxes = boxes.view(batch_size * i_dim, 4)
+        #boxes = boxes.view(batch_size * i_dim, 4)
 
         # Change boxes #
         """
@@ -780,12 +780,11 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         # List of boxes split #
         gru_hidden_instances_roi_align = self.roiAlign(gru_hidden_instances, boxes_roi) 
         
+        """
         #gru_hidden_instances = torch.cat([gru_hidden_instances] * i_dim, dim=1)
         #gru_hidden_instances = gru_hidden_instances.view(batch_size * i_dim, hidd_size, h_hid, w_hid)
-        """
         gru_hidden_instances_roi = roi_select_features(gru_hidden_instances, boxes) 
-        boxes = boxes.view(batch_size, i_dim, 4)
-
+        #boxes = boxes.view(batch_size, i_dim, 4)
 
         instances_scale_shift = self.instances_scale_and_shift(gru_hidden_instances_roi, boxes)
         instances_canonical = self.instances_canonical(gru_hidden_instances_roi, boxes)
@@ -1942,9 +1941,12 @@ def project_box_to_features(box, downsampling):
         return torch.ceil(box / downsampling).int()
    
 def roi_select_features(feature_map, box_coordinates, downsampling=4):
+    # Can be more efficient to skip zero maps?
     with torch.no_grad():
-        batch_size = box_coordinates.size(0)
+        batch_size, i_dim = box_coordinates.shape[0:2]
+        
         height, width = feature_map.size(-2), feature_map.size(-1)
+        box_coordinates = box_coordinates.view(batch_size * i_dim, 4)
 
         box_coordinates = project_box_to_features(box_coordinates, downsampling)
 
@@ -1958,9 +1960,12 @@ def roi_select_features(feature_map, box_coordinates, downsampling=4):
 
         row_mask = row_mask.unsqueeze(1).unsqueeze(-1) 
         col_mask = col_mask.unsqueeze(1).unsqueeze(2) 
-        masks = (torch.zeros_like(feature_map) + row_mask) * (torch.zeros_like(feature_map) + col_mask)
+       
+        zeros_mask = torch.zeros_like(feature_map).repeat(i_dim, 1, 1, 1)
+        masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
+        masked_feature_map = feature_map.repeat(i_dim, 1, 1, 1) * masks
         
-        masked_feature_map = feature_map * masks
+        box_coordinates = box_coordinates.view(batch_size, i_dim, 4)
         #x = upsample(masked_feature_map, 4)
         #x = x[0, 0, :, :].unsqueeze(0).permute(1,2,0)
         #x = (x - torch.min(x))/(torch.max(x) - torch.min(x))
