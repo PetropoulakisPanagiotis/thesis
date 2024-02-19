@@ -9,6 +9,7 @@ import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import cv2
+import random
 
 from tensorboardX import SummaryWriter
 
@@ -545,7 +546,14 @@ def main_worker(gpu, ngpus_per_node, args):
                                     writer.add_image('depth_canonical_est{}/image/{}/'.format(ii, i), 
                                                       colormap(torch.log10(torch.sum(pred_depths_instances_rc_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
                             if True: # expensive
-                                for j in find_indexes_valid_instances(labels[i]):
+                                max_vizualization = 5
+                                valid_indexes = find_indexes_valid_instances(labels[i])
+
+                                if(len(valid_indexes) < max_vizualization):
+                                    max_vizualization = len(valid_indexes)
+
+                                picked_items = random.sample(list(valid_indexes.detach().cpu().numpy()), max_vizualization)
+                                for j in picked_items:
                                     # Depth #
                                     for ii in range(max_tree_depth):
                                         writer.add_image('depth_metric_est{}/image/{}/instance{}'.format(ii, i, j), 

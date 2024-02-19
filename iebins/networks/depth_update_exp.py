@@ -738,8 +738,8 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
         self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes)       
 
-        self.p_head = CRHead(hidden_dim, hidden_dim, num_classes=self.num_semantic_classes) 
-        self.s_head = SSPHead(hidden_dim, num_classes=self.num_semantic_classes)                 
+        #self.p_head = CRHead(hidden_dim, hidden_dim, num_classes=self.num_semantic_classes) 
+        #self.s_head = SSPHead(hidden_dim, num_classes=self.num_semantic_classes)                 
 
         self.relu = nn.ReLU(inplace=True)
         self.loss_type = loss_type
@@ -796,35 +796,35 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         instances_canonical = pick_predictions_instances_canonical(instances_canonical, labels)
         pred_depths_instances_rc_list.append(instances_canonical)
     
-        pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
-        pred_scale = self.s_head(gru_hidden)       # b, 2*c
+        #pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
+        #pred_scale = self.s_head(gru_hidden)       # b, 2*c
         # revert back 
-        pred_scale_list.append(pred_scale[:, ::2])  # b, c
-        pred_shift_list.append(pred_scale[:, 1::2]) # b, c
+        #pred_scale_list.append(pred_scale[:, ::2])  # b, c
+        #pred_shift_list.append(pred_scale[:, 1::2]) # b, c
         
         # Canonical
         # b, 16*c, h, w - c*b, 16, h, w
         # b*c, 16, h, w
-        depth_rc = pred_prob
-        pred_depths_rc_list.append(depth_rc)
+        #depth_rc = pred_prob
+        #pred_depths_rc_list.append(depth_rc)
         
         # Metric
         if self.loss_type == 0:
-            depth_r = (self.relu(depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+            #depth_r = (self.relu(depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
             depth_instances_r = (self.relu(instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
         else:
-            depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
+            #depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
             depth_instances_r = instances_canonical * 20 * F.sigmoid(instances_scale.unsqueeze(-1).unsqueeze(-1)) + instances_shift.unsqueeze(-1).unsqueeze(-1)
        
         # depth_r: b, c, h, w
-        pred_depths_r_list.append(depth_r)
+        #pred_depths_r_list.append(depth_r)
         pred_depths_instances_r_list.append(depth_instances_r)
         
         result = {}
-        result["pred_depths_r_list"] = pred_depths_r_list
-        result["pred_depths_rc_list"] = pred_depths_rc_list
-        result["pred_scale_list"] = pred_scale_list
-        result["pred_shift_list"] = pred_shift_list
+        result["pred_depths_r_list"] = [None]#pred_depths_r_list
+        result["pred_depths_rc_list"] = [None]#pred_depths_rc_list
+        result["pred_scale_list"] = [None]#pred_scale_list
+        result["pred_shift_list"] = [None]#pred_shift_list
 
         result["pred_depths_instances_r_list"] = pred_depths_instances_r_list
         result["pred_depths_instances_rc_list"] = pred_depths_instances_rc_list
@@ -1984,6 +1984,9 @@ def roi_select_features(feature_map, box, labels, downsampling=4):
         height, width = feature_map.size(-2), feature_map.size(-1)
         box_coordinates = box.view(batch_size * i_dim, 4)
 
+        instances_per_batch = torch.nonzero(labels != -1)
+        instances_per_batch = torch.bincount(instances_per_batch[:, 0])
+        
         valid_boxes = labels.view(batch_size * i_dim, 1)
         valid_boxes = torch.nonzero(valid_boxes != -1)
 
@@ -2002,9 +2005,11 @@ def roi_select_features(feature_map, box, labels, downsampling=4):
 
         row_mask = row_mask.unsqueeze(1).unsqueeze(-1)
         col_mask = col_mask.unsqueeze(1).unsqueeze(2)
-        zeros_mask = torch.zeros_like(feature_map).repeat(i_dim // batch_size, 1, 1, 1)
+
+        zeros_mask = torch.cat([torch.zeros_like(feature_map[i, :, :, :].unsqueeze(0)).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
         masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
-        masked_feature_map = feature_map.repeat(i_dim // batch_size, 1, 1, 1) * masks
+
+        masked_feature_map = torch.cat([feature_map[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0) * masks
         
         #x = upsample(masked_feature_map, 4)
         #x = x[0, 0, :, :].unsqueeze(0).permute(1,2,0)
