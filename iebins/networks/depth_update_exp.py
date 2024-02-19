@@ -798,7 +798,6 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
     
         pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
         pred_scale = self.s_head(gru_hidden)       # b, 2*c
-       
         # revert back 
         pred_scale_list.append(pred_scale[:, ::2])  # b, c
         pred_shift_list.append(pred_scale[:, 1::2]) # b, c
@@ -1852,14 +1851,12 @@ class ROISelectScale(nn.Module):
         i, _ = boxes_tmp.shape
 
         boxes_tmp = project_box_to_features(boxes_tmp, self.downsampling)
-        boxes_tmp = boxes_tmp.view(b, i, 4)
-        normalized_box = normalize_box(boxes_tmp, height=h, width=w)
+        normalized_box = normalize_box_v2(boxes_tmp, height=h, width=w)
         out = self.pool(F.relu(self.conv1(x)))
         out = torch.flatten(out, 1)
-        normalized_box = normalized_box.view(b * i,  4)
         out = torch.cat((out, normalized_box), dim=1)
-        out = self.fc1(out) 
-        out = out.view(b*i, 2*self.num_semantic_classes)
+        out = self.fc1(out)
+        out = out.view(i, 2*self.num_semantic_classes)
         
         return out
 
@@ -1897,19 +1894,13 @@ class ROISelectCanonical(nn.Module):
         boxes_tmp = boxes_tmp[valid_boxes[:, 0]]
 
         i, _ = boxes_tmp.shape
-        boxes_tmp = boxes_tmp.view(b, i, 4)
         
         boxes_tmp = project_box_to_features(boxes_tmp, self.downsampling)
-        boxes_tmp = boxes_tmp.view(b, i, 4)
-        normalized_box = normalize_box(boxes_tmp, height=h, width=w)
-       
-        normalized_box = normalized_box.view(b * i,  4).unsqueeze(-1).unsqueeze(-1)
-        normalized_box = normalized_box.repeat(1, 1, h, w)
-
+        normalized_box = normalize_box_v2(boxes_tmp, height=h, width=w)
+        normalized_box = normalized_box.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, h, w)
         out = torch.cat((x, normalized_box), dim=1)
-
         out = self.canonical_head(out)
-        out = out.view(b*i, self.num_semantic_classes, h, w)
+        out = out.view(i, self.num_semantic_classes, h, w)
         
         return out
 
@@ -1939,8 +1930,8 @@ def pick_predictions_instances_scale(prediction, labels):
     pred_scale_full[valid_boxes[:,0]] = pred_scale
     pred_shift_full[valid_boxes[:,0]] = pred_shift
 
-    pred_scale_full = pred_scale_full.view(batch_size, i_dim, 1)
-    pred_shift_full = pred_shift_full.view(batch_size, i_dim, 1)
+    pred_scale_full = pred_scale_full.view(batch_size, i_dim)
+    pred_shift_full = pred_shift_full.view(batch_size, i_dim)
 
     return pred_scale_full, pred_shift_full
     
@@ -1963,7 +1954,7 @@ def pick_predictions_instances_canonical(prediction, labels):
     canonical_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(prediction.device)
     canonical_full[valid_boxes[:,0]] = canonical 
 
-    canonical_full = canonical_full.view(batch_size, i_dim, 1, h, w)
+    canonical_full = canonical_full.view(batch_size, i_dim, h, w)
     
     return canonical_full
 
@@ -1979,7 +1970,7 @@ def normalize_box_v2(box, height=480, width=640):
         return torch.stack(((box[:, 0] / height).float(), 
                             (box[:, 1] / width).float(), 
 	                        (box[:, 2] / height).float(), 
-	                        (box[:, 3] / width).float()), dim=2)
+	                        (box[:, 3] / width).float()), dim=1)
 
 def project_box_to_features(box, downsampling):
     with torch.no_grad():
@@ -2009,12 +2000,11 @@ def roi_select_features(feature_map, box, labels, downsampling=4):
         row_mask = (row_indices >= ymin) & (row_indices <= ymax)
         col_mask = (col_indices >= xmin) & (col_indices <= xmax)
 
-        row_mask = row_mask.unsqueeze(1).unsqueeze(-1) 
-        col_mask = col_mask.unsqueeze(1).unsqueeze(2) 
-       
-        zeros_mask = torch.zeros_like(feature_map).repeat(i_dim, 1, 1, 1)
+        row_mask = row_mask.unsqueeze(1).unsqueeze(-1)
+        col_mask = col_mask.unsqueeze(1).unsqueeze(2)
+        zeros_mask = torch.zeros_like(feature_map).repeat(i_dim // batch_size, 1, 1, 1)
         masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
-        masked_feature_map = feature_map.repeat(i_dim, 1, 1, 1) * masks
+        masked_feature_map = feature_map.repeat(i_dim // batch_size, 1, 1, 1) * masks
         
         #x = upsample(masked_feature_map, 4)
         #x = x[0, 0, :, :].unsqueeze(0).permute(1,2,0)
