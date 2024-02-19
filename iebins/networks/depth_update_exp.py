@@ -783,11 +783,11 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         """
         #gru_hidden_instances = torch.cat([gru_hidden_instances] * i_dim, dim=1)
         #gru_hidden_instances = gru_hidden_instances.view(batch_size * i_dim, hidd_size, h_hid, w_hid)
-        gru_hidden_instances_roi = roi_select_features(gru_hidden_instances, boxes) 
+        gru_hidden_instances_roi = roi_select_features(gru_hidden_instances, boxes, labels) 
         #boxes = boxes.view(batch_size, i_dim, 4)
 
-        instances_scale_shift = self.instances_scale_and_shift(gru_hidden_instances_roi, boxes)
-        instances_canonical = self.instances_canonical(gru_hidden_instances_roi, boxes)
+        instances_scale_shift = self.instances_scale_and_shift(gru_hidden_instances_roi, boxes, labels)
+        instances_canonical = self.instances_canonical(gru_hidden_instances_roi, boxes, labels)
 
         instances_scale, instances_shift = pick_predictions_instances_scale(instances_scale_shift, labels)
         pred_scale_instances_list.append(instances_scale)
@@ -1839,15 +1839,23 @@ class ROISelectScale(nn.Module):
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
-    def forward(self, x, boxes):
+    def forward(self, x, boxes, labels):
         h, w = x.shape[2:]
         b, i, _ = boxes.shape
 
-        boxes = project_box_to_features(boxes, self.downsampling)
-        normalized_box = normalize_box(boxes, height=h, width=w)
+        boxes_tmp = boxes.view(b * i, 4)
+        valid_boxes = labels.view(b * i, 1)
+        valid_boxes = torch.nonzero(valid_boxes != -1)
+
+        boxes_tmp = boxes_tmp[valid_boxes[:, 0]]
+
+        i, _ = boxes_tmp.shape
+
+        boxes_tmp = project_box_to_features(boxes_tmp, self.downsampling)
+        boxes_tmp = boxes_tmp.view(b, i, 4)
+        normalized_box = normalize_box(boxes_tmp, height=h, width=w)
         out = self.pool(F.relu(self.conv1(x)))
         out = torch.flatten(out, 1)
-
         normalized_box = normalized_box.view(b * i,  4)
         out = torch.cat((out, normalized_box), dim=1)
         out = self.fc1(out) 
@@ -1876,17 +1884,28 @@ class ROISelectCanonical(nn.Module):
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
-    def forward(self, x, boxes):
+    def forward(self, x, boxes, labels):
 
         h, w = x.shape[2:]
         b, i, _ = boxes.shape
+
+        boxes_tmp = boxes.view(b * i, 4)
+
+        valid_boxes = labels.view(b * i, 1)
+        valid_boxes = torch.nonzero(valid_boxes != -1)
+
+        boxes_tmp = boxes_tmp[valid_boxes[:, 0]]
+
+        i, _ = boxes_tmp.shape
+        boxes_tmp = boxes_tmp.view(b, i, 4)
         
-        boxes = project_box_to_features(boxes, self.downsampling)
-        normalized_box = normalize_box(boxes, height=h, width=w)
+        boxes_tmp = project_box_to_features(boxes_tmp, self.downsampling)
+        boxes_tmp = boxes_tmp.view(b, i, 4)
+        normalized_box = normalize_box(boxes_tmp, height=h, width=w)
        
         normalized_box = normalized_box.view(b * i,  4).unsqueeze(-1).unsqueeze(-1)
         normalized_box = normalized_box.repeat(1, 1, h, w)
-        
+
         out = torch.cat((x, normalized_box), dim=1)
 
         out = self.canonical_head(out)
@@ -1894,40 +1913,59 @@ class ROISelectCanonical(nn.Module):
         
         return out
 
-def pick_predictions_instances_scale(predicion, labels):
+def pick_predictions_instances_scale(prediction, labels):
+
+    batch_size, i_dim = labels.shape[0:2]
+
+    labels_fast = torch.where(labels == -1, 0, labels) 
+    labels_fast = labels_fast.view(batch_size*i_dim)
     
-    labels_fast = labels
-    b, i = labels.shape[0:2]
-
-    labels_fast = torch.where(labels_fast == -1, 0, labels_fast)
+    valid_boxes = labels.view(batch_size * i_dim, 1)
+    valid_boxes = torch.nonzero(valid_boxes != -1)
     
-    labels_fast = labels_fast.view(b*i)
+    size_boxes_sq = valid_boxes.shape[0]
 
-    pred_scale = predicion[:, ::2]
-    pred_shift = predicion[:, 1::2]
+    labels_fast = labels_fast[valid_boxes[:,0]]
+    
+    pred_scale = prediction[:, ::2]
+    pred_shift = prediction[:, 1::2]
+   
+    pred_scale = pred_scale[torch.arange(size_boxes_sq), labels_fast].unsqueeze(-1)
+    pred_shift = pred_shift[torch.arange(size_boxes_sq), labels_fast].unsqueeze(-1)
 
-    pred_scale = pred_scale[torch.arange(b*i), labels_fast]
-    pred_shift = pred_shift[torch.arange(b*i), labels_fast]
-    pred_scale = pred_scale.view(b, i)
-    pred_shift = pred_shift.view(b, i)
+    pred_scale_full = torch.zeros((batch_size*i_dim, 1)).to(prediction.device)
+    pred_shift_full = torch.zeros((batch_size*i_dim, 1)).to(prediction.device)
 
-    return pred_scale, pred_shift
+    pred_scale_full[valid_boxes[:,0]] = pred_scale
+    pred_shift_full[valid_boxes[:,0]] = pred_shift
+
+    pred_scale_full = pred_scale_full.view(batch_size, i_dim, 1)
+    pred_shift_full = pred_shift_full.view(batch_size, i_dim, 1)
+
+    return pred_scale_full, pred_shift_full
     
 def pick_predictions_instances_canonical(prediction, labels): 
-    
-    labels_fast = labels
-    b, i = labels.shape[0:2]
     h, w = prediction.shape[2:]
-
-    labels_fast = torch.where(labels_fast == -1, 0, labels_fast)
+    batch_size, i_dim = labels.shape[0:2]
+    labels_fast = torch.where(labels == -1, 0, labels) 
+    labels_fast = labels_fast.view(batch_size*i_dim)
     
-    labels_fast = labels_fast.view(b*i)
+    valid_boxes = labels.view(batch_size * i_dim, 1)
+    valid_boxes = torch.nonzero(valid_boxes != -1)
+    
+    size_boxes_sq = valid_boxes.shape[0]
 
-    canonical = prediction[torch.arange(b*i), labels_fast]
-    canonical = canonical.unsqueeze(1)
-    canonical = canonical.view(b, i, h, w)
+    labels_fast = labels_fast[valid_boxes[:,0]]
+    
+    canonical = prediction[torch.arange(size_boxes_sq), labels_fast].unsqueeze(1)
 
-    return canonical
+
+    canonical_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(prediction.device)
+    canonical_full[valid_boxes[:,0]] = canonical 
+
+    canonical_full = canonical_full.view(batch_size, i_dim, 1, h, w)
+    
+    return canonical_full
 
 def normalize_box(box, height=480, width=640):
     with torch.no_grad():
@@ -1936,17 +1974,30 @@ def normalize_box(box, height=480, width=640):
 	                        (box[:, :, 2] / height).float(), 
 	                        (box[:, :, 3] / width).float()), dim=2)
 
+def normalize_box_v2(box, height=480, width=640):
+    with torch.no_grad():
+        return torch.stack(((box[:, 0] / height).float(), 
+                            (box[:, 1] / width).float(), 
+	                        (box[:, 2] / height).float(), 
+	                        (box[:, 3] / width).float()), dim=2)
+
 def project_box_to_features(box, downsampling):
     with torch.no_grad():
         return torch.ceil(box / downsampling).int()
    
-def roi_select_features(feature_map, box_coordinates, downsampling=4):
+def roi_select_features(feature_map, box, labels, downsampling=4):
     # Can be more efficient to skip zero maps?
     with torch.no_grad():
-        batch_size, i_dim = box_coordinates.shape[0:2]
+        batch_size, i_dim = box.shape[0:2]
         
         height, width = feature_map.size(-2), feature_map.size(-1)
-        box_coordinates = box_coordinates.view(batch_size * i_dim, 4)
+        box_coordinates = box.view(batch_size * i_dim, 4)
+
+        valid_boxes = labels.view(batch_size * i_dim, 1)
+        valid_boxes = torch.nonzero(valid_boxes != -1)
+
+        box_coordinates = box_coordinates[valid_boxes[:, 0]]
+        i_dim = box_coordinates.shape[0] 
 
         box_coordinates = project_box_to_features(box_coordinates, downsampling)
 
@@ -1965,7 +2016,6 @@ def roi_select_features(feature_map, box_coordinates, downsampling=4):
         masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
         masked_feature_map = feature_map.repeat(i_dim, 1, 1, 1) * masks
         
-        box_coordinates = box_coordinates.view(batch_size, i_dim, 4)
         #x = upsample(masked_feature_map, 4)
         #x = x[0, 0, :, :].unsqueeze(0).permute(1,2,0)
         #x = (x - torch.min(x))/(torch.max(x) - torch.min(x))
@@ -1973,7 +2023,6 @@ def roi_select_features(feature_map, box_coordinates, downsampling=4):
         #cv2.imshow("instances_mapped_ittmage", x)
         #cv2.waitKey(0)
         #cv2.destroyAllWindows()
-
         return masked_feature_map
 
 class SepConvGRU(nn.Module):
