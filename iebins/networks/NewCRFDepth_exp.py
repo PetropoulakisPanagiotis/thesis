@@ -16,7 +16,7 @@ class NewCRFDepth(nn.Module):
     def __init__(self, version=None, pretrained=None, 
                     frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=6, 
                     bin_num=16, update_block=0, loss_type=0, train_decoder=0, 
-                    predict_unc=False, predict_unc_d3vo=False, num_semantic_classes=13, num_instances=63, **kwargs):
+                    predict_unc=False, predict_unc_d3vo=False, num_semantic_classes=13, num_instances=63, var=0,**kwargs):
         super().__init__()
 
         self.with_auxiliary_head = False
@@ -33,6 +33,7 @@ class NewCRFDepth(nn.Module):
         self.max_depth = max_depth
         self.num_semantic_classes = num_semantic_classes
         self.num_instances = num_instances
+        self.var = var
 
         # Uncertainty
         self.predict_unc = predict_unc
@@ -126,7 +127,7 @@ class NewCRFDepth(nn.Module):
         elif self.update_block == 20: # Canonical - one scale per image and no projection segmentation
             self.hidden_dim = 128   #128
             self.context_dim = 96
-            self.update = RegressionInstancesSemanticNoMaskingCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances) 
+            self.update = RegressionInstancesSemanticNoMaskingCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var) 
         else:
             pass
 

@@ -209,7 +209,8 @@ def main_worker(gpu, ngpus_per_node, args):
     # Model #
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
-                        train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes, num_instances=num_instances)
+                        train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, 
+                        predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -329,6 +330,7 @@ def main_worker(gpu, ngpus_per_node, args):
             "num_semantic_classes": num_semantic_classes,
             "segmentation": args.segmentation,
             "instances": args.instances,
+            "var": args.var,
         }
 
         writer.add_hparams(hparam_dict=hparams, metric_dict={})
@@ -551,16 +553,16 @@ def main_worker(gpu, ngpus_per_node, args):
 
                                 if(len(valid_indexes) < max_vizualization):
                                     max_vizualization = len(valid_indexes)
-
+                                
                                 picked_items = random.sample(list(valid_indexes.detach().cpu().numpy()), max_vizualization)
-                                for j in picked_items:
+                                for idx, j in enumerate(picked_items):
                                     # Depth #
                                     for ii in range(max_tree_depth):
-                                        writer.add_image('depth_metric_est{}/image/{}/instance{}'.format(ii, i, j), 
+                                        writer.add_image('depth_metric_est{}/image/{}/instance{}'.format(ii, i, idx), 
                                                          colormap(torch.log10((pred_depths_instances_r_list[ii][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
                                     if args.update_block != 0:
                                         for ii in range(max_tree_depth):
-                                            writer.add_image('depth_canonical_est{}/image/{}/instance{}'.format(ii, i, j), 
+                                            writer.add_image('depth_canonical_est{}/image/{}/instance{}'.format(ii, i, idx), 
                                                               colormap(torch.log10((pred_depths_instances_rc_list[ii][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-5).unsqueeze(0).data), name='magma'), global_step)
                     elif args.segmentation:
                         for i in range(num_images):

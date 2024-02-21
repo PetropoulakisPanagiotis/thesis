@@ -369,7 +369,7 @@ class ToTensor(object):
             segmentation_map = torch.from_numpy(sample['segmentation_map'])
            
             instances_labels = torch.from_numpy(sample['instances_labels'])
-            zero_tensors = [-1 * torch.ones(1, dtype=torch.int32) for _ in range(num_zeros_needed)]
+            zero_tensors = [torch.zeros(1, dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_labels = torch.cat([instances_labels] + zero_tensors, dim=0)
 
             instances_bbox = torch.stack([torch.from_numpy(arr) for arr in sample['instances_bbox']])

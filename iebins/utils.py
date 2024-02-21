@@ -360,7 +360,7 @@ class D_to_cloud(nn.Module):
 
 
 def find_indexes_valid_instances(labels):
-    return torch.nonzero(labels!=-1).squeeze()
+    return torch.nonzero(labels!=0).squeeze()
 
 """Train parser"""
 train_parser = argparse.ArgumentParser(description='Scale PyTorch implementation.', fromfile_prefix_chars='@')
@@ -383,6 +383,7 @@ train_parser.add_argument('--min_depth',                 type=float, help='minim
 
 # Bins 
 train_parser.add_argument('--update_block',              type=int,   help='update block: iebins (0), canonical one scale per pixel (1),  with uncertainty prediction (from GRU) (2), # Canonical - one scale with uncertainty (from decoder) concatenation (3), Canonical. one scale per image (4)', default='1')
+train_parser.add_argument('--var',                       type=int,   help='Variation of instances block', default='0')
 train_parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
 train_parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 train_parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
