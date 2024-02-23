@@ -1,25 +1,10 @@
-bookstore/rgb_00098.jpg bookstore/sync_depth_00098.png
-bookstore/rgb_00109.jpg bookstore/sync_depth_00109.png
-bookstore/rgb_00104.jpg bookstore/sync_depth_00104.png
-bookstore/rgb_00101.jpg bookstore/sync_depth_00101.png
-bookstore/rgb_00099.jpg bookstore/sync_depth_00099.png
-bookstore/rgb_00105.jpg bookstore/sync_depth_00105.png
-bookstore/rgb_00091.jpg bookstore/sync_depth_00091.png
-bookstore/rgb_00100.jpg bookstore/sync_depth_00100.png
-bookstore/rgb_00115.jpg bookstore/sync_depth_00115.png
-bookstore/rgb_00103.jpg bookstore/sync_depth_00103.png
-bookstore/rgb_00094.jpg bookstore/sync_depth_00094.png
-bookstore/rgb_00095.jpg bookstore/sync_depth_00095.png
-bookstore/rgb_00106.jpg bookstore/sync_depth_00106.png
-bookstore/rgb_00112.jpg bookstore/sync_depth_00112.png
-bookstore/rgb_00102.jpg bookstore/sync_depth_00102.png
-bookstore/rgb_00092.jpg bookstore/sync_depth_00092.png
-bookstore/rgb_00093.jpg bookstore/sync_depth_00093.png
-bookstore/rgb_00107.jpg bookstore/sync_depth_00107.png
-bookstore/rgb_00096.jpg bookstore/sync_depth_00096.png
-bookstore/rgb_00113.jpg bookstore/sync_depth_00113.png
-bookstore/rgb_00110.jpg bookstore/sync_depth_00110.png
-bookstore/rgb_00114.jpg bookstore/sync_depth_00114.png
-bookstore/rgb_00097.jpg bookstore/sync_depth_00097.png
-bookstore/rgb_00108.jpg bookstore/sync_depth_00108.png
-bookstore/rgb_00111.jpg bookstore/sync_depth_00111.png
+office/rgb_00008.jpg office/sync_depth_00008.png 518.8579
+office/rgb_00013.jpg office/sync_depth_00013.png 518.8579
+office/rgb_00014.jpg office/sync_depth_00014.png 518.8579
+office/rgb_00015.jpg office/sync_depth_00015.png 518.8579
+office/rgb_00016.jpg office/sync_depth_00016.png 518.8579
+office/rgb_00017.jpg office/sync_depth_00017.png 518.8579
+office/rgb_00020.jpg office/sync_depth_00020.png 518.8579
+office/rgb_00027.jpg office/sync_depth_00027.png 518.8579
+office/rgb_00028.jpg office/sync_depth_00028.png 518.8579
+office/rgb_00029.jpg office/sync_depth_00029.png 518.8579
