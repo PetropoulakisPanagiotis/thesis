@@ -16,7 +16,7 @@ class NewCRFDepth(nn.Module):
     def __init__(self, version=None, pretrained=None, 
                     frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=6, 
                     bin_num=16, update_block=0, loss_type=0, train_decoder=0, 
-                    predict_unc=False, predict_unc_d3vo=False, num_semantic_classes=13, num_instances=63, var=0,**kwargs):
+                    predict_unc=False, predict_unc_d3vo=False, num_semantic_classes=14, num_instances=63, var=0,**kwargs):
         super().__init__()
 
         self.with_auxiliary_head = False

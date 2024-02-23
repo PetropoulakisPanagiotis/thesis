@@ -35,8 +35,6 @@
 
 --exp_name debug
 --update_block 20
---var 15
-
 --segmentation
 --instances
 
