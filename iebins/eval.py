@@ -4,6 +4,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 import torch
 import torch.backends.cudnn as cudnn
 
+import cv2
+
 from tensorboardX import SummaryWriter
 
 import argparse
@@ -13,8 +15,8 @@ from tqdm import tqdm
 
 from networks.NewCRFDepth import NewCRFDepth
 from networks.NewCRFDepth_exp import NewCRFDepth as NewCRFDepth_exp
-from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics,  \ 
-                  entropy_loss, colormap, block_print, enable_print, normalize_result, inv_normalize,  \ 
+from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, \
+                  entropy_loss, colormap, block_print, enable_print, normalize_result, inv_normalize, \
                   convert_arg_line_to_args, eval_parser, find_indexes_valid_instances, debug_result
 
 def convert_arg_line_to_args(arg_line):
@@ -216,6 +218,10 @@ def eval_func(model, dataloader_eval, post_process=False):
                     pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
                     if True: # Fair comparison
                         instances_mask = torch.sum(instances, dim=1)
+                        #tmp = instances_mask.permute(1,2,0)
+                        #cv2.imshow("instances_mapped_image", (tmp.cpu().numpy() * 255).astype('uint8'))
+                        #cv2.waitKey(0)
+                        #cv2.destroyAllWindows()
                         pred_depth = pred_depth * instances_mask
                         mask = instances_mask.unsqueeze(-1).to(torch.bool).cpu()
                         gt_depth = (gt_depth * mask)
