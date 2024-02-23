@@ -120,16 +120,10 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             pred_depth = pred_depth_uncropped
 
         # Filter depth #
-        if args.instances:
-            pred_depth[pred_depth < args.min_depth_eval] = 0
-            pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
-            pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
-            pred_depth[np.isnan(pred_depth)] = 0
-        else:
-            pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
-            pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
-            pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
-            pred_depth[np.isnan(pred_depth)] = args.min_depth_eval
+        pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
+        pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
+        pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
+        pred_depth[np.isnan(pred_depth)] = args.min_depth_eval
 
         valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
 
@@ -399,10 +393,6 @@ def main_worker(gpu, ngpus_per_node, args):
 
             if args.instances:
                 pred_depths_instances_rc_list = result["pred_depths_instances_rc_list"]
-                #print(torch.max(pred_depths_instances_rc_list[0]))
-                #print(torch.min(pred_depths_instances_rc_list[0]))
-                #print(torch.mean(pred_depths_instances_rc_list[0]))
-                #print(torch.std(pred_depths_instances_rc_list[0]))
                 pred_depths_instances_r_list = result["pred_depths_instances_r_list"]
 
                 pred_scale_instances_list = result["pred_scale_instances_list"]

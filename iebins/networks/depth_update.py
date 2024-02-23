@@ -587,6 +587,8 @@ class RegressionSemanticMasking(nn.Module):
         pred_depths_r_list.append(depth_r)
         
         result = {}
+        result["pred_depths_c_list"] = [] 
+        result["uncertainty_maps_list"] = []
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_scale_list"] = pred_scale_list
@@ -648,6 +650,8 @@ class RegressionSemanticNoMaskingSharedCanonical(nn.Module):
         pred_depths_r_list.append(depth_r)
         
         result = {}
+        result["pred_depths_c_list"] = [] 
+        result["uncertainty_maps_list"] = []
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_scale_list"] = pred_scale_list
@@ -708,6 +712,8 @@ class RegressionSemanticNoMaskingCanonical(nn.Module):
         pred_depths_r_list.append(depth_r)
         
         result = {}
+        result["pred_depths_c_list"] = [] 
+        result["uncertainty_maps_list"] = []
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_scale_list"] = pred_scale_list
@@ -769,6 +775,8 @@ class RegressionSemanticNoMaskingCanonicalConc(nn.Module):
         pred_depths_r_list.append(depth_r)
         
         result = {}
+        result["pred_depths_c_list"] = [] 
+        result["uncertainty_maps_list"] = []
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_scale_list"] = pred_scale_list
@@ -840,6 +848,8 @@ class RegressionSemanticNoMaskingCanonicalConcProj(nn.Module):
         pred_depths_r_list.append(depth_r)
         
         result = {}
+        result["pred_depths_c_list"] = [] 
+        result["uncertainty_maps_list"] = []
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_scale_list"] = pred_scale_list
@@ -925,6 +935,8 @@ class RegressionSemanticNoMaskingCanonicalConcProjMask(nn.Module):
         pred_depths_r_list.append(depth_r)
         
         result = {}
+        result["pred_depths_c_list"] = [] 
+        result["uncertainty_maps_list"] = []
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_scale_list"] = pred_scale_list
@@ -1346,6 +1358,8 @@ class RegressionConcact(nn.Module):
         pred_depths_r_list.append(depth_r)
 
         result = {}
+        result["pred_depths_c_list"] = [] 
+        result["uncertainty_maps_list"] = []
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_scale_list"] = pred_scale_list
@@ -1397,6 +1411,8 @@ class Regression(nn.Module):
         pred_depths_r_list.append(depth_r)
 
         result = {}
+        result["pred_depths_c_list"] = [] 
+        result["uncertainty_maps_list"] = []
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_scale_list"] = pred_scale_list

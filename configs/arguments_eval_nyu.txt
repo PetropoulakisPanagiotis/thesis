@@ -16,7 +16,6 @@
 --update_block 13
 --segmentation
 --loss_type 1
-
 --exp_name eval
 
 --bin_num 16
@@ -24,4 +23,4 @@
 --max_depth 1
 --max_tree_depth 1
 
---checkpoint_path /usr/stud/petp/code/thesis/tmp/masking/nyu/model-4500-best_d1_0.58076
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/seg-17/nyu/model-14800-best_silog_13.77915

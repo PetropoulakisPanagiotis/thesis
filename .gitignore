@@ -2,6 +2,7 @@
 tmp/
 models/
 helpers/nyu_depth_v2_labeled.mat
+iebins/eval/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

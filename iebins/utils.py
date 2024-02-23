@@ -362,6 +362,64 @@ class D_to_cloud(nn.Module):
 def find_indexes_valid_instances(labels):
     return torch.nonzero(labels!=0).squeeze()
 
+def debug_result(result, gt_depth):
+    if True: 
+        if True:
+            print("depth")
+            print(torch.max(result['pred_depths_r_list'][-1][0, :, :, :]))
+            print(torch.min(result['pred_depths_r_list'][-1][0, :, :, :]))
+        if True:
+            print("canonical")
+            print(torch.max(result['pred_depths_rc_list'][-1][:, :, :, :]))
+            print(torch.min(result['pred_depths_rc_list'][-1][:, :, :, :]))
+            print(torch.mean(result['pred_depths_rc_list'][-1][:, :, :, :]))
+            print(torch.std(result['pred_depths_rc_list'][-1][:, :, :, :]))
+        if False:
+            print("uncertainty (std)")
+            print(torch.max(result['uncertainty_maps_list'][-1][0, 0, :, :]))
+            print(torch.min(result['uncertainty_maps_list'][-1][0, 0, :, :]))
+            print(torch.mean(result['uncertainty_maps_list'][-1][0, 0, :, :]))
+            print(torch.std(result['uncertainty_maps_list'][-1][0, 0, :, :]))            
+        if True:
+            print("scale")
+            print(torch.max(result['pred_scale_list'][-1][:, :]))
+            print(torch.min(result['pred_scale_list'][-1][:, :]))
+            print(torch.mean(result['pred_scale_list'][-1][:, :]))
+            print(torch.std(result['pred_scale_list'][-1][:, :]))            
+        if True:
+            print("shift")
+            print(torch.max(result['pred_shift_list'][-1][:, :]))
+            print(torch.min(result['pred_shift_list'][-1][:, :]))
+            print(torch.mean(result['pred_shift_list'][-1][:, :]))
+            print(torch.std(result['pred_shift_list'][-1][:, :]))
+        if False:
+            print("unc_d3vo")
+            print(torch.max(result['unc_d3vo'][0, 0, :, :]))
+            print(torch.min(result['unc_d3vo'][0, 0, :, :]))
+            print(torch.mean(result['unc_d3vo'][0, 0, :, :]))
+            print(torch.std(result['unc_d3vo'][0, 0, :, :]))
+        if False:
+            print("sample")
+            print(result['pred_depths_r_list'][-1][0, 0, 120, 701])
+            print(result['unc_d3vo'][0, 0, 120, 701])
+            print(gt_depth[0, 120, 701, 0])
+        if False:
+            print("instances scale")
+            print(torch.max(result['pred_scale_instances_list'][-1][0, 0]))
+            print(torch.min(result['pred_scale_instances_list'][-1][0, 0]))
+            print(torch.mean(result['pred_scale_instances_list'][-1][0, 0]))
+            print(torch.std(result['pred_scale_instances_list'][-1][0, 0]))  
+            print("instances shift")
+            print(torch.max(result['pred_shift_instances_list'][-1][0, 0]))
+            print(torch.min(result['pred_shift_instances_list'][-1][0, 0]))
+            print(torch.mean(result['pred_shift_instances_list'][-1][0, 0]))
+            print(torch.std(result['pred_shift_instances_list'][-1][0, 0]))  
+            print("instances canonical")
+            print(torch.max(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
+            print(torch.min(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
+            print(torch.mean(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
+            print(torch.std(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
+
 """Train parser"""
 train_parser = argparse.ArgumentParser(description='Scale PyTorch implementation.', fromfile_prefix_chars='@')
 train_parser.convert_arg_line_to_args = convert_arg_line_to_args
@@ -450,6 +508,10 @@ eval_parser.add_argument('--encoder',                   type=str,   help='type o
 eval_parser.add_argument('--checkpoint_path',           type=str,   help='path to a checkpoint to load', default='')
 eval_parser.add_argument('--pretrain',                  type=str,   help='path of pretrained encoder', default=None)
 
+eval_parser.add_argument('--segmentation',              dest='segmentation', help='segmentation variation', action='store_true')
+eval_parser.add_argument('--instances',                 dest='instances', help='instances variation', action='store_true')
+eval_parser.add_argument('--var',                       type=int,   help='Variation of instances block', default='0')
+
 # Dataset
 eval_parser.add_argument('--dataset',                   type=str,   help='dataset to train on, kitti or nyu', default='nyu')
 eval_parser.add_argument('--input_height',              type=int,   help='input height', default=480)
@@ -463,8 +525,6 @@ eval_parser.add_argument('--max_tree_depth',            type=int,   help='max GR
 eval_parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 eval_parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
 eval_parser.add_argument('--predict_unc_d3vo',          dest='predict_unc_d3vo',help='True to predict uncertainty d3vo from the decoder', action='store_true')
-eval_parser.add_argument('--segmentation',              dest='segmentation',help='segmentation variation', action='store_true')
-eval_parser.add_argument('--instances',                 dest='instances', help='instances variation', action='store_true')
 
 # Preprocessing
 eval_parser.add_argument('--do_random_rotate',                      help='if set, will perform random rotation for augmentation', action='store_true')
