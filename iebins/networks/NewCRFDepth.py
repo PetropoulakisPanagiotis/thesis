@@ -129,7 +129,11 @@ class NewCRFDepth(nn.Module):
         elif self.update_block == 20: # Canonical - one scale per image and no projection segmentation
             self.hidden_dim = 128   #128
             self.context_dim = 96
-            self.update = RegressionInstancesSemanticNoMaskingCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var) 
+            self.update = RegressionInstancesSemanticNoMaskingCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var)         
+        elif self.update_block == 21: # Canonical - one scale per image and no projection segmentation
+            self.hidden_dim = 128   #128
+            self.context_dim = 96
+            self.update = RegressionInstancesAgnostic(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var)        
         else:
             pass
 
@@ -279,13 +283,13 @@ class NewCRFDepth(nn.Module):
 
         # Predict depth with GRU. context: early feature map and hidden: late feature map #
         if self.predict_unc == False and self.update_block != 3:
-            if (self.update_block >= 9 and self.update_block < 18) or self.update_block == 20:
+            if (self.update_block >= 9 and self.update_block < 18) or self.update_block == 20 or self.update_block == 21:
                 masks = upsample(masks, scale_factor=1/4)
                 if instances != None:
                     instances = upsample(instances, scale_factor=1/4)
                 if self.update_block != 11 and self.update_block != 13 and self.update_block != 14 and self.update_block != 16 and self.update_block != 17 and self.update_block != 18:
                     masks = (masks > 0.4).float()
-                if self.update_block == 20:
+                if self.update_block == 20 or self.update_block == 21:
                     result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks, instances, boxes, labels)
                 else:
                     result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks)
@@ -297,15 +301,15 @@ class NewCRFDepth(nn.Module):
 
         if self.up_mode == 'mask':
             for i in range(max_tree_depth):
-                if self.update_block != 20:
+                if self.update_block != 20 and self.update_block != 21:
                     result["pred_depths_r_list"][i] = self.upsample_mask(result["pred_depths_r_list"][i], mask)  
                     result["pred_depths_rc_list"][i] = self.upsample_mask(result["pred_depths_rc_list"][i], mask.detach())
                 
-                if self.update_block == 20:
+                if self.update_block == 20 or self.update_block == 21:
                     result["pred_depths_instances_r_list"][i] = self.upsample_mask(result["pred_depths_instances_r_list"][i], mask)  
                     result["pred_depths_instances_rc_list"][i] = self.upsample_mask(result["pred_depths_instances_rc_list"][i], mask.detach())
 
-                if self.update_block != 7 and self.update_block != 8 and self.update_block != 10 and self.update_block != 11 and self.update_block != 12 and self.update_block != 13 and self.update_block != 14 and self.update_block != 15 and self.update_block != 16 and self.update_block != 17 and self.update_block != 20:
+                if self.update_block != 7 and self.update_block != 8 and self.update_block != 10 and self.update_block != 11 and self.update_block != 12 and self.update_block != 13 and self.update_block != 14 and self.update_block != 15 and self.update_block != 16 and self.update_block != 17 and self.update_block != 20 and self.update_block != 21:
                     result["uncertainty_maps_list"][i] = self.upsample_mask(result["uncertainty_maps_list"][i], mask.detach())
                     result["pred_depths_c_list"][i] = self.upsample_mask(result["pred_depths_c_list"][i], mask.detach())
 
@@ -322,15 +326,15 @@ class NewCRFDepth(nn.Module):
         else:
             for i in range(max_tree_depth):
 
-                if self.update_block != 20:
+                if self.update_block != 20 and self.update_block != 21:
                     result["pred_depths_r_list"][i] = upsample(result["pred_depths_r_list"][i], scale_factor=4)
                     result["pred_depths_rc_list"][i] = upsample(result["pred_depths_rc_list"][i], scale_factor=4) 
 
-                if self.update_block == 20:
+                if self.update_block == 20 or self.update_block == 21:
                     result["pred_depths_instances_r_list"][i] = upsample(result["pred_depths_instances_r_list"][i], scale_factor=4)  
                     result["pred_depths_instances_rc_list"][i] = upsample(result["pred_depths_instances_rc_list"][i], scale_factor=4)
 
-                if self.update_block != 7 and self.update_block != 8 and self.update_block != 10 and self.update_block != 11 and self.update_block != 12 and self.update_block != 13 and self.update_block != 14 and self.update_block != 15 and self.update_block != 16 and self.update_block != 17 and self.update_block != 20:
+                if self.update_block != 7 and self.update_block != 8 and self.update_block != 10 and self.update_block != 11 and self.update_block != 12 and self.update_block != 13 and self.update_block != 14 and self.update_block != 15 and self.update_block != 16 and self.update_block != 17 and self.update_block != 20 and self.update_block != 21:
                     result["pred_depths_c_list"][i] = upsample(result["pred_depths_c_list"][i], scale_factor=4) 
                     result["uncertainty_maps_list"][i] = upsample(result["uncertainty_maps_list"][i], scale_factor=4) 
 

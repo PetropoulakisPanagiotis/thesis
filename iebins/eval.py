@@ -14,7 +14,6 @@ import random
 from tqdm import tqdm
 
 from networks.NewCRFDepth import NewCRFDepth
-from networks.NewCRFDepth_exp import NewCRFDepth as NewCRFDepth_exp
 from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, \
                   entropy_loss, colormap, block_print, enable_print, normalize_result, inv_normalize, \
                   convert_arg_line_to_args, eval_parser, find_indexes_valid_instances, debug_result
@@ -28,6 +27,10 @@ def convert_arg_line_to_args(arg_line):
 if sys.argv.__len__() == 2:
     arg_filename_with_prefix = '@' + sys.argv[1]
     args = eval_parser.parse_args([arg_filename_with_prefix])
+elif sys.argv.__len__() == 3:
+    arg_filename_with_prefix = '@' + sys.argv[1]
+    args = eval_parser.parse_args([arg_filename_with_prefix])
+    args.pick_class = torch.tensor(int(sys.argv[2]))
 else:
     args = eval_parser.parse_args()
 
@@ -185,13 +188,14 @@ def eval_func(model, dataloader_eval, post_process=False):
             if False:
                 debug_result(result, gt_depth)
 
-            # Tensorboard #
-            if args.instances:
-                tb_visualization(writer, step, gt_depth, image, result, args, instances=instances, segmentation_map=segmentation_map, labels=labels)
-            elif args.segmentation:
-                tb_visualization(writer, step, gt_depth, image, result, args, segmentation_map=segmentation_map)
-            else:
-                tb_visualization(writer, step, gt_depth, image, result, args)
+            if False:
+                # Tensorboard #
+                if args.instances:
+                    tb_visualization(writer, step, gt_depth, image, result, args, instances=instances, segmentation_map=segmentation_map, labels=labels)
+                elif args.segmentation:
+                    tb_visualization(writer, step, gt_depth, image, result, args, segmentation_map=segmentation_map)
+                else:
+                    tb_visualization(writer, step, gt_depth, image, result, args)
 
             # Unpack #            
             pred_depths_r_list = result["pred_depths_r_list"]
@@ -211,12 +215,25 @@ def eval_func(model, dataloader_eval, post_process=False):
                 pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
             else:
                 if args.instances:
+                    if args.pick_class != 0:    
+                        non_class = torch.nonzero(labels[0] != args.pick_class)
+                        if non_class.shape[0] == 63:
+                            continue
+                        
+                    instances[0, non_class] = torch.zeros_like(instances[0, non_class])
+                    instances_mask = torch.sum(instances, dim=1)
                     pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
                     mask = torch.sum(instances, dim=1).unsqueeze(-1).to(torch.bool).cpu()
                     gt_depth = (gt_depth * mask)
                 elif args.segmentation:
                     pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
                     if True: # Fair comparison
+                        if args.pick_class != 0:    
+                            non_class = torch.nonzero(labels[0] != args.pick_class)
+                            if non_class.shape[0] == 63:
+                                continue
+                            
+                        instances[0, non_class] = torch.zeros_like(instances[0, non_class])
                         instances_mask = torch.sum(instances, dim=1)
                         #tmp = instances_mask.permute(1,2,0)
                         #cv2.imshow("instances_mapped_image", (tmp.cpu().numpy() * 255).astype('uint8'))
@@ -258,7 +275,9 @@ def eval_func(model, dataloader_eval, post_process=False):
                     eval_mask[45:471, 41:601] = 1
 
             valid_mask = np.logical_and(valid_mask, eval_mask)
-           
+            if np.all(gt_depth[valid_mask] == 0):
+                continue
+ 
         measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
         eval_measures[:9] += torch.tensor(measures).cuda()
         eval_measures[9] += 1
@@ -287,14 +306,7 @@ def main_worker(args):
     # depth model
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
-                        predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes)
-    """
-    model = NewCRFDepth_exp(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
-                        max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
-                        pretrained=args.pretrain, predict_unc=args.predict_unc, 
-                        predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes, 
-                        num_instances=num_instances, var=args.var)
-    """
+                        predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])

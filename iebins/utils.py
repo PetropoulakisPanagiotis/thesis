@@ -545,3 +545,4 @@ eval_parser.add_argument('--eigen_crop',                            help='if set
 eval_parser.add_argument('--garg_crop',                             help='if set, crops according to Garg  ECCV16', action='store_true')
 
 eval_parser.add_argument('--loss_type',                 type=int,   help='0 for silog, 1 for l1, 2 for l1 and d3vo uncertainty', default=0)
+eval_parser.add_argument('--pick_class',                type=int,   help='Evaluate single class for debug', default=3)
