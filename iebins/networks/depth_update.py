@@ -1,5 +1,6 @@
 import copy
 
+import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -2537,12 +2538,57 @@ def roi_select_features(feature_map, box, labels, downsampling=4):
 
         row_mask = row_mask.unsqueeze(1).unsqueeze(-1)
         col_mask = col_mask.unsqueeze(1).unsqueeze(2)
-
         zeros_mask = torch.cat([torch.zeros_like(feature_map[i, :, :, :].unsqueeze(0)).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
         masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
 
         masked_feature_map = torch.cat([feature_map[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0) * masks
         
+        """
+        x = upsample(masked_feature_map, 4)
+        x = x[0, 0, :, :].unsqueeze(0).permute(1,2,0)
+        x = (x - torch.min(x))/(torch.max(x) - torch.min(x))
+        x = (x.cpu().detach().numpy() * 255).astype('uint8')
+        cv2.imshow("instances_mapped_ittmage", x)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        """
+        return masked_feature_map
+
+def roi_select_features_ag(feature_map, box, labels, downsampling=4):
+    # Can be more efficient to skip zero maps?
+    with torch.no_grad():
+        batch_size, i_dim = box.shape[0:2]
+        
+        height, width = feature_map.size(-2), feature_map.size(-1)
+        box_coordinates = box.view(batch_size * i_dim, 4)
+
+        instances_per_batch = torch.nonzero(labels != 0)
+        instances_per_batch = torch.bincount(instances_per_batch[:, 0])
+        
+        valid_boxes = labels.view(batch_size * i_dim, 1)
+        valid_boxes = torch.nonzero(valid_boxes != 0)
+
+        box_coordinates = box_coordinates[valid_boxes[:, 0]]
+        i_dim = box_coordinates.shape[0] 
+
+        box_coordinates = project_box_to_features(box_coordinates, downsampling)
+
+        ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
+
+        row_indices = torch.arange(height, device=feature_map.device).unsqueeze(0)
+        col_indices = torch.arange(width, device=feature_map.device).unsqueeze(0)
+
+        row_mask = (row_indices >= ymin) & (row_indices <= ymax)
+        col_mask = (col_indices >= xmin) & (col_indices <= xmax)
+
+        row_mask = row_mask.unsqueeze(1).unsqueeze(-1)
+        col_mask = col_mask.unsqueeze(1).unsqueeze(2)
+
+        zeros_mask = torch.cat([torch.zeros_like(feature_map[i, :, :, :].unsqueeze(0)).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
+        masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
+
+        masked_feature_map = torch.cat([torch.cat([feature_map[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) * masks[i], feature_map[i, :, :, :].unsqueeze(0).repeat(times,1,1,1)], dim=1) for i, times in enumerate(instances_per_batch)], dim=0)
+
         #x = upsample(masked_feature_map, 4)
         #x = x[0, 0, :, :].unsqueeze(0).permute(1,2,0)
         #x = (x - torch.min(x))/(torch.max(x) - torch.min(x))
@@ -2551,7 +2597,6 @@ def roi_select_features(feature_map, box, labels, downsampling=4):
         #cv2.waitKey(0)
         #cv2.destroyAllWindows()
         return masked_feature_map
-
 
 class SepConvGRU(nn.Module):
     def __init__(self, hidden_dim=128, input_dim=128+192):
