@@ -2838,16 +2838,18 @@ def roi_select_features_canonical_shared(feature_map, box, labels, downsampling=
 
                 row_mask = row_mask.unsqueeze(1).unsqueeze(-1)
                 col_mask = col_mask.unsqueeze(1).unsqueeze(2)
-                zeros_mask = torch.zeros_like(feature_map) 
-                masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
-                masked_feature_map = torch.cat([feature_map * torch.sum(masks[:instances_per_batch[i]], dim=0).unsqueeze(0) for i in range(instances_per_batch.shape[0])], dim=0)
-                feature_maps_final[:, class_i, :, :] = masked_feature_map
-                #masks = torch.sum(masks[:instances_per_batch[0]], dim=0).unsqueeze(0)
-                #masked_feature_map = feature_map * masks
-                #feature_maps_final[0, class_i, :, :] = masked_feature_map
 
-            if True: 
-                print(masked_feature_map.shape)
+                zeros_mask = torch.cat([torch.zeros_like(feature_map[i, :, :, :].unsqueeze(0)).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
+
+                instances_per_batch = torch.cat((torch.tensor([1]).to(labels.device), instances_per_batch))
+                instances_per_batch = torch.cumsum(instances_per_batch, dim=0)
+
+                masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
+                batches_masks = torch.cat([torch.sum(masks[instances_per_batch[i] - 1:instances_per_batch[i+1]], dim=0).unsqueeze(0) for i in range(instances_per_batch.shape[0] - 1)], dim=0)
+                masked_feature_map = feature_map * batches_masks
+                feature_maps_final[:, class_i, :, :] = masked_feature_map
+
+            if False: 
                 for i in range(masked_feature_map.shape[0]): 
                     x = upsample(masked_feature_map, 4)
                     x = x[i, 0, :, :].unsqueeze(0).permute(1,2,0)
@@ -2857,7 +2859,6 @@ def roi_select_features_canonical_shared(feature_map, box, labels, downsampling=
                     cv2.waitKey(0)
                     cv2.destroyAllWindows()
     
-        print(feature_maps_final.shape)
         return feature_maps_final
 
 def roi_select_features_ag(feature_map, box, labels, downsampling=4):
