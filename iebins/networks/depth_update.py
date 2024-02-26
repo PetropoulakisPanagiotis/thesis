@@ -1045,42 +1045,24 @@ class RegressionInstancesPerClassC(nn.Module):
         # Change boxes #
         gru_hidden_instances_roi = roi_select_features(gru_hidden_instances, boxes, labels)
         instances_scale_shift = self.instances_scale_and_shift(gru_hidden_instances_roi, boxes, labels)
-
+        instances_scale, instances_shift = pick_predictions_instances_scale(instances_scale_shift, labels)
 
         gru_hidden_instances_roi_canonical = roi_select_features_canonical_shared(gru_hidden_instances, boxes, labels)
         gru_hidden_instances_roi_canonical = gru_hidden_instances_roi_canonical.view(batch_size*(self.num_semantic_classes-1), hidd_size, h_hid, w_hid)
         instances_canonical = self.instances_canonical(gru_hidden_instances_roi_canonical)
-        instances_canonical = instances_canonical.view(batch_size*(self.num_semantic_classes-1)*(self.num_semantic_classes-1), h_hid, w_hid)
-        indexes = torch.tensor(range(0, batch_size*(self.num_semantic_classes-1)*(self.num_semantic_classes-1), self.num_semantic_classes-1)).to(labels.device)
-        instances_canonical = instances_canonical[indexes, :, :]
-        instances_canonical = instances_canonical.view(batch_size, self.num_semantic_classes-1, h_hid, w_hid) 
-        print(instances_canonical.shape)        
-        exit()
         
+        instances_canonical = instances_canonical.view(batch_size*(self.num_semantic_classes-1)*(self.num_semantic_classes-1), h_hid, w_hid)
+        instances_canonical = instances_canonical[torch.tensor(range(0, batch_size*(self.num_semantic_classes-1)*(self.num_semantic_classes-1), self.num_semantic_classes-1)).to(labels.device), :, :]
+        instances_canonical = instances_canonical.view(batch_size, self.num_semantic_classes-1, h_hid, w_hid) 
+        instances_canonical = instances_canonical.unsqueeze(1).repeat(1,i_dim, 1,1,1)
+        instances_canonical = instances_canonical.view(batch_size*i_dim,self.num_semantic_classes-1, h_hid, w_hid)
 
-        """
-        instances_canonical_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(labels.device) 
-        instances_scale_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(labels.device) 
-        instances_shift_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(labels.device) 
-
-            valid_boxes = labels.view(batch_size * i_dim, 1)
-            valid_boxes = torch.nonzero(valid_boxes == i + 1)
-            size_boxes_sq = valid_boxes.shape[0]
-            
-            gru_hidden_instances_roi_input = gru_hidden_instances_roi_input[torch.arange(size_boxes_sq), valid_boxes[:, 0]]
-            instances_scale_shift = self.instances_scale_and_shift(gru_hidden_instances_roi_input, boxes, labels)
-            instances_canonical = self.instances_canonical(gru_hidden, boxes, labels)
-
-
-            instances_shift_full[valid_boxes[:, 0]] = instances_scale
-            instances_scale_full[valid_boxes[:, 0]] = instances_shift
-            instances_canonical_full[valid_boxes[:, 0]] = instances_canonical 
-
-        canonical_full[valid_boxes[:,0]] = instances_canonical 
-        canonical_full = canonical_full.view(batch_size, i_dim, h, w)
-        instances_canonical = canonical_full
-        """
-
+        labels_fast = torch.where(labels == 0, 1, labels) 
+        labels_fast -= 1
+        labels_fast = labels_fast.view(batch_size*i_dim)
+        instances_canonical = instances_canonical[torch.arange(batch_size*i_dim), labels_fast]
+        instances_canonical = instances_canonical.view(batch_size, i_dim, h_hid, w_hid)
+ 
         pred_scale_instances_list.append(instances_scale)
         pred_shift_instances_list.append(instances_shift)
 
