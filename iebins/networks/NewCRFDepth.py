@@ -313,7 +313,7 @@ class NewCRFDepth(nn.Module):
 
         if self.up_mode == 'mask':
             for i in range(max_tree_depth):
-                if self.update_block < 20 or self.update_block == 24:
+                if self.update_block < 20:
                     result["pred_depths_r_list"][i] = self.upsample_mask(result["pred_depths_r_list"][i], mask)  
                     result["pred_depths_rc_list"][i] = self.upsample_mask(result["pred_depths_rc_list"][i], mask.detach())
                 
@@ -321,7 +321,7 @@ class NewCRFDepth(nn.Module):
                     result["pred_depths_instances_r_list"][i] = self.upsample_mask(result["pred_depths_instances_r_list"][i], mask)  
                     result["pred_depths_instances_rc_list"][i] = self.upsample_mask(result["pred_depths_instances_rc_list"][i], mask.detach())
 
-                if self.update_block != 7 and self.update_block != 8 and self.update_block != 10 and self.update_block != 11 and self.update_block != 12 and self.update_block != 13 and self.update_block != 14 and self.update_block != 15 and self.update_block != 16 and self.update_block != 17 and self.update_block != 20 and self.update_block != 21 and self.update_block != 22 and self.update_block != 23 and self.update_block != 24:
+                if self.update_block != 7 and self.update_block != 8 and self.update_block != 10 and self.update_block != 11 and self.update_block != 12 and self.update_block != 13 and self.update_block != 14 and self.update_block != 15 and self.update_block != 16 and self.update_block != 17 and self.update_block != 20 and self.update_block != 21 and self.update_block != 22 and self.update_block != 23:
                     result["uncertainty_maps_list"][i] = self.upsample_mask(result["uncertainty_maps_list"][i], mask.detach())
                     result["pred_depths_c_list"][i] = self.upsample_mask(result["pred_depths_c_list"][i], mask.detach())
 
@@ -346,7 +346,7 @@ class NewCRFDepth(nn.Module):
                     result["pred_depths_instances_r_list"][i] = upsample(result["pred_depths_instances_r_list"][i], scale_factor=4)  
                     result["pred_depths_instances_rc_list"][i] = upsample(result["pred_depths_instances_rc_list"][i], scale_factor=4)
 
-                if self.update_block != 7 and self.update_block != 8 and self.update_block != 10 and self.update_block != 11 and self.update_block != 12 and self.update_block != 13 and self.update_block != 14 and self.update_block != 15 and self.update_block != 16 and self.update_block != 17 and self.update_block != 20 and self.update_block != 21 and self.update_block != 22 and self.update_block != 23 and self.update_block != 24:
+                if self.update_block != 7 and self.update_block != 8 and self.update_block != 10 and self.update_block != 11 and self.update_block != 12 and self.update_block != 13 and self.update_block != 14 and self.update_block != 15 and self.update_block != 16 and self.update_block != 17 and self.update_block != 20 and self.update_block != 21 and self.update_block != 22 and self.update_block != 23:
                     result["pred_depths_c_list"][i] = upsample(result["pred_depths_c_list"][i], scale_factor=4) 
                     result["uncertainty_maps_list"][i] = upsample(result["uncertainty_maps_list"][i], scale_factor=4) 
 
