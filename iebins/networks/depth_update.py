@@ -1171,6 +1171,85 @@ class RegressionSemanticNoMaskingCanonicalConc(nn.Module):
 
         return result
 
+class UniformSemanticNoMaskingCanonicalConc(nn.Module):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14):
+        super(UniformSemanticNoMaskingCanonicalConc, self).__init__()
+        self.num_semantic_classes = num_semantic_classes
+        self.hidden_dim = hidden_dim
+        self.context_dim = context_dim
+        self.bin_num = bin_num
+        self.p_head = CRHead(hidden_dim + num_semantic_classes, hidden_dim, num_classes=(bin_num + 1) * (self.num_semantic_classes)) # 16 propabilities canonical
+        self.s_head = SSPHead(hidden_dim + num_semantic_classes, num_classes=self.num_semantic_classes)                 # Global scale and shift 
+
+        self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
+
+    def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth, masks):
+        """
+         depth:      is typically zeros #
+         context:    feature map from early layers 
+         gru_hidden: feature map from late layers  
+        """
+        pred_depths_r_list = []    # metric 
+        pred_depths_rc_list = []   # canonical
+
+        pred_scale_list = []
+        pred_shift_list = []
+
+        uncertainty_maps_list = []
+        pred_depths_c_list = [] 
+
+        b, _, h, w = depth.shape
+        
+        bins_map = get_uniform_bins(depth, min_depth, max_depth, bin_num)
+        bins_map = torch.cat([bins_map] * self.num_semantic_classes, dim=0)        
+        gru_hidden = torch.cat((gru_hidden, masks),dim=1)
+        pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
+        pred_scale = self.s_head(gru_hidden)       # b, 2*c
+       
+        pred_prob = pred_prob.view(b*self.num_semantic_classes,bin_num+1,h,w)
+        # revert back 
+        pred_scale_list.append(pred_scale[:, ::2])  # b, c
+        pred_shift_list.append(pred_scale[:, 1::2]) # b, c
+          
+        # Canonical
+        # b, 16*c, h, w - c*b, 16, h, w
+        # b*c, 16, h, w
+        depth_rc = (pred_prob * bins_map.detach()).sum(1, keepdim=True)
+
+        uncertainty_map = torch.sqrt((pred_prob * ((bins_map.detach() - depth_rc.repeat(1, bin_num+1, 1, 1))**2)).sum(1, keepdim=True))
+        uncertainty_map = uncertainty_map.view(b, self.num_semantic_classes,h,w)
+        uncertainty_maps_list.append(uncertainty_map)
+
+        # Label #
+        pred_label = get_label(torch.squeeze(depth_rc, 1), bins_map, bin_num).unsqueeze(1)
+        depth_c = torch.gather(bins_map.detach(), 1, pred_label.detach())
+        depth_c  = depth_c.view(b, self.num_semantic_classes, h, w)
+        pred_depths_c_list.append(depth_c)
+        
+        depth_rc = depth_rc.view(b, self.num_semantic_classes, h, w)
+        pred_depths_rc_list.append(depth_rc)
+        
+        # Metric
+        if self.loss_type == 0:
+            depth_r = (self.relu(depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+        else:
+            depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
+        
+        # depth_r: b, c, h, w
+        pred_depths_r_list.append(depth_r)
+        result = {}
+        
+        result["pred_depths_r_list"] = pred_depths_r_list
+        result["pred_depths_rc_list"] = pred_depths_rc_list
+        result["pred_scale_list"] = pred_scale_list
+        result["pred_shift_list"] = pred_shift_list
+        result["pred_depths_c_list"] = pred_depths_c_list
+        result["uncertainty_maps_list"] = uncertainty_maps_list
+
+        return result
+
+
 """
 Canonical space basic block: one scale per semantic class and instance 
 """
