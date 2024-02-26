@@ -442,6 +442,7 @@ train_parser.add_argument('--min_depth',                 type=float, help='minim
 # Bins 
 train_parser.add_argument('--update_block',              type=int,   help='update block: iebins (0), canonical one scale per pixel (1),  with uncertainty prediction (from GRU) (2), # Canonical - one scale with uncertainty (from decoder) concatenation (3), Canonical. one scale per image (4)', default='1')
 train_parser.add_argument('--var',                       type=int,   help='Variation of instances block', default='0')
+train_parser.add_argument('--padding_instances',         type=int,   help='How many pixels to padd for box instances', default='0')
 train_parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
 train_parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 train_parser.add_argument('--predict_unc',               dest='predict_unc',help='True to predict uncertainty from the decoder', action='store_true')
@@ -511,6 +512,7 @@ eval_parser.add_argument('--pretrain',                  type=str,   help='path o
 eval_parser.add_argument('--segmentation',              dest='segmentation', help='segmentation variation', action='store_true')
 eval_parser.add_argument('--instances',                 dest='instances', help='instances variation', action='store_true')
 eval_parser.add_argument('--var',                       type=int,   help='Variation of instances block', default='0')
+eval_parser.add_argument('--padding_instances',         type=int,   help='How many pixels to padd for box instances', default='0')
 
 # Dataset
 eval_parser.add_argument('--dataset',                   type=str,   help='dataset to train on, kitti or nyu', default='nyu')

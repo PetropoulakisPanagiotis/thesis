@@ -7,6 +7,8 @@ import torch.nn.functional as F
 
 from .utils import *
 
+padding_global = 0
+
 """
 IEBins metric depth implementation 
 """
@@ -661,7 +663,7 @@ class RegressionSemanticNoMaskingSharedCanonical(nn.Module):
         return result
 
 class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, feature_map_instances_dim=32, num_instances=63,var=0):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, feature_map_instances_dim=32, num_instances=63,var=0,padding_instances=0):
         super(RegressionInstancesSemanticNoMaskingCanonical, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -670,7 +672,9 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         self.num_instances = num_instances
         self.var = var
         self.project = ProjectionCustom(hidden_dim, 32, 128)
-      
+        self.padding_instances = padding_instances
+        padding_global = padding_instances
+  
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
         self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes-1)       
         if var == 1:
@@ -789,7 +793,7 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         return result
 
 class RegressionInstancesAgnostic(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, feature_map_instances_dim=32, num_instances=63,var=0):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, feature_map_instances_dim=32, num_instances=63,var=0, padding_instances=0):
         super(RegressionInstancesAgnostic, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -798,6 +802,9 @@ class RegressionInstancesAgnostic(nn.Module):
         self.num_instances = num_instances
         self.var = var
         self.project = ProjectionCustom(hidden_dim, 32, 128)
+   
+        self.padding_instances = padding_instances
+        padding_global = padding_instances
       
         self.instances_scale_and_shift = ROISelectScaleAgnostic(128, downsampling=4, num_semantic_classes=1)
         self.instances_canonical = ROISelectCanonicalAgnostic(128, 4, num_semantic_classes=1)       
@@ -896,7 +903,7 @@ class RegressionInstancesAgnostic(nn.Module):
         return result
 
 class RegressionInstancesSharedCanonical(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, feature_map_instances_dim=32, num_instances=63,var=0):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, feature_map_instances_dim=32, num_instances=63,var=0, padding_instances=0):
         super(RegressionInstancesSharedCanonical, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -905,6 +912,9 @@ class RegressionInstancesSharedCanonical(nn.Module):
         self.num_instances = num_instances
         self.var = var
         self.project = ProjectionCustom(hidden_dim, 32, 128)
+        self.padding_instances = padding_instances
+
+        padding_global = padding_instances
       
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
         self.instances_canonical = ROISelectSharedCanonical(128, 4, num_semantic_classes=1)       
@@ -1001,7 +1011,7 @@ class RegressionInstancesSharedCanonical(nn.Module):
 
 
 class RegressionInstancesPerClassC(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, feature_map_instances_dim=32, num_instances=63,var=0):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, feature_map_instances_dim=32, num_instances=63,var=0, padding_instances=0):
         super(RegressionInstancesPerClassC, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -1010,6 +1020,8 @@ class RegressionInstancesPerClassC(nn.Module):
         self.num_instances = num_instances
         self.var = var
         self.project = ProjectionCustom(hidden_dim, 32, 128)
+        self.padding_instances = padding_instances
+        padding_global = padding_instances
       
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
         self.instances_canonical = ROISelectCanonicalClass(128, 4, num_semantic_classes=self.num_semantic_classes-1)
@@ -2840,10 +2852,21 @@ def normalize_box_v2(box, height=480, width=640):
 	                        (box[:, 2] / height).float(), 
 	                        (box[:, 3] / width).float()), dim=1)
 
-def project_box_to_features(box, downsampling):
+def project_box_to_features(box, downsampling, height=480, width=640, padding=0):
     with torch.no_grad():
-        return torch.ceil(box / downsampling).int()
-   
+        if padding == 0:
+            return torch.ceil(box / downsampling).int()
+        else:
+            new_box = torch.ceil(box / downsampling).int()
+            height /= downsampling
+            width /= downsampling
+            padding = padding_global
+            return torch.stack((torch.max(0, new_box[:, 0] - padding).float(), 
+                                torch.max(0, new_box[:, 1] - padding).float(), 
+	                            torch.min(height - 1, new_box[:, 2] + padding).float(), 
+	                            torch.min(width - 1, new_box[:, 3] + padding).float()), dim=1)
+
+
 def roi_select_features(feature_map, box, labels, downsampling=4):
     # Can be more efficient to skip zero maps?
     with torch.no_grad():

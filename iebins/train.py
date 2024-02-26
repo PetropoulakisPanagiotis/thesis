@@ -204,7 +204,7 @@ def main_worker(gpu, ngpus_per_node, args):
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
                         train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, 
-                        predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var)
+                        predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, padding_instances=args.padding_instances)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -326,6 +326,7 @@ def main_worker(gpu, ngpus_per_node, args):
             "segmentation": args.segmentation,
             "instances": args.instances,
             "var": args.var,
+            "padding_instances": args.padding_instances,
         }
 
         writer.add_hparams(hparam_dict=hparams, metric_dict={})
