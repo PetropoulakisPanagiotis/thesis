@@ -1012,7 +1012,7 @@ class RegressionInstancesPerClassC(nn.Module):
         self.project = ProjectionCustom(hidden_dim, 32, 128)
       
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-        self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes-1)
+        self.instances_canonical = ROISelectCanonicalClass(128, 4, num_semantic_classes=self.num_semantic_classes-1)
 
         #self.p_head = CRHead(hidden_dim, hidden_dim, num_classes=self.num_semantic_classes) 
         #self.s_head = SSPHead(hidden_dim, num_classes=self.num_semantic_classes)                 
@@ -1042,16 +1042,27 @@ class RegressionInstancesPerClassC(nn.Module):
         gru_hidden_instances = gru_hidden
         hidd_size, h_hid, w_hid = gru_hidden_instances.shape[1:]
 
-
         # Change boxes #
         gru_hidden_instances_roi = roi_select_features(gru_hidden_instances, boxes, labels)
-        gru_hidden_instances_roi_canonical = roi_select_features_canonical_shared(gru_hidden_instances, boxes, labels)
+        instances_scale_shift = self.instances_scale_and_shift(gru_hidden_instances_roi, boxes, labels)
 
+
+        gru_hidden_instances_roi_canonical = roi_select_features_canonical_shared(gru_hidden_instances, boxes, labels)
+        gru_hidden_instances_roi_canonical = gru_hidden_instances_roi_canonical.view(batch_size*(self.num_semantic_classes-1), hidd_size, h_hid, w_hid)
+        instances_canonical = self.instances_canonical(gru_hidden_instances_roi_canonical)
+        instances_canonical = instances_canonical.view(batch_size*(self.num_semantic_classes-1)*(self.num_semantic_classes-1), h_hid, w_hid)
+        indexes = torch.tensor(range(0, batch_size*(self.num_semantic_classes-1)*(self.num_semantic_classes-1), self.num_semantic_classes-1)).to(labels.device)
+        instances_canonical = instances_canonical[indexes, :, :]
+        instances_canonical = instances_canonical.view(batch_size, self.num_semantic_classes-1, h_hid, w_hid) 
+        print(instances_canonical.shape)        
+        exit()
+        
+
+        """
         instances_canonical_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(labels.device) 
         instances_scale_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(labels.device) 
         instances_shift_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(labels.device) 
 
-        for i in range(self.num_semantic_classes - 1):
             valid_boxes = labels.view(batch_size * i_dim, 1)
             valid_boxes = torch.nonzero(valid_boxes == i + 1)
             size_boxes_sq = valid_boxes.shape[0]
@@ -1068,6 +1079,7 @@ class RegressionInstancesPerClassC(nn.Module):
         canonical_full[valid_boxes[:,0]] = instances_canonical 
         canonical_full = canonical_full.view(batch_size, i_dim, h, w)
         instances_canonical = canonical_full
+        """
 
         pred_scale_instances_list.append(instances_scale)
         pred_shift_instances_list.append(instances_shift)
@@ -2517,6 +2529,19 @@ class ROISelectCanonical(nn.Module):
         
         return out
 
+class ROISelectCanonicalClass(nn.Module):
+    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+        super(ROISelectCanonicalClass, self).__init__()
+              
+        self.canonical_head = CRIHead(input_dim, hidden_dim=128, num_classes=num_semantic_classes)
+        self.downsampling = downsampling   
+        self.num_semantic_classes = num_semantic_classes
+        self.input_dim = input_dim
+
+    def forward(self, x):
+        out = self.canonical_head(x)
+        return out
+
 class ROISelectSharedCanonical(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
         super(ROISelectSharedCanonical, self).__init__()
@@ -2809,7 +2834,7 @@ def roi_select_features_canonical_shared(feature_map, box, labels, downsampling=
         
         batch_size, i_dim = box.shape[0:2]
         height, width = feature_map.size(-2), feature_map.size(-1)
-        feature_maps_final = torch.zeros((batch_size, 13, feature_map.shape[1], height, width))
+        feature_maps_final = torch.zeros((batch_size, 13, feature_map.shape[1], height, width)).to(labels.device)
         
         for class_i in range(13):
             i_dim = box.shape[1]

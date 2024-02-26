@@ -19,7 +19,7 @@ import numpy as np
 from tqdm import tqdm
 
 from networks.NewCRFDepth_exp import NewCRFDepth
-from networks.depth_update import *
+from networks.depth_update_exp import *
 from datetime import datetime
 from utils import post_process_depth, flip_lr, silog_loss, l1_loss, l1_d3vo_loss, compute_errors, compute_errors_uncertainty, \
                     eval_metrics, entropy_loss, colormap, \
