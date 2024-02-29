@@ -673,6 +673,7 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         self.var = var
         self.project = ProjectionCustom(hidden_dim, 32, 128)
         self.padding_instances = padding_instances
+        global padding_global
         padding_global = padding_instances
   
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
@@ -768,12 +769,16 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
             depth_instances_r = (self.relu(instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
         else:
             #depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
+            depth_instances_r = instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1)
+            """
             if self.var == 8:
                 depth_instances_r = instances_canonical * 50 * F.sigmoid(instances_scale.unsqueeze(-1).unsqueeze(-1)) + instances_shift.unsqueeze(-1).unsqueeze(-1)
             elif self.var == 9 or self.var == 13 or self.var == 14 or self.var == 15:
                 depth_instances_r = instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1)
             else:
                 depth_instances_r = instances_canonical * 20 * F.sigmoid(instances_scale.unsqueeze(-1).unsqueeze(-1)) + instances_shift.unsqueeze(-1).unsqueeze(-1)
+                depth_instances_r = instances_canonical * 20 * F.sigmoid(instances_scale.unsqueeze(-1).unsqueeze(-1)) + instances_shift.unsqueeze(-1).unsqueeze(-1)
+            """
        
         # depth_r: b, c, h, w
         #pred_depths_r_list.append(depth_r)
@@ -804,6 +809,7 @@ class RegressionInstancesAgnostic(nn.Module):
         self.project = ProjectionCustom(hidden_dim, 32, 128)
    
         self.padding_instances = padding_instances
+        global padding_global
         padding_global = padding_instances
       
         self.instances_scale_and_shift = ROISelectScaleAgnostic(128, downsampling=4, num_semantic_classes=1)
@@ -913,7 +919,7 @@ class RegressionInstancesSharedCanonical(nn.Module):
         self.var = var
         self.project = ProjectionCustom(hidden_dim, 32, 128)
         self.padding_instances = padding_instances
-
+        global padding
         padding_global = padding_instances
       
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
@@ -2345,8 +2351,8 @@ class ROISelectScale(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
         super(ROISelectScale, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1) # First preprocess ROI map 
-        self.pool = nn.AdaptiveAvgPool2d(120)
-        self.fc1 = nn.Linear((120*120) + 4, 2*num_semantic_classes) # Scale and shift 
+        self.pool = nn.AdaptiveAvgPool2d(70) # 120
+        self.fc1 = nn.Linear((70*70) + 4, 2*num_semantic_classes) # Scale and shift 
         
         self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
@@ -2380,8 +2386,8 @@ class ROISelectScaleAgnostic(nn.Module):
         super(ROISelectScaleAgnostic, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, 128, 3, padding=1) # First preprocess ROI map 
         self.conv2 = nn.Conv2d(128, 1, 3, padding=1) # First preprocess ROI map 
-        self.pool = nn.AdaptiveAvgPool2d(120)
-        self.fc1 = nn.Linear((120*120) + 4, 2*num_semantic_classes) # Scale and shift 
+        self.pool = nn.AdaptiveAvgPool2d(70)
+        self.fc1 = nn.Linear((70*70) + 4, 2*num_semantic_classes) # Scale and shift 
         
         self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
@@ -2577,7 +2583,7 @@ class ROISelectCanonical(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
         super(ROISelectCanonical, self).__init__()
               
-        self.canonical_head = CRIHead(input_dim+4, hidden_dim=128, num_classes=num_semantic_classes)
+        self.canonical_head = CRIHead(input_dim+4, hidden_dim=128, num_classes=num_semantic_classes) #128
         self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
@@ -2853,6 +2859,7 @@ def normalize_box_v2(box, height=480, width=640):
 	                        (box[:, 3] / width).float()), dim=1)
 
 def project_box_to_features(box, downsampling, height=480, width=640, padding=0):
+    padding = padding_global
     with torch.no_grad():
         if padding == 0:
             return torch.ceil(box / downsampling).int()
@@ -2860,11 +2867,14 @@ def project_box_to_features(box, downsampling, height=480, width=640, padding=0)
             new_box = torch.ceil(box / downsampling).int()
             height /= downsampling
             width /= downsampling
-            padding = padding_global
-            return torch.stack((torch.max(0, new_box[:, 0] - padding).float(), 
-                                torch.max(0, new_box[:, 1] - padding).float(), 
-	                            torch.min(height - 1, new_box[:, 2] + padding).float(), 
-	                            torch.min(width - 1, new_box[:, 3] + padding).float()), dim=1)
+            new_box = torch.stack((
+                (new_box[:, 0]-padding).clamp(min=0).int(), 
+                (new_box[:, 1]-padding).clamp(min=0).int(), 
+                (new_box[:, 2]+padding).clamp(max=height-1).int(), 
+                (new_box[:, 3]+padding).clamp(max=width-1).int()), dim=1)
+            return new_box 
+
+
 
 
 def roi_select_features(feature_map, box, labels, downsampling=4):

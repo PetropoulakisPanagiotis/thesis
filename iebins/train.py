@@ -703,6 +703,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
 def main():
     torch.cuda.empty_cache()
+    torch.cuda.empty_cache()
     gc.collect()
     if args.mode != 'train':
         print('train.py is only for training.')

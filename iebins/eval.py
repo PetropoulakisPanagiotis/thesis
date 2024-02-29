@@ -5,7 +5,7 @@ import torch
 import torch.backends.cudnn as cudnn
 
 import cv2
-
+import matplotlib.pyplot as plt
 from tensorboardX import SummaryWriter
 
 import argparse
@@ -171,7 +171,8 @@ def eval_func(model, dataloader_eval, post_process=False):
                 instances = torch.autograd.Variable(eval_sample_batched['instances_masks'].cuda())
                 boxes = torch.autograd.Variable(eval_sample_batched['instances_bbox'].cuda())
                 labels = torch.autograd.Variable(eval_sample_batched['instances_labels'].cuda())
-
+                instances_areas = torch.autograd.Variable(eval_sample_batched['instances_areas'].cuda())
+            
             has_valid_depth = eval_sample_batched['has_valid_depth']
             if not has_valid_depth:
                 print('Invalid depth. continue.')
@@ -260,7 +261,9 @@ def eval_func(model, dataloader_eval, post_process=False):
         pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
         pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
         pred_depth[np.isnan(pred_depth)] = args.min_depth_eval
-        valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
+        valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < 3.0)
+        #valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
+        #valid_mask = np.logical_and(gt_depth >= 5.0, gt_depth < args.max_depth_eval)
 
         if args.garg_crop or args.eigen_crop:
             gt_height, gt_width = gt_depth.shape
@@ -275,9 +278,24 @@ def eval_func(model, dataloader_eval, post_process=False):
                     eval_mask[45:471, 41:601] = 1
 
             valid_mask = np.logical_and(valid_mask, eval_mask)
-            if np.all(gt_depth[valid_mask] == 0):
+            if np.all(gt_depth[valid_mask] == 0) or len(gt_depth[valid_mask]) == 1:
                 continue
- 
+        if False:
+            # Calculate depth errors
+            depth_errors = np.abs(gt_depth[valid_mask] - pred_depth[valid_mask])
+            depth_errors = depth_errors[0:500]
+            print(np.mean(depth_errors))
+            print(np.max(depth_errors))
+            # Plot depth errors over ground truth depth
+            plt.figure(figsize=(8, 6))
+            plt.scatter(gt_depth[valid_mask][0:500], depth_errors, color='blue', marker='o')
+            #plt.plot(gt_depth[valid_mask][0:100], color='blue', marker='o')
+            plt.title('Depth Error over Ground Truth Depth')
+            plt.ylabel('Depth Error')
+            plt.xlabel('Distance')
+            plt.grid(True)
+            plt.show()
+
         measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
         eval_measures[:9] += torch.tensor(measures).cuda()
         eval_measures[9] += 1

@@ -218,6 +218,7 @@ class DataLoadPreprocess(Dataset):
             sample['segmentation_map'] = segmentation_map
             sample['instances_labels'] = instances_labels
             sample['instances_bbox'] = instances_bbox
+            sample['instances_areas'] = instances_areas
         
         if self.transform:
             sample = self.transform([sample, self.args.dataset])
@@ -376,6 +377,10 @@ class ToTensor(object):
             zero_tensors = [torch.zeros((1, 4), dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_bbox = torch.cat([instances_bbox] + zero_tensors, dim=0)
 
+            instances_areas = torch.stack([torch.from_numpy(np.asarray([arr])) for arr in sample['instances_areas']])
+            zero_tensors = [torch.zeros((1, 1), dtype=torch.int32) for _ in range(num_zeros_needed)]
+            instances_areas = torch.cat([instances_areas] + zero_tensors, dim=0)
+
             if self.mode == 'test':
                 return {'image': image, 'inv_K_p': inv_K_p, 'focal': focal}
 
@@ -384,12 +389,12 @@ class ToTensor(object):
                 depth = self.to_tensor(depth)
 
                 return {'image': image, 'depth': depth, 'focal': focal, 'instances_masks': instances_masks, 'segmentation_map': segmentation_map, 'instances_labels': instances_labels,
-                        'instances_bbox': instances_bbox
+                        'instances_bbox': instances_bbox, 'instances_areas': instances_areas,
                         }
             else:
                 has_valid_depth = sample['has_valid_depth']
                 return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth, 'instances_masks': instances_masks, 'segmentation_map': segmentation_map, 'instances_labels': instances_labels,
-                        'instances_bbox': instances_bbox
+                        'instances_bbox': instances_bbox, 'instances_areas': instances_areas,
                         }
         else:
             if self.mode == 'test':
@@ -467,9 +472,8 @@ def load_annotations(json_file_path):
         bounding_boxes_list.append(bbox)
 
         # Unpack area
-        area = annotation.get("area", 0)
+        area = annotation.get("area", [])
         areas_list.append(area)
-
     return instances, labels_map, np.array(labels), np.asarray(bounding_boxes_list, dtype=np.int32), np.asarray(areas_list, dtype=np.int32), num_semantic_classes
 
 def create_one_hot_mask_np(label_map, num_classes):
