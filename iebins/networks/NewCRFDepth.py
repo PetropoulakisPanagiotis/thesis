@@ -138,7 +138,7 @@ class NewCRFDepth(nn.Module):
         elif self.update_block == 22: # Canonical - one scale per image and no projection segmentation
             self.hidden_dim = 128     #128
             self.context_dim = 96
-            self.update = RegressionInstancesSharedCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=vari, padding_instances=self.padding_instances)        
+            self.update = RegressionInstancesSharedCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
         elif self.update_block == 23: # Canonical - one scale per image and no projection segmentation
             self.hidden_dim = 128   #128
             self.context_dim = 96

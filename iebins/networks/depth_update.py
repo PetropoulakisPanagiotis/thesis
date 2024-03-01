@@ -956,8 +956,11 @@ class RegressionInstancesSharedCanonical(nn.Module):
 
         # Change boxes #
         gru_hidden_instances_roi = roi_select_features(gru_hidden_instances, boxes, labels) 
-
         instances_scale_shift = self.instances_scale_and_shift(gru_hidden_instances_roi, boxes, labels)
+        instances_scale, instances_shift = pick_predictions_instances_scale(instances_scale_shift, labels)
+        pred_scale_instances_list.append(instances_scale)
+        pred_shift_instances_list.append(instances_shift)
+
         instances_canonical = self.instances_canonical(gru_hidden, boxes, labels)
         valid_boxes = labels.view(batch_size * i_dim, 1)
         valid_boxes = torch.nonzero(valid_boxes != 0)
@@ -966,11 +969,6 @@ class RegressionInstancesSharedCanonical(nn.Module):
         canonical_full[valid_boxes[:,0]] = instances_canonical 
         canonical_full = canonical_full.view(batch_size, i_dim, h, w)
         instances_canonical = canonical_full
-
-        instances_scale, instances_shift = pick_predictions_instances_scale(instances_scale_shift, labels)
-        pred_scale_instances_list.append(instances_scale)
-        pred_shift_instances_list.append(instances_shift)
-
         pred_depths_instances_rc_list.append(instances_canonical)
     
         #pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
@@ -2639,14 +2637,15 @@ class ROISelectSharedCanonical(nn.Module):
         valid_boxes = labels.view(b * i, 1)
         valid_boxes = torch.nonzero(valid_boxes != 0)
         boxes_tmp = boxes_tmp[valid_boxes[:, 0]]
-        i, _ = boxes_tmp.shape
+        i_dim, _ = boxes_tmp.shape
 
-        boxes_tmp = project_box_to_features(boxes_tmp, self.downsampling)
-        normalized_box = normalize_box_v2(boxes_tmp, height=h, width=w)
-        normalized_box = normalized_box.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, h, w)
+        instances_per_batch = torch.nonzero(labels != 0)
+        instances_per_batch = torch.bincount(instances_per_batch[:, 0])
+
         out = self.canonical_head(x)
-        out = torch.cat([out] * i, dim=0)
-        out = out.view(i, 1, h, w)
+        out = torch.cat([out[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
+        #out = torch.cat([out] * i_dim, dim=0)
+        out = out.view(i_dim, 1, h, w)
         
         return out
 
