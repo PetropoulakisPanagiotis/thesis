@@ -8,8 +8,9 @@ import torch.nn.utils as utils
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
-import cv2
+
 import random
+import cv2
 
 from tensorboardX import SummaryWriter
 
@@ -19,7 +20,7 @@ import numpy as np
 from tqdm import tqdm
 
 from networks.NewCRFDepth_exp import NewCRFDepth
-from networks.depth_update_exp import *
+from networks.depth_update import *
 from datetime import datetime
 from utils import post_process_depth, flip_lr, silog_loss, l1_loss, l1_d3vo_loss, compute_errors, compute_errors_uncertainty, \
                     eval_metrics, entropy_loss, colormap, \
@@ -32,7 +33,7 @@ else:
     args = train_parser.parse_args()
 
 if args.dataset == 'kitti' or args.dataset == 'nyu' or args.dataset == 'nyud':
-    from dataloaders.dataloader import NewDataLoader
+    from dataloaders.dataloader_exp import NewDataLoader
 
 def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, post_process=False):
     measures_size = 10
@@ -56,7 +57,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                 continue
 
             # Predict #
-            if args.update_block >= 9 and args.update_block < 18 or args.update_block == 20:
+            if args.update_block >= 9 and args.update_block < 18 or args.update_block >= 20:
                 if args.instances:
                     result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
                 else:
@@ -82,10 +83,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                     result = model(image_flipped, masks = segmentation_map_flipped)
                 else:
                     result = model(image_flipped)
-        
                 pred_depths_r_list_flipped = result["pred_depths_r_list"]
-                if args.instances: ### fix aggregation after
-                    pred_depths_r_list_flipped = result["pred_depths_instances_r_list"] 
 
                 if args.segmentation:
                     pred_depth = post_process_depth(torch.sum((pred_depths_r_list[-1] * segmentation_map_flipped), dim=1).unsqueeze(0), torch.sum((pred_depths_r_list_flipped[-1] * segmentation_map), dim=1).unsqueeze(0))
@@ -184,6 +182,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
 
 def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
+
     if args.gpu is not None:
         print("== Use GPU: {} for training".format(args.gpu))
     
@@ -193,18 +192,19 @@ def main_worker(gpu, ngpus_per_node, args):
         if args.multiprocessing_distributed:
             args.rank = args.rank * ngpus_per_node + gpu
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
-    
+
     # Dataloaders #
     dataloader = NewDataLoader(args, 'train')
     dataloader_eval = NewDataLoader(args, 'online_eval')
     num_semantic_classes = dataloader.num_semantic_classes
     num_semantic_classes = 14
     num_instances = 63
+ 
     # Model #
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
                         train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, 
-                        predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var)
+                        predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, padding_instances=args.padding_instances)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -227,6 +227,7 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         model = torch.nn.DataParallel(model)
         model.cuda()
+
     if args.distributed:
         print("== Model Initialized on GPU: {}".format(args.gpu))
     else:
@@ -325,6 +326,7 @@ def main_worker(gpu, ngpus_per_node, args):
             "segmentation": args.segmentation,
             "instances": args.instances,
             "var": args.var,
+            "padding_instances": args.padding_instances,
         }
 
         writer.add_hparams(hparam_dict=hparams, metric_dict={})
@@ -376,7 +378,7 @@ def main_worker(gpu, ngpus_per_node, args):
             num_images = image.shape[0]
             
             # Predict #            
-            if args.update_block >= 9 and args.update_block < 18 or args.update_block == 20:
+            if args.update_block >= 9 and args.update_block < 18 or args.update_block >= 20:
                 if args.instances:
                     result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
                 else:
@@ -387,10 +389,10 @@ def main_worker(gpu, ngpus_per_node, args):
             # Unpack #            
             pred_depths_r_list = result["pred_depths_r_list"]
             max_tree_depth = len(pred_depths_r_list)
-            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20:
+            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11 and args.update_block != 12 and args.update_block != 13 and args.update_block != 14 and args.update_block != 15 and \
+               args.update_block != 16 and args.update_block != 17 and args.update_block != 20 and args.update_block != 21 and args.update_block != 22 and args.update_block != 23 and args.update_block != 25:            
                 pred_depths_c_list = result["pred_depths_c_list"]
                 uncertainty_maps_list = result["uncertainty_maps_list"]
-
             if args.instances:
                 pred_depths_instances_rc_list = result["pred_depths_instances_rc_list"]
                 pred_depths_instances_r_list = result["pred_depths_instances_r_list"]
@@ -403,11 +405,11 @@ def main_worker(gpu, ngpus_per_node, args):
                 #print(pred_shift_instances_list[0][non_zero_idx[:,0], non_zero_idx[:,1]].detach().cpu().numpy())
                 #print(pred_scale_instances_list[0].detach().cpu().numpy())
                 #print(pred_shift_instances_list[0].detach().cpu().numpy())
-
+            
             # Canonical #
             if args.update_block != 0:
                 pred_depths_rc_list = result["pred_depths_rc_list"]
-
+            
             # uncertainty (GRU)
             if args.update_block == 2:
                 pred_depths_u_list = result["pred_depths_u_list"]
@@ -517,7 +519,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     writer.add_scalar('learning_rate', current_lr, global_step)
                     writer.add_scalar('var_average', var_sum.item()/var_cnt, global_step)
                     depth_gt = torch.where(depth_gt < 1e-3, depth_gt * 0 + 1e-3, depth_gt)
-                    
+           
                     if args.instances:
                         for i in range(num_images):
                             writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
@@ -526,7 +528,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                 writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), 
                                                  colormap(torch.log10(torch.sum(pred_depths_instances_r_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
 
-                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20:
+                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20 and args.update_block != 21 and args.update_block != 22 and args.update_block != 23 and args.update_block != 24 and args.update_block != 25:
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
                                                      colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
@@ -562,7 +564,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                 writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), 
                                                  colormap(torch.log10(torch.sum(pred_depths_r_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
                             
-                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20:
+                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11 and args.update_block != 12 and args.update_block != 13 and args.update_block != 14 and args.update_block != 15 and args.update_block != 16 and args.update_block != 17:            
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
                                                      colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
@@ -579,10 +581,16 @@ def main_worker(gpu, ngpus_per_node, args):
                                     for ii in range(max_tree_depth):
                                         writer.add_image('depth_metric_est{}/image/{}/class{}'.format(ii, i, j), 
                                                          colormap(torch.log10((pred_depths_r_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
+                                    for ii in range(max_tree_depth):
+                                        writer.add_image('depth_labels_est{}/image/{}/class{}'.format(ii, i, j), 
+                                                         colormap(torch.log10((pred_depths_c_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
                                     if args.update_block != 0:
                                         for ii in range(max_tree_depth):
                                             writer.add_image('depth_canonical_est{}/image/{}/class{}'.format(ii, i, j), 
                                                               colormap(torch.log10((pred_depths_rc_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-5).unsqueeze(0).data), name='magma'), global_step)
+                                    for ii in range(max_tree_depth):
+                                        writer.add_image('uncer_bins_est{}/image/{}/class{}'.format(ii, i, j), 
+                                                         colormap((uncertainty_maps_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), global_step)
                     else:
                         for i in range(num_images):
                             writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
@@ -590,8 +598,7 @@ def main_worker(gpu, ngpus_per_node, args):
                             writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
                             for ii in range(max_tree_depth):
                                 writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), global_step)
-                            
-                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20:
+                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11 and args.update_block != 12 and args.update_block != 13 and args.update_block != 14 and args.update_block != 15 and args.update_block != 16 and args.update_block != 17:            
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_labels_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), global_step)
                                     writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), global_step)
@@ -696,6 +703,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
 def main():
     torch.cuda.empty_cache()
+    torch.cuda.empty_cache()
     gc.collect()
     if args.mode != 'train':
         print('train.py is only for training.')
@@ -714,14 +722,15 @@ def main():
         aux_out_path = os.path.join(args.log_directory, args.model_name)
         networks_savepath = os.path.join(aux_out_path, 'networks')
         dataloaders_savepath = os.path.join(aux_out_path, 'dataloaders')
-        command = 'cp ../iebins/train.py ' + aux_out_path
+        command = 'cp iebins/train.py ' + aux_out_path
         os.system(command)
-        command = 'mkdir -p ' + networks_savepath + ' && cp ../iebins/networks/*.py ' + networks_savepath
+        command = 'mkdir -p ' + networks_savepath + ' && cp iebins/networks/*.py ' + networks_savepath
         os.system(command)
-        command = 'mkdir -p ' + dataloaders_savepath + ' && cp ../iebins/dataloaders/*.py ' + dataloaders_savepath
+        command = 'mkdir -p ' + dataloaders_savepath + ' && cp iebins/dataloaders/*.py ' + dataloaders_savepath
         os.system(command)
         
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
+
     ngpus_per_node = torch.cuda.device_count()
     if ngpus_per_node > 1 and not args.multiprocessing_distributed:
         print("This machine has more than 1 gpu. Please specify --multiprocessing_distributed, or set \'CUDA_VISIBLE_DEVICES=0\'")
