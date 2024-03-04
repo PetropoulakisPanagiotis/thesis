@@ -6,14 +6,14 @@
 --dataset nyu
 --data_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
 --gt_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
---filenames_file /usr/stud/petp/code/thesis/data_splits/nyudepthv2_debug.txt
+--filenames_file /usr/stud/petp/code/thesis/data_splits/nyudepthv2_debug_test.txt
 
 --do_online_eval
---log_freq 20
---eval_freq 100
+--log_freq 5
+--eval_freq 5
 --log_directory /usr/stud/petp/code/thesis/tmp/
---data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
---gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
 --filenames_file_eval /usr/stud/petp/code/thesis/data_splits/nyudepthv2_debug_test.txt
 --min_depth_eval 1e-3
 --max_depth_eval 10
@@ -21,9 +21,9 @@
 --input_height 480
 --input_width 640
 
---batch_size 1 
+--batch_size 1
 --num_epochs 5000
---learning_rate 2.5e-4
+--learning_rate 1e-4
 --weight_decay 1e-2
 --adam_eps 1e-3
 
@@ -34,13 +34,14 @@
 --eigen_crop
 
 --exp_name debug
---update_block 20
+--update_block 22
 --segmentation
---instances
+--instances 
+--padding_instances 10
+--var 4
 
 --loss_type 1
-
---bin_num 60
+--bin_num 40
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
