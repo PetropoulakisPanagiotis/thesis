@@ -431,7 +431,6 @@ def main_worker(gpu, ngpus_per_node, args):
                     if args.instances:
                         #instances[:, 6:, :, :] = 0
                         pred_d = torch.sum((pred_depths_instances_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
-                        
                         instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
                         mask = mask * instances_gt_mask 
                         #image_masked_with_instances = torch.sum(instances[0, :, :, :], dim=0)

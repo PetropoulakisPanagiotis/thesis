@@ -1085,21 +1085,26 @@ class RegressionInstancesSharedCanonicalModule(nn.Module):
         valid_boxes = torch.nonzero(valid_boxes_reshaped != 0)
 
         # Change boxes #
-        gru_hidden_instances_roi = roi_select_features(gru_hidden_instances, boxes, labels) #[valid,hid,h,w] 
-        
+        #gru_hidden_instances = self.project(gru_hidden_instances)
 
         instances_scale = torch.zeros((batch_size*i_dim, 1)).to(labels.device) 
-        instances_shift = torch.zeros((batch_size*i_dim, 1)).to(labels.device) 
-        
+        instances_shift = torch.zeros((batch_size*i_dim, 1)).to(labels.device)
+ 
         for i in range(self.num_semantic_classes-1):
-            valid_boxes_class = torch.nonzero(valid_boxes_reshaped == i + 1)
-            if valid_boxes_class.shape[0] == 0:
-                continue
+            with torch.no_grad():
+                valid_boxes_class = torch.nonzero(valid_boxes_reshaped == i + 1)
 
+                if valid_boxes_class.shape[0] == 0:
+                    continue
+
+            gru_hidden_instances_roi = roi_select_features_module(gru_hidden_instances, boxes, labels, i+1) #[valid,hid,h,w]  
             scale, shift = self.instances_scale_and_shift[i](gru_hidden_instances_roi, boxes, labels, i+1)
+            
             instances_scale[valid_boxes_class[:, 0]] = scale
             instances_shift[valid_boxes_class[:, 0]] = shift
- 
+
+        instances_scale = instances_scale.view(batch_size, i_dim)
+        instances_shift = instances_shift.view(batch_size, i_dim)
         pred_scale_instances_list.append(instances_scale)
         pred_shift_instances_list.append(instances_shift)
 
@@ -2532,21 +2537,21 @@ class ROISelectScaleModule(nn.Module):
         self.input_dim = input_dim
 
     def forward(self, x, boxes, labels, class_label):
-        h, w = x.shape[2:]
-        b, i, _ = boxes.shape
 
-        boxes_tmp = boxes.view(b * i, 4)
-        valid_boxes = labels.view(b * i, 1)
-        valid_boxes = torch.nonzero(valid_boxes == class_label)
-        boxes_tmp = boxes_tmp[valid_boxes[:, 0]]
+        with torch.no_grad():  # Are we sure for this? Yes, I think
+            h, w = x.shape[2:]
+            b, i, _ = boxes.shape
+            boxes_tmp = boxes.view(b * i, 4)
+            valid_boxes = labels.view(b * i, 1)
+            valid_boxes = torch.nonzero(valid_boxes == class_label)
+            boxes_tmp = boxes_tmp[valid_boxes[:, 0]]
 
-        i, _ = boxes_tmp.shape
+            i, _ = boxes_tmp.shape
 
-        boxes_tmp = project_box_to_features(boxes_tmp, self.downsampling)
-        normalized_box = normalize_box_v2(boxes_tmp, height=h, width=w)
+            boxes_tmp = project_box_to_features(boxes_tmp, self.downsampling)
+            normalized_box = normalize_box_v2(boxes_tmp, height=h, width=w)
 
-        in_x = x[valid_boxes[:, 0]]
-        out = self.pool(F.relu(self.conv1(in_x)))
+        out = self.pool(F.relu(self.conv1(x)))
 
         out = torch.flatten(out, 1)
         out = torch.cat((out, normalized_box), dim=1)
@@ -2555,6 +2560,7 @@ class ROISelectScaleModule(nn.Module):
 
         scale = out[:, ::2]        
         shift = out[:, 1::2]
+
         return scale, shift
 
 class ROISelectScaleSmall(nn.Module):
@@ -3267,6 +3273,51 @@ def roi_select_features(feature_map, box, labels, downsampling=4):
         
         valid_boxes = labels.view(batch_size * i_dim, 1)
         valid_boxes = torch.nonzero(valid_boxes != 0)
+
+        box_coordinates = box_coordinates[valid_boxes[:, 0]]
+        i_dim = box_coordinates.shape[0] 
+
+        box_coordinates = project_box_to_features(box_coordinates, downsampling)
+
+        ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
+
+        row_indices = torch.arange(height, device=feature_map.device).unsqueeze(0)
+        col_indices = torch.arange(width, device=feature_map.device).unsqueeze(0)
+
+        row_mask = (row_indices >= ymin) & (row_indices <= ymax)
+        col_mask = (col_indices >= xmin) & (col_indices <= xmax)
+
+        row_mask = row_mask.unsqueeze(1).unsqueeze(-1)
+        col_mask = col_mask.unsqueeze(1).unsqueeze(2)
+        zeros_mask = torch.cat([torch.zeros_like(feature_map[i, :, :, :].unsqueeze(0)).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
+        masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
+
+        masked_feature_map = torch.cat([feature_map[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0) * masks
+      
+        if False: 
+            for i in range(masked_feature_map.shape[0]): 
+                x = upsample(masked_feature_map, 4)
+                x = x[i, 0, :, :].unsqueeze(0).permute(1,2,0)
+                x = (x - torch.min(x))/(torch.max(x) - torch.min(x))
+                x = (x.cpu().detach().numpy() * 255).astype('uint8')
+                cv2.imshow(str(i), x)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+        return masked_feature_map
+
+def roi_select_features_module(feature_map, box, labels, class_label, downsampling=4):
+    # Can be more efficient to skip zero maps?
+    with torch.no_grad():
+        batch_size, i_dim = box.shape[0:2]
+        
+        height, width = feature_map.size(-2), feature_map.size(-1)
+        box_coordinates = box.view(batch_size * i_dim, 4)
+
+        instances_per_batch = torch.nonzero(labels == class_label)
+        instances_per_batch = torch.bincount(instances_per_batch[:, 0])
+        
+        valid_boxes = labels.view(batch_size * i_dim, 1)
+        valid_boxes = torch.nonzero(valid_boxes == class_label)
 
         box_coordinates = box_coordinates[valid_boxes[:, 0]]
         i_dim = box_coordinates.shape[0] 
