@@ -1023,6 +1023,278 @@ class RegressionInstancesSharedCanonical(nn.Module):
 
         return result
 
+class RegressionInstancesSharedCanonicalModule(nn.Module):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, feature_map_instances_dim=32, num_instances=63,var=0, padding_instances=0):
+        super(RegressionInstancesSharedCanonicalModule, self).__init__()
+        self.num_semantic_classes = num_semantic_classes
+        self.hidden_dim = hidden_dim
+        self.context_dim = context_dim
+        self.feature_map_instances_dim = feature_map_instances_dim
+        self.num_instances = num_instances
+        self.var = var
+        self.project = ProjectionCustom(hidden_dim, 32, 128)
+        self.padding_instances = padding_instances
+        global padding
+        padding_global = padding_instances
+      
+        self.instances_scale_and_shift = nn.ModuleList()
+        for i in range(num_semantic_classes - 1):
+            self.instances_scale_and_shift.append(ROISelectScaleModule(128, downsampling=4, num_semantic_classes=1))
+
+        self.instances_canonical = ROISelectSharedCanonical(128, 4, num_semantic_classes=1)       
+        if var == 1:
+            self.instances_canonical = ROISelectSharedCanonicalBig(128, 4, num_semantic_classes=1)          
+        if var == 2:
+            self.instances_canonical = ROISelectSharedCanonicalHuge(128, 4, num_semantic_classes=1)       
+        if var == 3:
+            self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
+        if var == 4:
+            self.instances_scale_and_shift = ROISelectScaleHuge(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
+        if var == 5:
+            self.instances_scale_and_shift = ROISelectScaleSmall(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
+
+        #self.p_head = CRHead(hidden_dim, hidden_dim, num_classes=self.num_semantic_classes) 
+        #self.s_head = SSPHead(hidden_dim, num_classes=self.num_semantic_classes)                 
+
+        self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
+
+    def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth, masks, instances, boxes, labels):
+        """
+         depth:      is typically zeros #
+         context:    feature map from early layers 
+         gru_hidden: feature map from late layers  
+        """
+        pred_depths_r_list = []    # metric 
+        pred_depths_instances_r_list = []
+        pred_depths_rc_list = []   # canonical
+        pred_depths_instances_rc_list = []
+
+        pred_scale_list = []
+        pred_shift_list = []
+        pred_scale_instances_list = []
+        pred_shift_instances_list = []
+        b, _, h, w = depth.shape
+
+        batch_size, i_dim, h, w = instances.shape
+
+        gru_hidden_instances = gru_hidden
+        hidd_size, h_hid, w_hid = gru_hidden_instances.shape[1:]
+
+        valid_boxes_reshaped = labels.view(batch_size * i_dim, 1)
+        valid_boxes = torch.nonzero(valid_boxes_reshaped != 0)
+
+        # Change boxes #
+        #gru_hidden_instances = self.project(gru_hidden_instances)
+
+        instances_scale = torch.zeros((batch_size*i_dim, 1)).to(labels.device) 
+        instances_shift = torch.zeros((batch_size*i_dim, 1)).to(labels.device)
+ 
+        for i in range(self.num_semantic_classes-1):
+            with torch.no_grad():
+                valid_boxes_class = torch.nonzero(valid_boxes_reshaped == i + 1)
+
+                if valid_boxes_class.shape[0] == 0:
+                    continue
+
+            gru_hidden_instances_roi = roi_select_features_module(gru_hidden_instances, boxes, labels, i+1) #[valid,hid,h,w]  
+            scale, shift = self.instances_scale_and_shift[i](gru_hidden_instances_roi, boxes, labels, i+1)
+            
+            instances_scale[valid_boxes_class[:, 0]] = scale
+            instances_shift[valid_boxes_class[:, 0]] = shift
+
+        instances_scale = instances_scale.view(batch_size, i_dim)
+        instances_shift = instances_shift.view(batch_size, i_dim)
+        pred_scale_instances_list.append(instances_scale)
+        pred_shift_instances_list.append(instances_shift)
+
+        instances_canonical = self.instances_canonical(gru_hidden, boxes, labels)
+
+        size_boxes_sq = valid_boxes.shape[0]
+        canonical_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(instances_canonical.device)
+        canonical_full[valid_boxes[:,0]] = instances_canonical 
+        canonical_full = canonical_full.view(batch_size, i_dim, h, w)
+        instances_canonical = canonical_full
+        pred_depths_instances_rc_list.append(instances_canonical)
+    
+        #pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
+        #pred_scale = self.s_head(gru_hidden)       # b, 2*c
+        # revert back 
+        #pred_scale_list.append(pred_scale[:, ::2])  # b, c
+        #pred_shift_list.append(pred_scale[:, 1::2]) # b, c
+        
+        # Canonical
+        # b, 16*c, h, w - c*b, 16, h, w
+        # b*c, 16, h, w
+        #depth_rc = pred_prob
+        #pred_depths_rc_list.append(depth_rc)
+        
+        # Metric
+        if self.loss_type == 0:
+            #depth_r = (self.relu(depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+            depth_instances_r = (self.relu(instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+        else:
+            #depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
+            if self.var == 8:
+                depth_instances_r = instances_canonical * 50 * F.sigmoid(instances_scale.unsqueeze(-1).unsqueeze(-1)) + instances_shift.unsqueeze(-1).unsqueeze(-1)
+            elif self.var == 9 or self.var == 13 or self.var == 14 or self.var == 15:
+                depth_instances_r = instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1)
+            else:
+                depth_instances_r = instances_canonical * 20 * F.sigmoid(instances_scale.unsqueeze(-1).unsqueeze(-1)) + instances_shift.unsqueeze(-1).unsqueeze(-1)
+       
+        # depth_r: b, c, h, w
+        #pred_depths_r_list.append(depth_r)
+        pred_depths_instances_r_list.append(depth_instances_r)
+        
+        result = {}
+        result["pred_depths_r_list"] = [None]#pred_depths_r_list
+        result["pred_depths_rc_list"] = [None]#pred_depths_rc_list
+        result["pred_scale_list"] = [None]#pred_scale_list
+        result["pred_shift_list"] = [None]#pred_shift_list
+
+        result["pred_depths_instances_r_list"] = pred_depths_instances_r_list
+        result["pred_depths_instances_rc_list"] = pred_depths_instances_rc_list
+        result["pred_scale_instances_list"] = pred_scale_instances_list
+        result["pred_shift_instances_list"] = pred_shift_instances_list
+
+        return result
+
+class RegressionInstancesNoSharedCanonicalModule(nn.Module):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, feature_map_instances_dim=32, num_instances=63,var=0, padding_instances=0):
+        super(RegressionInstancesNoSharedCanonicalModule, self).__init__()
+        self.num_semantic_classes = num_semantic_classes
+        self.hidden_dim = hidden_dim
+        self.context_dim = context_dim
+        self.feature_map_instances_dim = feature_map_instances_dim
+        self.num_instances = num_instances
+        self.var = var
+        self.project = ProjectionCustom(hidden_dim, 32, 128)
+        self.padding_instances = padding_instances
+        global padding
+        padding_global = padding_instances
+      
+        self.instances_scale_and_shift = nn.ModuleList()
+        for i in range(num_semantic_classes - 1):
+            self.instances_scale_and_shift.append(ROISelectScaleModule(128, downsampling=4, num_semantic_classes=1))
+
+        self.instances_canonical = nn.ModuleList()
+        for i in range(num_semantic_classes - 1):
+            self.instances_canonical.append(ROISelectCanonicalModule(128, 4, num_semantic_classes=1))     
+        
+        if var == 1:
+            self.instances_canonical = ROISelectSharedCanonicalBig(128, 4, num_semantic_classes=1)          
+        if var == 2:
+            self.instances_canonical = ROISelectSharedCanonicalHuge(128, 4, num_semantic_classes=1)       
+        if var == 3:
+            self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
+        if var == 4:
+            self.instances_scale_and_shift = ROISelectScaleHuge(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
+        if var == 5:
+            self.instances_scale_and_shift = ROISelectScaleSmall(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
+
+        #self.p_head = CRHead(hidden_dim, hidden_dim, num_classes=self.num_semantic_classes) 
+        #self.s_head = SSPHead(hidden_dim, num_classes=self.num_semantic_classes)                 
+
+        self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
+
+    def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth, masks, instances, boxes, labels):
+        """
+         depth:      is typically zeros #
+         context:    feature map from early layers 
+         gru_hidden: feature map from late layers  
+        """
+        pred_depths_r_list = []    # metric 
+        pred_depths_instances_r_list = []
+        pred_depths_rc_list = []   # canonical
+        pred_depths_instances_rc_list = []
+
+        pred_scale_list = []
+        pred_shift_list = []
+        pred_scale_instances_list = []
+        pred_shift_instances_list = []
+        b, _, h, w = depth.shape
+
+        batch_size, i_dim, h, w = instances.shape
+
+        gru_hidden_instances = gru_hidden
+        hidd_size, h_hid, w_hid = gru_hidden_instances.shape[1:]
+
+        valid_boxes_reshaped = labels.view(batch_size * i_dim, 1)
+        valid_boxes = torch.nonzero(valid_boxes_reshaped != 0)
+
+        # Change boxes #
+        #gru_hidden_instances = self.project(gru_hidden_instances)
+
+        instances_scale = torch.zeros((batch_size*i_dim, 1)).to(labels.device) 
+        instances_shift = torch.zeros((batch_size*i_dim, 1)).to(labels.device)
+        canonical_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(labels.device)
+ 
+        for i in range(self.num_semantic_classes-1):
+            with torch.no_grad():
+                valid_boxes_class = torch.nonzero(valid_boxes_reshaped == i + 1)
+
+                if valid_boxes_class.shape[0] == 0:
+                    continue
+
+            gru_hidden_instances_roi = roi_select_features_module(gru_hidden_instances, boxes, labels, i+1) #[valid,hid,h,w]  
+            scale, shift = self.instances_scale_and_shift[i](gru_hidden_instances_roi, boxes, labels, i+1)
+
+            instances_canonical = self.instances_canonical[i](gru_hidden_instances_roi, boxes, labels, i+1)
+            canonical_full[valid_boxes_class[:, 0]] = instances_canonical
+
+            instances_scale[valid_boxes_class[:, 0]] = scale
+            instances_shift[valid_boxes_class[:, 0]] = shift
+
+        instances_canonical = canonical_full.view(batch_size, i_dim, h, w)
+        instances_scale = instances_scale.view(batch_size, i_dim)
+        instances_shift = instances_shift.view(batch_size, i_dim)
+        pred_scale_instances_list.append(instances_scale)
+        pred_shift_instances_list.append(instances_shift)
+        pred_depths_instances_rc_list.append(instances_canonical)
+    
+        #pred_prob = self.p_head(gru_hidden)        # b, 16*c, 88, 280
+        #pred_scale = self.s_head(gru_hidden)       # b, 2*c
+        # revert back 
+        #pred_scale_list.append(pred_scale[:, ::2])  # b, c
+        #pred_shift_list.append(pred_scale[:, 1::2]) # b, c
+        
+        # Canonical
+        # b, 16*c, h, w - c*b, 16, h, w
+        # b*c, 16, h, w
+        #depth_rc = pred_prob
+        #pred_depths_rc_list.append(depth_rc)
+        
+        # Metric
+        if self.loss_type == 0:
+            #depth_r = (self.relu(depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+            depth_instances_r = (self.relu(instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+        else:
+            #depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
+            if self.var == 8:
+                depth_instances_r = instances_canonical * 50 * F.sigmoid(instances_scale.unsqueeze(-1).unsqueeze(-1)) + instances_shift.unsqueeze(-1).unsqueeze(-1)
+            elif self.var == 9 or self.var == 13 or self.var == 14 or self.var == 15:
+                depth_instances_r = instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1)
+            else:
+                depth_instances_r = instances_canonical * 20 * F.sigmoid(instances_scale.unsqueeze(-1).unsqueeze(-1)) + instances_shift.unsqueeze(-1).unsqueeze(-1)
+       
+        # depth_r: b, c, h, w
+        #pred_depths_r_list.append(depth_r)
+        pred_depths_instances_r_list.append(depth_instances_r)
+        
+        result = {}
+        result["pred_depths_r_list"] = [None]#pred_depths_r_list
+        result["pred_depths_rc_list"] = [None]#pred_depths_rc_list
+        result["pred_scale_list"] = [None]#pred_scale_list
+        result["pred_shift_list"] = [None]#pred_shift_list
+
+        result["pred_depths_instances_r_list"] = pred_depths_instances_r_list
+        result["pred_depths_instances_rc_list"] = pred_depths_instances_rc_list
+        result["pred_scale_instances_list"] = pred_scale_instances_list
+        result["pred_shift_instances_list"] = pred_shift_instances_list
+
+        return result
+
 
 class RegressionInstancesPerClassC(nn.Module):
     def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, feature_map_instances_dim=32, num_instances=63,var=0, padding_instances=0):
@@ -2389,6 +2661,44 @@ class ROISelectScale(nn.Module):
         
         return out
 
+class ROISelectScaleModule(nn.Module):
+    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+        super(ROISelectScaleModule, self).__init__()
+        self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1) # First preprocess ROI map 
+        self.pool = nn.AdaptiveAvgPool2d(70) # 120
+        self.fc1 = nn.Linear((70*70) + 4, 2*num_semantic_classes) # Scale and shift 
+        
+        self.downsampling = downsampling   
+        self.num_semantic_classes = num_semantic_classes
+        self.input_dim = input_dim
+
+    def forward(self, x, boxes, labels, class_label):
+
+        with torch.no_grad():  # Are we sure for this? Yes, I think
+            h, w = x.shape[2:]
+            b, i, _ = boxes.shape
+            boxes_tmp = boxes.view(b * i, 4)
+            valid_boxes = labels.view(b * i, 1)
+            valid_boxes = torch.nonzero(valid_boxes == class_label)
+            boxes_tmp = boxes_tmp[valid_boxes[:, 0]]
+
+            i, _ = boxes_tmp.shape
+
+            boxes_tmp = project_box_to_features(boxes_tmp, self.downsampling)
+            normalized_box = normalize_box_v2(boxes_tmp, height=h, width=w)
+
+        out = self.pool(F.relu(self.conv1(x)))
+
+        out = torch.flatten(out, 1)
+        out = torch.cat((out, normalized_box), dim=1)
+        out = self.fc1(out)
+        out = out.view(i, 2*self.num_semantic_classes)
+
+        scale = out[:, ::2]        
+        shift = out[:, 1::2]
+
+        return scale, shift
+
 class ROISelectScaleSmall(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
         super(ROISelectScaleSmall, self).__init__()
@@ -2759,6 +3069,31 @@ class ROISelectCanonical(nn.Module):
         
         return out
 
+class ROISelectCanonicalModule(nn.Module):
+    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+        super(ROISelectCanonicalModule, self).__init__()
+              
+        self.canonical_head = CRIHead(input_dim, hidden_dim=128, num_classes=num_semantic_classes) #128
+        self.downsampling = downsampling   
+        self.num_semantic_classes = num_semantic_classes
+        self.input_dim = input_dim
+
+    def forward(self, x, boxes, labels, class_label):
+        with torch.no_grad():  # Are we sure for this? Yes, I think
+            h, w = x.shape[2:]
+            b, i, _ = boxes.shape
+            boxes_tmp = boxes.view(b * i, 4)
+            valid_boxes = labels.view(b * i, 1)
+            valid_boxes = torch.nonzero(valid_boxes == class_label)
+            boxes_tmp = boxes_tmp[valid_boxes[:, 0]]
+
+            i, _ = boxes_tmp.shape
+
+        out = self.canonical_head(x)
+        out = out.view(i, self.num_semantic_classes, h, w)
+        
+        return out
+
 class ROISelectCanonicalClass(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
         super(ROISelectCanonicalClass, self).__init__()
@@ -3099,6 +3434,51 @@ def roi_select_features(feature_map, box, labels, downsampling=4):
         
         valid_boxes = labels.view(batch_size * i_dim, 1)
         valid_boxes = torch.nonzero(valid_boxes != 0)
+
+        box_coordinates = box_coordinates[valid_boxes[:, 0]]
+        i_dim = box_coordinates.shape[0] 
+
+        box_coordinates = project_box_to_features(box_coordinates, downsampling)
+
+        ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
+
+        row_indices = torch.arange(height, device=feature_map.device).unsqueeze(0)
+        col_indices = torch.arange(width, device=feature_map.device).unsqueeze(0)
+
+        row_mask = (row_indices >= ymin) & (row_indices <= ymax)
+        col_mask = (col_indices >= xmin) & (col_indices <= xmax)
+
+        row_mask = row_mask.unsqueeze(1).unsqueeze(-1)
+        col_mask = col_mask.unsqueeze(1).unsqueeze(2)
+        zeros_mask = torch.cat([torch.zeros_like(feature_map[i, :, :, :].unsqueeze(0)).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
+        masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
+
+        masked_feature_map = torch.cat([feature_map[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0) * masks
+      
+        if False: 
+            for i in range(masked_feature_map.shape[0]): 
+                x = upsample(masked_feature_map, 4)
+                x = x[i, 0, :, :].unsqueeze(0).permute(1,2,0)
+                x = (x - torch.min(x))/(torch.max(x) - torch.min(x))
+                x = (x.cpu().detach().numpy() * 255).astype('uint8')
+                cv2.imshow(str(i), x)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+        return masked_feature_map
+
+def roi_select_features_module(feature_map, box, labels, class_label, downsampling=4):
+    # Can be more efficient to skip zero maps?
+    with torch.no_grad():
+        batch_size, i_dim = box.shape[0:2]
+        
+        height, width = feature_map.size(-2), feature_map.size(-1)
+        box_coordinates = box.view(batch_size * i_dim, 4)
+
+        instances_per_batch = torch.nonzero(labels == class_label)
+        instances_per_batch = torch.bincount(instances_per_batch[:, 0])
+        
+        valid_boxes = labels.view(batch_size * i_dim, 1)
+        valid_boxes = torch.nonzero(valid_boxes == class_label)
 
         box_coordinates = box_coordinates[valid_boxes[:, 0]]
         i_dim = box_coordinates.shape[0] 

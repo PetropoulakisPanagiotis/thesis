@@ -455,6 +455,8 @@ def load_annotations(json_file_path):
     labels_map = create_one_hot_mask_np(labels_map, num_semantic_classes)
     labels = []
     c, h, w = labels_map.shape
+    instances_classes = [[] for _ in    range(num_semantic_classes-1)]
+
     # Iterate over annotations in the COCO-like format
     for ii, annotation in enumerate(coco_data.get("annotations", [])):
         # Unpack segmentation (assuming it's a list)
@@ -462,10 +464,12 @@ def load_annotations(json_file_path):
         instance_map = np.zeros((h,w), dtype=np.int32)
         instance_map[instance[:, 1], instance[:, 0]] = 1
         
-        instances.append(instance_map)
+        #instances.append(instance_map)
+
         # Unpack category_id, assuming it's the label in your semantic map
         label = annotation.get("category_id", 0)
         labels.append(label)
+        instances_classes[label - 1].append(instance_map)
 
         # Unpack bbox (bounding box) as a list
         bbox = annotation.get("bbox", [])
@@ -474,6 +478,8 @@ def load_annotations(json_file_path):
         # Unpack area
         area = annotation.get("area", [])
         areas_list.append(area)
+
+    [instances.extend(instances_class) for instances_class in instances_classes]
     return instances, labels_map, np.array(labels), np.asarray(bounding_boxes_list, dtype=np.int32), np.asarray(areas_list, dtype=np.int32), num_semantic_classes
 
 def create_one_hot_mask_np(label_map, num_classes):

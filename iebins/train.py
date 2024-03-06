@@ -390,7 +390,8 @@ def main_worker(gpu, ngpus_per_node, args):
             pred_depths_r_list = result["pred_depths_r_list"]
             max_tree_depth = len(pred_depths_r_list)
             if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and args.update_block != 11 and args.update_block != 12 and args.update_block != 13 and args.update_block != 14 and args.update_block != 15 and \
-               args.update_block != 16 and args.update_block != 17 and args.update_block != 20 and args.update_block != 21 and args.update_block != 22 and args.update_block != 23:            
+               args.update_block != 16 and args.update_block != 17 and args.update_block != 20 and args.update_block != 21 and args.update_block != 22 \
+               and args.update_block != 23 and args.update_block != 25 and args.update_block != 26:            
                 pred_depths_c_list = result["pred_depths_c_list"]
                 uncertainty_maps_list = result["uncertainty_maps_list"]
             if args.instances:
@@ -431,7 +432,6 @@ def main_worker(gpu, ngpus_per_node, args):
                     if args.instances:
                         #instances[:, 6:, :, :] = 0
                         pred_d = torch.sum((pred_depths_instances_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
-                        
                         instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
                         mask = mask * instances_gt_mask 
                         #image_masked_with_instances = torch.sum(instances[0, :, :, :], dim=0)
@@ -528,7 +528,8 @@ def main_worker(gpu, ngpus_per_node, args):
                                 writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), 
                                                  colormap(torch.log10(torch.sum(pred_depths_instances_r_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
 
-                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20 and args.update_block != 21 and args.update_block != 22 and args.update_block != 23 and args.update_block != 4:
+                            if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20 and args.update_block != 21 \
+                               and args.update_block != 22 and args.update_block != 23 and args.update_block != 24 and args.update_block != 25 and args.update_block != 26:
                                 for ii in range(max_tree_depth):
                                     writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
                                                      colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
