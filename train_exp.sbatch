@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name="sc-18"
-#SBATCH --nodelist=node[18]
+#SBATCH --job-name="m-1"
+#SBATCH --nodelist=node[14,15,18]
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1,VRAM:48G
 #SBATCH --mem=24G
 #SBATCH --time=24:00:00
 #SBATCH --mail-type=NONE
-#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-sc-18-%j.out
-#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-sc-18-%j.out
-srun python /usr/stud/petp/code/thesis/iebins/train_exp.py /usr/stud/petp/code/thesis/configs/sc_18.txt
+#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-m-1-%j.out
+#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-m-1-%j.out
+srun python /usr/stud/petp/code/thesis/iebins/train_exp.py /usr/stud/petp/code/thesis/configs/nyu_train_small_debug.txt
 
 # SBATCH --nodelist=node[12,14,15,16,17,18]
 # SBATCH --nodelist=node[11,12,13,16,17,18]
