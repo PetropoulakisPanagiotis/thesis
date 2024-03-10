@@ -57,7 +57,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                 continue
 
             # Predict #
-            if (args.update_block >= 9 and args.update_block < 18) or args.update_block >= 20 or args.update_block == 1:
+            if (args.update_block >= 9 and args.update_block < 18) or args.update_block >= 20 or args.update_block == 1 or args.update_block == 2:
                 if args.instances:
                     result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
                 else:
@@ -378,7 +378,7 @@ def main_worker(gpu, ngpus_per_node, args):
             num_images = image.shape[0]
             
             # Predict #            
-            if (args.update_block >= 9 and args.update_block < 18) or args.update_block >= 20 or args.update_block == 1:
+            if (args.update_block >= 9 and args.update_block < 18) or args.update_block >= 20 or args.update_block == 1 or args.update_block == 2:
                 if args.instances:
                     result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
                 else:
@@ -452,10 +452,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     current_loss_d += l1_criterion.forward(pred_d, depth_gt, mask.to(torch.bool))
            
                 # uncertainty loss #
-                if args.update_block == 2:
-                    u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[curr_tree_depth].detach()) / (depth_gt + pred_depths_r_list[curr_tree_depth].detach() + 1e-7))
-                    current_loss_u += torch.abs(pred_depths_u_list[curr_tree_depth][mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
-                elif args.predict_unc: 
+                if args.predict_unc: 
                     if args.segmentation:
                         u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_d.detach()) / (depth_gt + pred_d.detach() + 1e-7))
                         current_loss_u = torch.abs(unc[mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
@@ -465,7 +462,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 else:
                     pass
 
-            if args.update_block == 2 or args.predict_unc:
+            if args.predict_unc:
                 loss = current_loss_d + (args.uncertainty_weight * current_loss_u)
             else:
                 loss = current_loss_d
@@ -479,7 +476,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
             # LR + Loss #
             if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
-                if args.update_block == 2 or args.predict_unc:
+                if args.predict_unc:
                     print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}, depth_loss: {:.12f}, u_loss: {:.12f}'.format(epoch, step, steps_per_epoch, global_step, current_lr, loss, current_loss_d, current_loss_u))
                 else:
                     print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}'.format(epoch, step, steps_per_epoch, global_step, current_lr, loss))

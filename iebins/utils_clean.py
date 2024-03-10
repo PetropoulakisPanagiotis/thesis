@@ -416,9 +416,9 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
                and args.update_block != 22 and args.update_block != 23 and args.update_block != 24 and args.update_block != 25 and args.update_block != 26:
                 for ii in range(max_tree_depth):
                     writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
-                                     colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
+                                     colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
                     writer.add_image('uncer_bins_est{}/image/{}/'.format(ii, i), 
-                                     colormap(torch.sum(uncertainty_maps_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), global_step)
+                                     colormap(torch.sum(uncertainty_maps_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).unsqueeze(0).data), global_step)
 
             if args.update_block != 0:
                 for ii in range(max_tree_depth):
@@ -474,15 +474,6 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
                         for ii in range(max_tree_depth):
                             writer.add_image('depth_canonical_est{}/image/{}/class{}'.format(ii, i, j), 
                                               colormap(torch.log10((pred_depths_rc_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-5).unsqueeze(0).data), name='magma'), global_step)
-                    """
-                    for ii in range(max_tree_depth):
-                        writer.add_image('depth_labels_est{}/image/{}/class{}'.format(ii, i, j), 
-                                         colormap(torch.log10((pred_depths_c_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
-
-                    for ii in range(max_tree_depth):
-                        writer.add_image('uncer_bins_est{}/image/{}/class{}'.format(ii, i, j), 
-                                         colormap((uncertainty_maps_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), global_step)
-                    """
     else:
         for i in range(num_images):
             writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
