@@ -142,7 +142,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
         measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
 
         if args.predict_unc:
-            unc_error = compute_errors_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], unc[valid_mask], 0)
+            unc_error = compute_errors_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], unc[valid_mask])
             eval_measures_unc[0] += torch.tensor(unc_error).cuda(device=gpu)
             eval_measures_unc[0] += torch.tensor(unc_error).cuda(device=gpu)
 
@@ -455,9 +455,13 @@ def main_worker(gpu, ngpus_per_node, args):
                 if args.update_block == 2:
                     u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[curr_tree_depth].detach()) / (depth_gt + pred_depths_r_list[curr_tree_depth].detach() + 1e-7))
                     current_loss_u += torch.abs(pred_depths_u_list[curr_tree_depth][mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
-                elif args.predict_unc:           
-                    u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[0].detach()) / (depth_gt + pred_depths_r_list[0].detach() + 1e-7))
-                    current_loss_u = torch.abs(unc[mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
+                elif args.predict_unc: 
+                    if args.segmentation:
+                        u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_d.detach()) / (depth_gt + pred_d.detach() + 1e-7))
+                        current_loss_u = torch.abs(unc[mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
+                    else: 
+                        u_gt = torch.exp(-5 * torch.abs(depth_gt - pred_depths_r_list[0].detach()) / (depth_gt + pred_depths_r_list[0].detach() + 1e-7))
+                        current_loss_u = torch.abs(unc[mask.to(torch.bool)] - u_gt[mask.to(torch.bool)]).mean() 
                 else:
                     pass
 

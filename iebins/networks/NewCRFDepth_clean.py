@@ -269,22 +269,20 @@ class NewCRFDepth(nn.Module):
         gru_hidden = torch.tanh(e0)
 
         # Predict depth with GRU. context: early feature map and hidden: late feature map #
-        if self.predict_unc == False:
-            if (self.update_block >= 9 and self.update_block < 18) or self.update_block >= 20 or self.update_block == 1:
-                masks = upsample(masks, scale_factor=1/4)
-                if instances != None:
-                    instances = upsample(instances, scale_factor=1/4)
-                if self.update_block != 13 \
-                   and self.update_block != 18 and self.update_block != 24:
-                    masks = (masks > 0.4).float()
-                if self.update_block >= 20 and self.update_block != 24:
-                    result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks, instances, boxes, labels)
-                else:
-                    result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks)
+        if (self.update_block >= 9 and self.update_block < 18) or self.update_block >= 20 or self.update_block == 1:
+            masks = upsample(masks, scale_factor=1/4)
+            if instances != None:
+                instances = upsample(instances, scale_factor=1/4)
+            if self.update_block != 13 \
+               and self.update_block != 18 and self.update_block != 24:
+                masks = (masks > 0.4).float()
+            if self.update_block >= 20 and self.update_block != 24:
+                result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks, instances, boxes, labels)
             else:
-                result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
+                result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks)
         else:
-            result = self.update(depth, unc, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
+            result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
+            #result = self.update(depth, unc, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
            
 
         if self.up_mode == 'mask':
