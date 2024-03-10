@@ -420,6 +420,8 @@ def debug_result(result, gt_depth):
             print(torch.mean(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
             print(torch.std(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
 
+
+
 """Train parser"""
 train_parser = argparse.ArgumentParser(description='Scale PyTorch implementation.', fromfile_prefix_chars='@')
 train_parser.convert_arg_line_to_args = convert_arg_line_to_args

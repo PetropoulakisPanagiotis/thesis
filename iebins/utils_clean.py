@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import math
+import random
 
 import torch
 import torch.nn as nn
@@ -404,6 +405,105 @@ def debug_result(result, gt_depth):
             print(torch.min(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
             print(torch.mean(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
             print(torch.std(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
+
+def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max_tree_depth, pred_depths_r_list, pred_depths_rc_list, pred_depths_instances_r_list, pred_depths_instances_rc_list, instances, segmentation_map, labels, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list, unc):
+    if args.instances:
+        for i in range(num_images):
+            writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
+            writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
+            for ii in range(max_tree_depth):
+                writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), 
+                                 colormap(torch.log10(torch.sum(pred_depths_instances_r_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
+
+            if args.update_block != 8 and not (args.update_block >= 12 and args.update_block <= 15) and args.update_block != 20 and args.update_block != 21 \
+               and args.update_block != 22 and args.update_block != 23 and args.update_block != 24 and args.update_block != 25 and args.update_block != 26:
+                for ii in range(max_tree_depth):
+                    writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
+                                     colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
+                    writer.add_image('uncer_bins_est{}/image/{}/'.format(ii, i), 
+                                     colormap(torch.sum(uncertainty_maps_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), global_step)
+
+            if args.update_block != 0:
+                for ii in range(max_tree_depth):
+                    writer.add_image('depth_canonical_est{}/image/{}/'.format(ii, i), 
+                                      colormap(torch.log10(torch.sum(pred_depths_instances_rc_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
+            if True: # expensive
+                max_vizualization = 5
+                valid_indexes = find_indexes_valid_instances(labels[i])
+
+                if(len(valid_indexes) < max_vizualization):
+                    max_vizualization = len(valid_indexes)
+                
+                picked_items = random.sample(list(valid_indexes.detach().cpu().numpy()), max_vizualization)
+                for idx, j in enumerate(picked_items):
+                    # Depth #
+                    for ii in range(max_tree_depth):
+                        writer.add_image('depth_metric_est{}/image/{}/instance{}'.format(ii, i, idx), 
+                                         colormap(torch.log10((pred_depths_instances_r_list[ii][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
+                    if args.update_block != 0:
+                        for ii in range(max_tree_depth):
+                            writer.add_image('depth_canonical_est{}/image/{}/instance{}'.format(ii, i, idx), 
+                                              colormap(torch.log10((pred_depths_instances_rc_list[ii][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-5).unsqueeze(0).data), name='magma'), global_step)
+    elif args.segmentation:
+        for i in range(num_images):
+            writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
+            writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
+            for ii in range(max_tree_depth):
+                writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), 
+                                 colormap(torch.log10(torch.sum(pred_depths_r_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
+            
+            if args.update_block != 8 and args.update_block != 12 \
+               and args.update_block != 13 and args.update_block != 15:            
+                for ii in range(max_tree_depth):
+                    writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
+                                     colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
+                    writer.add_image('uncer_bins_est{}/image/{}/'.format(ii, i), 
+                                     colormap(torch.sum(uncertainty_maps_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), global_step)
+
+            if args.update_block != 0:
+                for ii in range(max_tree_depth):
+                    writer.add_image('depth_canonical_est{}/image/{}/'.format(ii, i), 
+                                      colormap(torch.log10(torch.sum(pred_depths_rc_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
+            if True: # expensive        
+                for j in range(num_semantic_classes):
+                    # Depth #
+                    for ii in range(max_tree_depth):
+                        writer.add_image('depth_metric_est{}/image/{}/class{}'.format(ii, i, j), 
+                                         colormap(torch.log10((pred_depths_r_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
+                    #for ii in range(max_tree_depth):
+                    #    writer.add_image('depth_labels_est{}/image/{}/class{}'.format(ii, i, j), 
+                    #                     colormap(torch.log10((pred_depths_c_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
+                    if args.update_block != 0:
+                        for ii in range(max_tree_depth):
+                            writer.add_image('depth_canonical_est{}/image/{}/class{}'.format(ii, i, j), 
+                                              colormap(torch.log10((pred_depths_rc_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-5).unsqueeze(0).data), name='magma'), global_step)
+                    #for ii in range(max_tree_depth):
+                    #    writer.add_image('uncer_bins_est{}/image/{}/class{}'.format(ii, i, j), 
+                    #                     colormap((uncertainty_maps_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), global_step)
+    else:
+        for i in range(num_images):
+            writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
+            # Depth #
+            writer.add_image('depth_gt/image/{}'.format(i), colormap(torch.log10(depth_gt[i, :, :, :].data), name='magma'), global_step)
+            for ii in range(max_tree_depth):
+                writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), global_step)
+            if args.update_block != 8 and args.update_block != 12 \
+               and args.update_block != 13 and args.update_block != 15:            
+                for ii in range(max_tree_depth):
+                    writer.add_image('depth_labels_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), global_step)
+                    writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), global_step)
+            
+            if args.update_block != 0:
+                for ii in range(max_tree_depth):
+                    writer.add_image('depth_canonical_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data), name='magma'), global_step)
+            # uncertainty #
+            if args.update_block == 2:
+                for ii in range(max_tree_depth):
+                    writer.add_image('uncer_depth_gru_est{}/image/{}'.format(ii, i), colormap(pred_depths_u_list[ii][i, :, :, :].data), global_step)
+            if args.predict_unc:
+                writer.add_image('uncer_depth_est{}/image/{}'.format(ii, i), colormap(unc[i, :, :, :].data, name='viridis'), global_step)
+
+
 
 """Train parser"""
 train_parser = argparse.ArgumentParser(description='Scale PyTorch implementation.', fromfile_prefix_chars='@')
