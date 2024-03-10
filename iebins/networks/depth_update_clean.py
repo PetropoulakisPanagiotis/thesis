@@ -1294,6 +1294,188 @@ class RegressionSemanticNoMaskingCanonicalConcProjMask(nn.Module):
 
         return result
 
+class RegressionSemanticNoMaskingCanonicalConcProjMaskBins(nn.Module):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5, operation_mask='*'):
+        super(RegressionSemanticNoMaskingCanonicalConcProjMaskBins, self).__init__()
+        self.num_semantic_classes = num_semantic_classes
+        self.hidden_dim = hidden_dim
+        self.context_dim = context_dim
+        self.operation_mask = operation_mask
+
+        self.p_heads = nn.ModuleList()
+        self.s_heads = nn.ModuleList()
+
+        if operation_mask == None:
+            extra_dim = 1
+        else:
+            extra_dim = 0
+
+        for i in range(num_semantic_classes):       
+            self.p_heads.append(CRHead(128 + extra_dim, 128, num_classes=bin_num+1))
+            self.s_heads.append(SSPHead(128 + extra_dim, num_classes=1))                
+
+        self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
+
+    def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth, masks):
+        """
+         depth:      is typically zeros #
+         context:    feature map from early layers 
+         gru_hidden: feature map from late layers  
+        """
+        pred_depths_r_list = []    # metric 
+        pred_depths_rc_list = []   # canonical
+        pred_scale_list = []
+        pred_shift_list = []
+        uncertainty_maps_list = []
+        pred_depths_c_list = [] 
+
+        b, _, h, w = depth.shape
+        depth_rc = []
+        pred_scale = [] 
+        bins_map = get_uniform_bins(depth, min_depth, max_depth, bin_num)
+
+        uncertainty_map = torch.zeros(b, self.num_semantic_classes, h, w).to(masks.device)
+        depth_c = torch.zeros(b, self.num_semantic_classes, h, w).to(masks.device)
+        for i in range(self.num_semantic_classes):
+            
+            if self.operation_mask == None:
+                gru_hidden_current = torch.cat((gru_hidden, masks[:, i, :, :].unsqueeze(1)), dim=1)
+            if self.operation_mask == '+':
+                gru_hidden_current = gru_hidden + masks[:, i, :, :].unsqueeze(1)
+            if self.operation_mask == '*':
+                gru_hidden_current = gru_hidden * masks[:, i, :, :].unsqueeze(1)
+
+            prob = self.p_heads[i](gru_hidden_current)
+            depth_rc_current = (prob * bins_map.detach()).sum(1, keepdim=True)
+
+            uncertainty_map_current = torch.sqrt((prob * ((bins_map.detach() - depth_rc_current.repeat(1, bin_num+1, 1, 1))**2)).sum(1, keepdim=True))
+            uncertainty_map[:, i, :, :] = uncertainty_map_current.squeeze(1)
+
+            pred_label = get_label(torch.squeeze(depth_rc_current, 1), bins_map, bin_num).unsqueeze(1)
+            depth_c[:, i, :, : ]  = (torch.gather(bins_map.detach(), 1, pred_label.detach())).squeeze(1)
+            
+            scale = self.s_heads[i](gru_hidden_current)
+
+            depth_rc.append(depth_rc_current)
+            pred_scale.append(scale)
+
+        pred_depths_c_list.append(depth_c)
+        uncertainty_maps_list.append(uncertainty_map)
+        depth_rc = torch.cat(depth_rc, dim=1) 
+        pred_scale = torch.cat(pred_scale, dim=1) 
+
+        # revert back 
+        pred_scale_list.append(pred_scale[:, ::2])  # b, c
+        pred_shift_list.append(pred_scale[:, 1::2]) # b, c
+          
+        # Canonical
+        # b, 16*c, h, w - c*b, 16, h, w
+        # b*c, 16, h, w
+        pred_depths_rc_list.append(depth_rc)
+        
+        # Metric
+        if self.loss_type == 0:
+            depth_r = (self.relu(depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+        else:
+            depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
+        
+        # depth_r: b, c, h, w
+        pred_depths_r_list.append(depth_r)
+        
+        result = {}
+        result["pred_depths_c_list"] = pred_depths_c_list
+        result["uncertainty_maps_list"] = uncertainty_maps_list
+        result["pred_depths_r_list"] = pred_depths_r_list
+        result["pred_depths_rc_list"] = pred_depths_rc_list
+        result["pred_scale_list"] = pred_scale_list
+        result["pred_shift_list"] = pred_shift_list
+
+        return result
+
+class RegressionSemanticNoMaskingCanonicalConcProjMaskU(nn.Module):
+    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5, operation_mask='*'):
+        super(RegressionSemanticNoMaskingCanonicalConcProjMaskU, self).__init__()
+        self.num_semantic_classes = num_semantic_classes
+        self.hidden_dim = hidden_dim
+        self.context_dim = context_dim
+        self.operation_mask = operation_mask
+
+        self.p_heads = nn.ModuleList()
+        self.s_heads = nn.ModuleList()
+
+        if operation_mask == None:
+            extra_dim = 1
+        else:
+            extra_dim = 0
+
+        for i in range(num_semantic_classes):       
+            self.p_heads.append(CRHead(128 + extra_dim, 128, num_classes=1))
+            self.s_heads.append(SSPHead(128 + extra_dim, num_classes=1))                
+
+        self.relu = nn.ReLU(inplace=True)
+        self.loss_type = loss_type
+
+    def forward(self, depth, context, gru_hidden, seq_len, bin_num, min_depth, max_depth, masks):
+        """
+         depth:      is typically zeros #
+         context:    feature map from early layers 
+         gru_hidden: feature map from late layers  
+        """
+        pred_depths_r_list = []    # metric 
+        pred_depths_rc_list = []   # canonical
+        pred_scale_list = []
+        pred_shift_list = []
+
+        b, _, h, w = depth.shape
+
+        pred_prob = []
+        pred_scale = [] 
+        for i in range(self.num_semantic_classes):
+            if self.operation_mask == None:
+                gru_hidden_current = torch.cat((gru_hidden, masks[:, i, :, :].unsqueeze(1)), dim=1)
+            if self.operation_mask == '+':
+                gru_hidden_current = gru_hidden + masks[:, i, :, :].unsqueeze(1)
+            if self.operation_mask == '*':
+                gru_hidden_current = gru_hidden * masks[:, i, :, :].unsqueeze(1)
+
+            prob = self.p_heads[i](gru_hidden_current)
+            scale = self.s_heads[i](gru_hidden_current)
+
+            pred_prob.append(prob)
+            pred_scale.append(scale)
+
+        pred_prob = torch.cat(pred_prob, dim=1) 
+        pred_scale = torch.cat(pred_scale, dim=1) 
+
+        # revert back 
+        pred_scale_list.append(pred_scale[:, ::2])  # b, c
+        pred_shift_list.append(pred_scale[:, 1::2]) # b, c
+          
+        # Canonical
+        # b, 16*c, h, w - c*b, 16, h, w
+        # b*c, 16, h, w
+        depth_rc = pred_prob
+        pred_depths_rc_list.append(depth_rc)
+        
+        # Metric
+        if self.loss_type == 0:
+            depth_r = (self.relu(depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+        else:
+            depth_r = depth_rc * pred_scale[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale[:, 1::2].unsqueeze(-1).unsqueeze(-1)
+        
+        # depth_r: b, c, h, w
+        pred_depths_r_list.append(depth_r)
+        
+        result = {}
+        result["pred_depths_c_list"] = [] 
+        result["uncertainty_maps_list"] = []
+        result["pred_depths_r_list"] = pred_depths_r_list
+        result["pred_depths_rc_list"] = pred_depths_rc_list
+        result["pred_scale_list"] = pred_scale_list
+        result["pred_shift_list"] = pred_shift_list
+
+        return result
 
 
 """

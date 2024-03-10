@@ -57,7 +57,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                 continue
 
             # Predict #
-            if args.update_block >= 9 and args.update_block < 18 or args.update_block >= 20:
+            if args.update_block >= 9 and args.update_block < 18 or args.update_block >= 20 or args.update_block == 1:
                 if args.instances:
                     result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
                 else:
@@ -378,12 +378,14 @@ def main_worker(gpu, ngpus_per_node, args):
             num_images = image.shape[0]
             
             # Predict #            
-            if args.update_block >= 9 and args.update_block < 18 or args.update_block >= 20:
+            if (args.update_block >= 9 and args.update_block < 18) or args.update_block >= 20 or args.update_block == 1:
+                print("1\n")
                 if args.instances:
                     result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
                 else:
                     result = model(image, masks=segmentation_map)
             else:
+                print("2\n")
                 result = model(image, epoch, step)
             
             # Unpack #            

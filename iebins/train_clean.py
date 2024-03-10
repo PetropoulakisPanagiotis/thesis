@@ -57,7 +57,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
                 continue
 
             # Predict #
-            if args.update_block >= 9 and args.update_block < 18 or args.update_block >= 20:
+            if (args.update_block >= 9 and args.update_block < 18) or args.update_block >= 20 or args.update_block == 1:
                 if args.instances:
                     result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
                 else:
@@ -353,6 +353,7 @@ def main_worker(gpu, ngpus_per_node, args):
         pred_depths_r_list, pred_depths_rc_list, pred_depths_instances_r_list, \
          pred_depths_instances_rc_list, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list, unc, labels  \
           = [], [], [], [], [], [], [], None, None
+        instances, boxes, labels = None, None, None
         if args.distributed:
             dataloader.train_sampler.set_epoch(epoch)
 
@@ -377,7 +378,7 @@ def main_worker(gpu, ngpus_per_node, args):
             num_images = image.shape[0]
             
             # Predict #            
-            if args.update_block >= 9 and args.update_block < 18 or args.update_block >= 20:
+            if (args.update_block >= 9 and args.update_block < 18) or args.update_block >= 20 or args.update_block == 1:
                 if args.instances:
                     result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
                 else:
@@ -513,7 +514,9 @@ def main_worker(gpu, ngpus_per_node, args):
                     writer.add_scalar('var_average', var_sum.item()/var_cnt, global_step)
                     depth_gt = torch.where(depth_gt < 1e-3, depth_gt * 0 + 1e-3, depth_gt)
            
-                tb_visualization(writer, global_step, args, num_images, depth_gt, image, max_tree_depth, pred_depths_r_list, pred_depths_rc_list, pred_depths_instances_r_list, pred_depths_instances_rc_list, instances, segmentation_map, labels, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list, unc)
+                tb_visualization(writer, global_step, args, num_images, depth_gt, image, max_tree_depth, pred_depths_r_list, \
+                                 pred_depths_rc_list, pred_depths_instances_r_list, pred_depths_instances_rc_list, num_semantic_classes, \
+                                 instances, segmentation_map, labels, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list, unc)
 
 
             # Evaluate #

@@ -71,6 +71,10 @@ class NewCRFDepth(nn.Module):
         # Set update block #
         if self.update_block == 0: # IEBins
             self.update = BasicUpdateBlockDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=16)
+        elif self.update_block == 1: # Seg - Module concat mask bins  
+            self.hidden_dim = 128   #128
+            self.context_dim = 96
+            self.update = RegressionSemanticNoMaskingCanonicalConcProjMaskBins(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, operation_mask=None)        
         elif self.update_block == 6: # Canonical - one scale per image and no projection 
             self.update = BasicUpdateBlockCSNoProjectDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         elif self.update_block == 8: # Canonical - one scale per image and NO GRU
@@ -266,7 +270,7 @@ class NewCRFDepth(nn.Module):
 
         # Predict depth with GRU. context: early feature map and hidden: late feature map #
         if self.predict_unc == False:
-            if (self.update_block >= 9 and self.update_block < 18) or self.update_block >= 20:
+            if (self.update_block >= 9 and self.update_block < 18) or self.update_block >= 20 or self.update_block == 1:
                 masks = upsample(masks, scale_factor=1/4)
                 if instances != None:
                     instances = upsample(instances, scale_factor=1/4)
