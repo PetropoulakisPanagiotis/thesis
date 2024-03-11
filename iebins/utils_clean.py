@@ -416,7 +416,7 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
                and args.update_block != 22 and args.update_block != 23 and args.update_block != 24 and args.update_block != 25 and args.update_block != 26:
                 for ii in range(max_tree_depth):
                     writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
-                                     colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), global_step)
+                                     colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), name='magma'), global_step)
                     writer.add_image('uncer_bins_est{}/image/{}/'.format(ii, i), 
                                      colormap(torch.sum(uncertainty_maps_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).unsqueeze(0).data), global_step)
 
