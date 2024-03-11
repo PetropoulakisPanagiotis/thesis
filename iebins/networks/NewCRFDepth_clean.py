@@ -260,7 +260,7 @@ class NewCRFDepth(nn.Module):
 
         # Uncertainty prediction from the decoder #
         if self.predict_unc:
-            unc = self.uncer_head(e0)
+            unc_decoder = self.uncer_head(e0)
 
         b, c, h, w = e1.shape
         device = e1.device
@@ -310,8 +310,8 @@ class NewCRFDepth(nn.Module):
                     result["pred_depths_u_list"][i] = self.upsample_mask(result["pred_depths_u_list"][i], mask.detach())
 
             if self.predict_unc:
-                unc = self.upsample_mask(unc, mask.detach())
-                result["unc"] = unc
+                unc_decoder = self.upsample_mask(unc_decoder, mask.detach())
+                result["unc_decoder"] = unc_decoder
         else:
             for i in range(max_tree_depth):
 
@@ -331,8 +331,8 @@ class NewCRFDepth(nn.Module):
                     result["uncertainty_maps_list"][i] = upsample(result["uncertainty_maps_list"][i], scale_factor=4) 
 
             if self.predict_unc:
-                unc = upsample(unc, scale_factor=4)
-                result["unc"] = unc
+                unc_decoder = upsample(unc_decoder, scale_factor=4)
+                result["unc_decoder"] = unc_decoder
 
         return result
 

@@ -1,8 +1,10 @@
 import os, sys
+import math
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
-import math
+
 
 import torch
 import torch.nn as nn
@@ -16,17 +18,13 @@ inv_normalize = transforms.Normalize(
     std=[1/0.229, 1/0.224, 1/0.225]
 )
 
-
 eval_metrics = ['silog', 'abs_rel', 'log10', 'rms', 'sq_rel', 'log_rms', 'd1', 'd2', 'd3']
 
-colors = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]  # Replace with your desired colors
-n_bins = [15]  # Number of bins, can be adjusted based on your data
 
 cmap_name = "custom_colormap"
-custom_cmap_labels = LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins[0])
+colors = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]  
+custom_cmap_labels = LinearSegmentedColormap.from_list(cmap_name, colors, N=14)
 custom_cmap_instances = LinearSegmentedColormap.from_list(cmap_name, colors, N=40)
-
-
 
 
 def block_print():
@@ -39,8 +37,10 @@ def enable_print():
 
 def get_num_lines(file_path):
     f = open(file_path, 'r')
+
     lines = f.readlines()
     f.close()
+
     return len(lines)
 
 
@@ -54,7 +54,7 @@ def colorize(value, vmin=None, vmax=None, cmap='Greys'):
     if vmin != vmax:
         value = (value - vmin) / (vmax - vmin)
     else:
-        value = value*0.
+        value = value * 0.0
 
     cmapper = matplotlib.cm.get_cmap(cmap)
     value = cmapper(value, bytes=True)
@@ -73,7 +73,7 @@ def normalize_result(value, vmin=None, vmax=None):
     if vmin != vmax:
         value = (value - vmin) / (vmax - vmin)
     else:
-        value = value * 0.
+        value = value * 0.0
 
     return np.expand_dims(value, 0)
 
@@ -101,11 +101,13 @@ def compute_errors(gt, pred):
 
     return [silog, abs_rel, log10, rms, sq_rel, log_rms, d1, d2, d3]
 
-def compute_errors_uncertainty(gt, pred, unc):
+
+def compute_error_uncertainty(gt, pred, unc):
     u_gt = np.exp(-5 * np.abs(gt - pred) / (gt + pred + 1e-7))
     unc_error = np.abs(unc - u_gt).mean()
     
     return unc_error
+
 
 class silog_loss(nn.Module):
     def __init__(self, variance_focus):
@@ -114,31 +116,38 @@ class silog_loss(nn.Module):
 
     def forward(self, depth_est, depth_gt, mask):
         d = torch.log(depth_est[mask]) - torch.log(depth_gt[mask])
+        
         return torch.sqrt((d ** 2).mean() - self.variance_focus * (d.mean() ** 2)) * 10.0
+
 
 class l1_loss(nn.Module):
     def __init__(self):
         super(l1_loss, self).__init__()
 
     def forward(self, depth_est, depth_gt, mask):
+        
         return torch.mean(torch.abs(depth_est[mask] - depth_gt[mask]))
+
 
 def entropy_loss(preds, gt_label, mask):
     # preds: B, C, H, W
     # gt_label: B, H, W
     # mask: B, H, W
-    mask = mask > 0.0 # B, H, W
+    mask = mask > 0.0             
     preds = preds.permute(0, 2, 3, 1) # B, H, W, C
-    preds_mask = preds[mask] # N, C
-    gt_label_mask = gt_label[mask] # N
+    preds_mask = preds[mask]          # N, C
+    gt_label_mask = gt_label[mask]    # N
     loss = F.cross_entropy(preds_mask, gt_label_mask, reduction='mean')
+    
     return loss
 
 
 def colormap(inputs, name='jet', normalize=True, torch_transpose=True):
     if isinstance(inputs, torch.Tensor):
         inputs = inputs.detach().cpu().numpy()
-    _DEPTH_COLORMAP = plt.get_cmap(name, 256)  # for plotting
+
+    _DEPTH_COLORMAP = plt.get_cmap(name, 256)   
+    
     vis = inputs
     if normalize:
         ma = float(vis.max())
@@ -152,11 +161,13 @@ def colormap(inputs, name='jet', normalize=True, torch_transpose=True):
         vis = vis[:, :, :, 0, :3]
         if torch_transpose:
             vis = vis.transpose(0, 3, 1, 2)
+
     elif vis.ndim == 3:
         vis = _DEPTH_COLORMAP(vis)
         vis = vis[:, :, :, :3]
         if torch_transpose:
             vis = vis.transpose(0, 3, 1, 2)
+
     elif vis.ndim == 2:
         vis = _DEPTH_COLORMAP(vis)
         vis = vis[..., :3]
@@ -169,16 +180,9 @@ def colormap(inputs, name='jet', normalize=True, torch_transpose=True):
 def flip_lr(image):
     """
     Flip image horizontally
-
-    Parameters
-    ----------
-    image : torch.Tensor [B,3,H,W]
-        Image to be flipped
-
+        image : torch.Tensor [B,3,H,W]
     Returns
-    -------
-    image_flipped : torch.Tensor [B,3,H,W]
-        Flipped image
+        image_flipped : torch.Tensor [B,3,H,W]
     """
     assert image.dim() == 4, 'You need to provide a [B,C,H,W] image to flip'
     
@@ -196,7 +200,6 @@ def fuse_inv_depth(inv_depth, inv_depth_hat, method='mean'):
     inv_depth_hat : torch.Tensor [B,1,H,W]
         Flipped inverse depth map produced from a flipped image
     method : str
-        Method that will be used to fuse the inverse depth maps
 
     Returns
     -------
@@ -232,6 +235,7 @@ def post_process_depth(depth, depth_flipped, method='mean'):
         Post-processed inverse depth map
     """
     B, C, H, W = depth.shape
+
     inv_depth_hat = flip_lr(depth_flipped)
     inv_depth_fused = fuse_inv_depth(depth, inv_depth_hat, method=method)
     
@@ -243,7 +247,8 @@ def post_process_depth(depth, depth_flipped, method='mean'):
 
 
 class DistributedSamplerNoEvenlyDivisible(Sampler):
-    """Sampler that restricts data loading to a subset of the dataset.
+    """
+    Sampler that restricts data loading to a subset of the dataset.
 
     It is especially useful in conjunction with
     :class:`torch.nn.parallel.DistributedDataParallel`. In such case, each
@@ -314,34 +319,8 @@ class DistributedSamplerNoEvenlyDivisible(Sampler):
         self.epoch = epoch
     
     
-class D_to_cloud(nn.Module):
-    """Layer to transform depth into point cloud
-    """
-    def __init__(self, batch_size, height, width):
-        super(D_to_cloud, self).__init__()
-
-        self.batch_size = batch_size
-        self.height = height
-        self.width = width
-
-        meshgrid = np.meshgrid(range(self.width), range(self.height), indexing='xy')
-        self.id_coords = np.stack(meshgrid, axis=0).astype(np.float32) # 2, H, W    
-        self.id_coords = nn.Parameter(torch.from_numpy(self.id_coords), requires_grad=False) # 2, H, W  
-
-        self.ones = nn.Parameter(torch.ones(self.batch_size, 1, self.height * self.width),
-                                 requires_grad=False) # B, 1, H, W
-
-        self.pix_coords = torch.unsqueeze(torch.stack(
-            [self.id_coords[0].view(-1), self.id_coords[1].view(-1)], 0), 0) # 1, 2, L
-        self.pix_coords = self.pix_coords.repeat(batch_size, 1, 1) # B, 2, L
-        self.pix_coords = nn.Parameter(torch.cat([self.pix_coords, self.ones], 1), requires_grad=False) # B, 3, L
-
-    def forward(self, depth, inv_K):
-        cam_points = torch.matmul(inv_K[:, :3, :3], self.pix_coords)
-        cam_points = depth.view(self.batch_size, 1, -1) * cam_points
-
-        return cam_points.permute(0, 2, 1)
-
-
 def find_indexes_valid_instances(labels):
-    return torch.nonzero(labels!=0).squeeze()
+    """
+    1-dim
+    """
+    return torch.nonzero(labels != 0).squeeze()

@@ -1924,7 +1924,7 @@ class CRHead(nn.Module):
 
 class CRHeadUniform(nn.Module):
     def __init__(self, input_dim=128, hidden_dim=128, num_classes=1):
-        super(CRHead, self).__init__()
+        super(CRHeadUniform, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
         self.conv2 = nn.Conv2d(hidden_dim, num_classes, 3, padding=1)
 

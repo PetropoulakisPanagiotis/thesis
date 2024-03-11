@@ -24,9 +24,9 @@ from networks.depth_update_clean import *
 from datetime import datetime
 
 from parser_options import train_parser
-from custom_logging import debug_result, tb_visualization
+from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization
 
-from utils_clean import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, compute_errors_uncertainty, \
+from utils_clean import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, compute_error_uncertainty, \
                     eval_metrics, entropy_loss, \
                     block_print, enable_print
 
@@ -75,7 +75,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             
             # uncertainty #
             if args.predict_unc == True:
-                unc = result["unc"].cpu().numpy().squeeze()
+                unc = result["unc_decoder"].cpu().numpy().squeeze()
 
             #  Predict depth of flipped image too and fuse - True
             if post_process and False:
@@ -146,7 +146,7 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
         measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
 
         if args.predict_unc:
-            unc_error = compute_errors_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], unc[valid_mask])
+            unc_error = compute_error_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], unc[valid_mask])
             eval_measures_unc[0] += torch.tensor(unc_error).cuda(device=gpu)
             eval_measures_unc[0] += torch.tensor(unc_error).cuda(device=gpu)
 
@@ -389,7 +389,9 @@ def main_worker(gpu, ngpus_per_node, args):
                     result = model(image, masks=segmentation_map)
             else:
                 result = model(image, epoch, step)
-            
+
+            #debug_result(result, depth_gt)           
+ 
             # Unpack #            
             pred_depths_r_list = result["pred_depths_r_list"]
 
@@ -412,7 +414,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 pred_depths_rc_list = result["pred_depths_rc_list"]
             
             if args.predict_unc == True:
-                unc = result["unc"]
+                unc = result["unc_decoder"]
             
             # gt_depth masking #
             if args.dataset == 'nyu' or args.dataset == 'nyud':
@@ -420,14 +422,16 @@ def main_worker(gpu, ngpus_per_node, args):
             else:
                 mask = depth_gt > 1.0
 
+            debug_visualize_gt_instances(instances, mask, depth_gt)
+
             # Loss #
             for curr_tree_depth in range(max_tree_depth):
                 if args.segmentation:
                     if args.instances:
                         pred_d = torch.sum((pred_depths_instances_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
                         instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
+                        
                         mask = mask * instances_gt_mask 
-
 
                     else:
                         pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * segmentation_map), dim=1).unsqueeze(1)

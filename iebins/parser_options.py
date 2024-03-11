@@ -6,6 +6,7 @@ def convert_arg_line_to_args(arg_line):
             continue
         yield arg
 
+
 # Train parser
 train_parser = argparse.ArgumentParser(description='Scale-Aware SLAM PyTorch implementation.', fromfile_prefix_chars='@')
 train_parser.convert_arg_line_to_args = convert_arg_line_to_args
