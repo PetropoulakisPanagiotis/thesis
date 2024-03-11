@@ -22,9 +22,13 @@ from tqdm import tqdm
 from networks.NewCRFDepth_clean import NewCRFDepth
 from networks.depth_update_clean import *
 from datetime import datetime
+
+from parser_options import train_parser
+from custom_logging import debug_result, tb_visualization
+
 from utils_clean import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, compute_errors_uncertainty, \
-                    eval_metrics, entropy_loss, colormap, tb_visualization, \
-                    block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args, train_parser, find_indexes_valid_instances
+                    eval_metrics, entropy_loss, \
+                    block_print, enable_print
 
 if sys.argv.__len__() == 2:
     arg_filename_with_prefix = '@' + sys.argv[1]
@@ -403,12 +407,6 @@ def main_worker(gpu, ngpus_per_node, args):
                 pred_scale_instances_list = result["pred_scale_instances_list"]
                 pred_shift_instances_list = result["pred_shift_instances_list"]
                 
-                #non_zero_idx = (labels != -1).nonzero(as_tuple=False)
-                #print(pred_scale_instances_list[0][non_zero_idx[:,0], non_zero_idx[:,1]].detach().cpu().numpy())
-                #print(pred_shift_instances_list[0][non_zero_idx[:,0], non_zero_idx[:,1]].detach().cpu().numpy())
-                #print(pred_scale_instances_list[0].detach().cpu().numpy())
-                #print(pred_shift_instances_list[0].detach().cpu().numpy())
-            
             # Canonical #
             if args.update_block != 0:
                 pred_depths_rc_list = result["pred_depths_rc_list"]
@@ -426,20 +424,10 @@ def main_worker(gpu, ngpus_per_node, args):
             for curr_tree_depth in range(max_tree_depth):
                 if args.segmentation:
                     if args.instances:
-                        #instances[:, 6:, :, :] = 0
                         pred_d = torch.sum((pred_depths_instances_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
                         instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
                         mask = mask * instances_gt_mask 
-                        #image_masked_with_instances = torch.sum(instances[0, :, :, :], dim=0)
-                        #depth_gt = depth_gt * instances_gt_mask
-                        #cv2.imshow("instances_mapped_image", depth_gt[0,0,:,:].cpu().numpy())
-                        #tmp = mask[0].permute(1,2,0).squeeze()
-                        #tmp = (tmp.cpu().detach().numpy() * 255).astype('uint8')
-                        #print(tmp.shape)
-                        #print(instances[0, :, :, :].shape)
-                        #cv2.imshow("instances_mapped_ittmage", tmp)
-                        #cv2.waitKey(0)
-                        #cv2.destroyAllWindows()
+
 
                     else:
                         pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * segmentation_map), dim=1).unsqueeze(1)
