@@ -1,6 +1,7 @@
 import os, sys
 import math
 
+from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
@@ -12,6 +13,7 @@ import torch.nn.functional as F
 import torch.distributed as dist
 from torch.utils.data import Sampler
 from torchvision import transforms
+
 
 inv_normalize = transforms.Normalize(
     mean=[-0.485/0.229, -0.456/0.224, -0.406/0.225],
@@ -25,6 +27,14 @@ cmap_name = "custom_colormap"
 colors = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]  
 custom_cmap_labels = LinearSegmentedColormap.from_list(cmap_name, colors, N=14)
 custom_cmap_instances = LinearSegmentedColormap.from_list(cmap_name, colors, N=40)
+
+
+def _is_pil_image(img):
+    return isinstance(img, Image.Image)
+
+
+def _is_numpy_image(img):
+    return isinstance(img, np.ndarray) and (img.ndim in {2, 3})
 
 
 def block_print():

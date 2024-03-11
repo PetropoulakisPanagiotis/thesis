@@ -1,26 +1,14 @@
-import os
-import copy
 import json
 
-import cv2
-
-import numpy as np
 from PIL import Image
 
 import torch
 from torch.utils.data import DataLoader
 import torch.utils.data.distributed
-import torch.nn.functional as F
 from torchvision import transforms
 
 from dataloaders.dataloader_dataset import DatasetPreprocess, ToTensorCustom 
 from utils_clean import DistributedSamplerNoEvenlyDivisible
-
-
-def preprocessing_transforms(mode, segmentation):
-    return transforms.Compose([
-        ToTensorCustom(mode=mode, segmentation=segmentation)
-    ])
 
 
 class NewDataLoader(object):
@@ -64,8 +52,9 @@ class NewDataLoader(object):
 
         else:
             print('mode should be one of \'train, test, online_eval\'. Got {}'.format(mode))
-            
 
 
-
-
+def preprocessing_transforms(mode, segmentation):
+    return transforms.Compose([
+        ToTensorCustom(mode=mode, segmentation=segmentation)
+    ])
