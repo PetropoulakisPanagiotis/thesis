@@ -422,7 +422,7 @@ def main_worker(gpu, ngpus_per_node, args):
             else:
                 mask = depth_gt > 1.0
 
-            debug_visualize_gt_instances(instances, mask, depth_gt)
+            #debug_visualize_gt_instances(instances, mask, depth_gt)
 
             # Loss #
             for curr_tree_depth in range(max_tree_depth):
