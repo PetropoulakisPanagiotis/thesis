@@ -208,7 +208,7 @@ class ROISelectSharedCanonicalUniform(nn.Module):
     def forward(self, x, boxes, labels):
         h, w = x.shape[2:]
 
-        instances_per_batch, num_valid_boxes = get_valid_num_instances_per_batch(x, boxes, labels)
+        instances_per_batch, num_valid_boxes = get_valid_num_instances_per_batch(boxes, labels)
 
         out = F.relu(self.conv1(x))
         out = torch.softmax(self.conv2(out), 1)
@@ -233,7 +233,7 @@ class ROISelectSharedCanonicalBigUniform(nn.Module):
     def forward(self, x, boxes, labels):
         h, w = x.shape[2:]
 
-        instances_per_batch, num_valid_boxes = get_valid_num_instances_per_batch(x, boxes, labels)
+        instances_per_batch, num_valid_boxes = get_valid_num_instances_per_batch(boxes, labels)
 
         out = F.relu(self.conv1(x))
         out = F.relu(self.conv2(out))
@@ -261,7 +261,7 @@ class ROISelectSharedCanonicalHugeUniform(nn.Module):
     def forward(self, x, boxes, labels):
         h, w = x.shape[2:]
 
-        instances_per_batch, num_valid_boxes = get_valid_num_instances_per_batch(x, boxes, labels)
+        instances_per_batch, num_valid_boxes = get_valid_num_instances_per_batch(boxes, labels)
 
         out = F.relu(self.conv1(x))
         out = F.relu(self.conv2(x))

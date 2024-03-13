@@ -124,6 +124,11 @@ def get_label(depth_prediction, bin_edges, bin_num):
         return label_bin
 
 
+"""
+Boxes operations start
+"""
+
+
 def normalize_box(box, height=480, width=640):
     with torch.no_grad():
         return torch.stack(((box[:, 0] / height).float(), 
@@ -153,11 +158,9 @@ def project_box_to_feature_map(box, downsampling, height=480, width=640, padding
             return new_box 
 
 
-def get_valid_normalized_projected_boxes(feature_map, boxes, labels, downsampling):
-    h, w = feature_map.shape[2:]
-    b, num_instances, _ = boxes.shape
-
+def get_valid_boxes(boxes, labels):
     with torch.no_grad():
+        b, num_instances, _ = boxes.shape
         boxes_reshaped = boxes.view(b * num_instances, 4)
 
         labels_reshaped = labels.view(b * num_instances, 1)
@@ -166,26 +169,27 @@ def get_valid_normalized_projected_boxes(feature_map, boxes, labels, downsamplin
         boxes_valid = boxes_reshaped[boxes_valid_idx[:, 0]]
 
         num_valid_boxes, _ = boxes_valid.shape
+
+    return boxes_valid, num_valid_boxes
+
+
+def get_valid_normalized_projected_boxes(feature_map, boxes, labels, downsampling):
+    h, w = feature_map.shape[2:]
+
+    with torch.no_grad():
+
+        boxes_valid, num_valid_boxes = get_valid_boxes(boxes, labels)
 
         boxes_valid_projected = project_box_to_feature_map(boxes_valid, downsampling)
         boxes_valid_normalized_projected = normalize_box(boxes_valid_projected, height=h, width=w)
 
     return boxes_valid_normalized_projected, num_valid_boxes
 
-def get_valid_num_instances_per_batch(feature_map, boxes, labels):
 
-    h, w = feature_map.shape[2:]
-    b, num_instances, _ = boxes.shape
-
+def get_valid_num_instances_per_batch(boxes, labels):
     with torch.no_grad():
-        boxes_reshaped = boxes.view(b * num_instances, 4)
 
-        labels_reshaped = labels.view(b * num_instances, 1)
-        boxes_valid_idx = torch.nonzero(labels_reshaped != 0)
-
-        boxes_valid = boxes_reshaped[boxes_valid_idx[:, 0]]
-
-        num_valid_boxes, _ = boxes_valid.shape
+        boxes_valid, num_valid_boxes = get_valid_boxes(boxes, labels)
 
         instances_per_batch = torch.nonzero(labels != 0)
         instances_per_batch = torch.bincount(instances_per_batch[:, 0])
@@ -193,83 +197,27 @@ def get_valid_num_instances_per_batch(feature_map, boxes, labels):
 
     return instances_per_batch, num_valid_boxes
 
-def pick_predictions_instances_scale(prediction, labels):
 
-    batch_size, i_dim = labels.shape[0:2]
-
-    labels_fast = torch.where(labels == 0, 1, labels) 
-    labels_fast -= 1
-    labels_fast = labels_fast.view(batch_size*i_dim)
-    
-    valid_boxes = labels.view(batch_size * i_dim, 1)
-    valid_boxes = torch.nonzero(valid_boxes != 0)
-    
-    size_boxes_sq = valid_boxes.shape[0]
-
-    labels_fast = labels_fast[valid_boxes[:,0]]
-    
-    pred_scale = prediction[:, ::2]
-    pred_shift = prediction[:, 1::2]
-   
-    pred_scale = pred_scale[torch.arange(size_boxes_sq), labels_fast].unsqueeze(-1)
-    pred_shift = pred_shift[torch.arange(size_boxes_sq), labels_fast].unsqueeze(-1)
-
-    pred_scale_full = torch.zeros((batch_size*i_dim, 1)).to(prediction.device)
-    pred_shift_full = torch.zeros((batch_size*i_dim, 1)).to(prediction.device)
-
-    pred_scale_full[valid_boxes[:,0]] = pred_scale
-    pred_shift_full[valid_boxes[:,0]] = pred_shift
-
-    pred_scale_full = pred_scale_full.view(batch_size, i_dim)
-    pred_shift_full = pred_shift_full.view(batch_size, i_dim)
-
-    return pred_scale_full, pred_shift_full
-    
-def pick_predictions_instances_canonical(prediction, labels): 
-    h, w = prediction.shape[2:]
-    batch_size, i_dim = labels.shape[0:2]
-
-    labels_fast = torch.where(labels == 0, 1, labels) 
-    labels_fast -= 1
-    labels_fast = labels_fast.view(batch_size*i_dim)
-    
-    valid_boxes = labels.view(batch_size * i_dim, 1)
-    valid_boxes = torch.nonzero(valid_boxes != 0)
-    
-    size_boxes_sq = valid_boxes.shape[0]
-
-    labels_fast = labels_fast[valid_boxes[:,0]]
-    
-    canonical = prediction[torch.arange(size_boxes_sq), labels_fast].unsqueeze(1)
+"""
+Boxes operations end
+"""
 
 
-    canonical_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(prediction.device)
-    canonical_full[valid_boxes[:,0]] = canonical 
+"""
+Select features operations start
+"""
 
-    canonical_full = canonical_full.view(batch_size, i_dim, h, w)
-    
-    return canonical_full
 
-def roi_select_features(feature_map, box, labels, downsampling=4):
-    # Can be more efficient to skip zero maps?
+def roi_select_features(feature_map, boxes, labels, downsampling=4):
     with torch.no_grad():
-        batch_size, i_dim = box.shape[0:2]
-        
-        height, width = feature_map.size(-2), feature_map.size(-1)
-        box_coordinates = box.view(batch_size * i_dim, 4)
+        height, width = feature_map.shape[2:] 
 
-        instances_per_batch = torch.nonzero(labels != 0)
-        instances_per_batch = torch.bincount(instances_per_batch[:, 0])
-        
-        valid_boxes = labels.view(batch_size * i_dim, 1)
-        valid_boxes = torch.nonzero(valid_boxes != 0)
+        boxes_valid, _ = get_valid_boxes(boxes, labels)
+        instances_per_batch, num_valid_boxes = get_valid_num_instances_per_batch(boxes, labels)
 
-        box_coordinates = box_coordinates[valid_boxes[:, 0]]
-        i_dim = box_coordinates.shape[0] 
+        box_coordinates_projected = project_box_to_feature_map(boxes_valid, downsampling)
 
-        box_coordinates = project_box_to_feature_map(box_coordinates, downsampling)
-
-        ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
+        ymin, xmin, ymax, xmax = box_coordinates_projected.split(1, dim=1)
 
         row_indices = torch.arange(height, device=feature_map.device).unsqueeze(0)
         col_indices = torch.arange(width, device=feature_map.device).unsqueeze(0)
@@ -286,14 +234,16 @@ def roi_select_features(feature_map, box, labels, downsampling=4):
       
         if False: 
             for i in range(masked_feature_map.shape[0]): 
-                x = upsample(masked_feature_map, 4)
+                x = upsample(masked_feature_map[i, :, :, :].unsqueeze(1), 4)
                 x = x[i, 0, :, :].unsqueeze(0).permute(1,2,0)
-                x = (x - torch.min(x))/(torch.max(x) - torch.min(x))
+                x = (x - torch.min(x)) / (torch.max(x) - torch.min(x))
                 x = (x.cpu().detach().numpy() * 255).astype('uint8')
                 cv2.imshow(str(i), x)
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
+
         return masked_feature_map
+
 
 def roi_select_features_module(feature_map, box, labels, class_label, downsampling=4):
     # Can be more efficient to skip zero maps?
@@ -339,6 +289,7 @@ def roi_select_features_module(feature_map, box, labels, class_label, downsampli
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
         return masked_feature_map
+
 
 def roi_select_features_canonical_shared(feature_map, box, labels, downsampling=4):
     # Can be more efficient to skip zero maps?
@@ -398,49 +349,6 @@ def roi_select_features_canonical_shared(feature_map, box, labels, downsampling=
     
         return feature_maps_final
 
-def roi_select_features_ag(feature_map, box, labels, downsampling=4):
-    # Can be more efficient to skip zero maps?
-    with torch.no_grad():
-        batch_size, i_dim = box.shape[0:2]
-        
-        height, width = feature_map.size(-2), feature_map.size(-1)
-        box_coordinates = box.view(batch_size * i_dim, 4)
-
-        instances_per_batch = torch.nonzero(labels != 0)
-        instances_per_batch = torch.bincount(instances_per_batch[:, 0])
-        
-        valid_boxes = labels.view(batch_size * i_dim, 1)
-        valid_boxes = torch.nonzero(valid_boxes != 0)
-
-        box_coordinates = box_coordinates[valid_boxes[:, 0]]
-        i_dim = box_coordinates.shape[0] 
-
-        box_coordinates = project_box_to_feature_map(box_coordinates, downsampling)
-
-        ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
-
-        row_indices = torch.arange(height, device=feature_map.device).unsqueeze(0)
-        col_indices = torch.arange(width, device=feature_map.device).unsqueeze(0)
-
-        row_mask = (row_indices >= ymin) & (row_indices <= ymax)
-        col_mask = (col_indices >= xmin) & (col_indices <= xmax)
-
-        row_mask = row_mask.unsqueeze(1).unsqueeze(-1)
-        col_mask = col_mask.unsqueeze(1).unsqueeze(2)
-
-        zeros_mask = torch.cat([torch.zeros_like(feature_map[i, :, :, :].unsqueeze(0)).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
-        masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
-
-        masked_feature_map = torch.cat([torch.cat([feature_map[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) * masks[i], feature_map[i, :, :, :].unsqueeze(0).repeat(times,1,1,1)], dim=1) for i, times in enumerate(instances_per_batch)], dim=0)
-
-        #x = upsample(masked_feature_map, 4)
-        #x = x[0, 0, :, :].unsqueeze(0).permute(1,2,0)
-        #x = (x - torch.min(x))/(torch.max(x) - torch.min(x))
-        #x = (x.cpu().detach().numpy() * 255).astype('uint8')
-        #cv2.imshow("instances_mapped_ittmage", x)
-        #cv2.waitKey(0)
-        #cv2.destroyAllWindows()
-        return masked_feature_map
 
 def roi_select_features_ag(feature_map, box, labels, downsampling=4):
     # Can be more efficient to skip zero maps?
@@ -486,3 +394,119 @@ def roi_select_features_ag(feature_map, box, labels, downsampling=4):
         #cv2.destroyAllWindows()
         return masked_feature_map
 
+
+def roi_select_features_ag(feature_map, box, labels, downsampling=4):
+    # Can be more efficient to skip zero maps?
+    with torch.no_grad():
+        batch_size, i_dim = box.shape[0:2]
+        
+        height, width = feature_map.size(-2), feature_map.size(-1)
+        box_coordinates = box.view(batch_size * i_dim, 4)
+
+        instances_per_batch = torch.nonzero(labels != 0)
+        instances_per_batch = torch.bincount(instances_per_batch[:, 0])
+        
+        valid_boxes = labels.view(batch_size * i_dim, 1)
+        valid_boxes = torch.nonzero(valid_boxes != 0)
+
+        box_coordinates = box_coordinates[valid_boxes[:, 0]]
+        i_dim = box_coordinates.shape[0] 
+
+        box_coordinates = project_box_to_feature_map(box_coordinates, downsampling)
+
+        ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
+
+        row_indices = torch.arange(height, device=feature_map.device).unsqueeze(0)
+        col_indices = torch.arange(width, device=feature_map.device).unsqueeze(0)
+
+        row_mask = (row_indices >= ymin) & (row_indices <= ymax)
+        col_mask = (col_indices >= xmin) & (col_indices <= xmax)
+
+        row_mask = row_mask.unsqueeze(1).unsqueeze(-1)
+        col_mask = col_mask.unsqueeze(1).unsqueeze(2)
+
+        zeros_mask = torch.cat([torch.zeros_like(feature_map[i, :, :, :].unsqueeze(0)).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
+        masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
+
+        masked_feature_map = torch.cat([torch.cat([feature_map[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) * masks[i], feature_map[i, :, :, :].unsqueeze(0).repeat(times,1,1,1)], dim=1) for i, times in enumerate(instances_per_batch)], dim=0)
+
+        #x = upsample(masked_feature_map, 4)
+        #x = x[0, 0, :, :].unsqueeze(0).permute(1,2,0)
+        #x = (x - torch.min(x))/(torch.max(x) - torch.min(x))
+        #x = (x.cpu().detach().numpy() * 255).astype('uint8')
+        #cv2.imshow("instances_mapped_ittmage", x)
+        #cv2.waitKey(0)
+        #cv2.destroyAllWindows()
+        return masked_feature_map
+
+
+"""
+Select features operations end
+"""
+
+
+"""
+Select out operations start
+"""
+
+
+def pick_predictions_instances_scale_shift(prediction_scale_shift, labels):
+
+    batch_size, labels_max_size = labels.shape[0:2]
+
+    # Prediction --> num_classes - 1 does not include null #
+    labels_reshaped = labels.view(batch_size*labels_max_size)
+    labels_valid_idx = torch.nonzero(labels_reshaped != 0)
+    labels_valid_num = labels_valid_idx.shape[0]
+
+    labels_valid = labels_reshaped[labels_valid_idx[:,0]]
+    labels_valid -= 1 
+
+    pred_scale = prediction_scale_shift[:, ::2]
+    pred_shift = prediction_scale_shift[:, 1::2]
+
+    # Pick scale/shift that corresponds to the correct class #
+    pred_scale = pred_scale[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)
+    pred_shift = pred_shift[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)
+
+    pred_scale_full = torch.zeros((batch_size*labels_max_size, 1)).to(prediction_scale_shift.device)
+    pred_shift_full = torch.zeros((batch_size*labels_max_size, 1)).to(prediction_scale_shift.device)
+
+    pred_scale_full[labels_valid_idx[:,0]] = pred_scale
+    pred_shift_full[labels_valid_idx[:,0]] = pred_shift
+
+    pred_scale_full = pred_scale_full.view(batch_size, labels_max_size)
+    pred_shift_full = pred_shift_full.view(batch_size, labels_max_size)
+
+    return pred_scale_full, pred_shift_full
+    
+
+def pick_predictions_instances_canonical(prediction, labels): 
+    h, w = prediction.shape[2:]
+    batch_size, i_dim = labels.shape[0:2]
+
+    labels_fast = torch.where(labels == 0, 1, labels) 
+    labels_fast -= 1
+    labels_fast = labels_fast.view(batch_size*i_dim)
+    
+    valid_boxes = labels.view(batch_size * i_dim, 1)
+    valid_boxes = torch.nonzero(valid_boxes != 0)
+    
+    size_boxes_sq = valid_boxes.shape[0]
+
+    labels_fast = labels_fast[valid_boxes[:,0]]
+    
+    canonical = prediction[torch.arange(size_boxes_sq), labels_fast].unsqueeze(1)
+
+
+    canonical_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(prediction.device)
+    canonical_full[valid_boxes[:,0]] = canonical 
+
+    canonical_full = canonical_full.view(batch_size, i_dim, h, w)
+    
+    return canonical_full
+
+
+"""
+Select out operations end
+"""

@@ -542,65 +542,59 @@ class UniformInstancesSharedCanonical(nn.Module):
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, depth, context, input_feature_map, bin_num, min_depth, max_depth, masks, instances, boxes, labels):
-        pred_depths_r_list = []    # metric 
-        pred_depths_instances_r_list = []
-        pred_depths_rc_list = []   # canonical
-        pred_depths_instances_rc_list = []
+        pred_depths_instances_r_list = [] # Metric
+        pred_depths_instances_rc_list = [] # Canonical
 
-        pred_scale_list = []
-        pred_shift_list = []
         pred_scale_instances_list = []
         pred_shift_instances_list = []
 
         uncertainty_maps_list = []
         pred_depths_c_list = [] 
 
-        b, _, h, w = depth.shape
+        batch_size, _, h, w = depth.shape
+        max_instances_size = instances.shape[1]
 
-        batch_size, i_dim, h, w = instances.shape
+        # Mask feature maps based on bboxes #
+        input_feature_map_instances_roi = roi_select_features(input_feature_map, boxes, labels) 
 
-        input_feature_map_instances = input_feature_map
-        hidd_size, h_hid, w_hid = input_feature_map_instances.shape[1:]
-
-      
-
-        # Change boxes #
-        input_feature_map_instances_roi = roi_select_features(input_feature_map_instances, boxes, labels) 
+        # Scale/Shift #
         instances_scale_shift = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
-        instances_scale, instances_shift = pick_predictions_instances_scale(instances_scale_shift, labels)
+        instances_scale, instances_shift = pick_predictions_instances_scale_shift(instances_scale_shift, labels)
         pred_scale_instances_list.append(instances_scale)
         pred_shift_instances_list.append(instances_shift)
-
-        instances_canonical = self.instances_canonical(input_feature_map, boxes, labels)
         
+        # Canonical instances valid #
+        instances_canonical_prob = self.instances_canonical(input_feature_map, boxes, labels)
+       
         bins_map = get_uniform_bins(depth, min_depth, max_depth, bin_num)[0, :, :, :].unsqueeze(0)
-        bins_map = torch.cat([bins_map] * instances_canonical.shape[0], dim=0)  
-
-        depth_rc_current = (instances_canonical * bins_map.detach()).sum(1, keepdim=True)
-        uncertainty_map_current = torch.sqrt((instances_canonical * ((bins_map.detach() - depth_rc_current.repeat(1, bin_num+1, 1, 1))**2)).sum(1, keepdim=True))
+        bins_map = torch.cat([bins_map] * instances_canonical_prob.shape[0], dim=0)  
+        depth_instances_rc = (instances_canonical_prob * bins_map.detach()).sum(1, keepdim=True)
+      
+        # Unc #
+        uncertainty_map_current = torch.sqrt((instances_canonical_prob * ((bins_map.detach() - depth_instances_rc.repeat(1, bin_num+1, 1, 1))**2)).sum(1, keepdim=True))
         uncertainty_map = uncertainty_map_current
-
-        pred_label = get_label(torch.squeeze(depth_rc_current, 1), bins_map, bin_num).unsqueeze(1)
-        depth_c  = (torch.gather(bins_map.detach(), 1, pred_label.detach()))
-        
-        pred_depths_c_list.append(depth_c)
         uncertainty_maps_list.append(uncertainty_map)
-        instances_canonical = depth_rc_current
+
+        # Labels #
+        pred_label = get_label(torch.squeeze(depth_instances_rc, 1), bins_map, bin_num).unsqueeze(1)
+        depth_c  = (torch.gather(bins_map.detach(), 1, pred_label.detach()))
+        pred_depths_c_list.append(depth_c)
+
+        # Fill full instances map canonical #        
+        canonical_full = torch.zeros((batch_size*max_instances_size, 1, h, w)).to(depth_instances_rc.device)
         
-        valid_boxes = labels.view(batch_size * i_dim, 1)
+        valid_boxes = labels.view(batch_size * max_instances_size, 1)
         valid_boxes = torch.nonzero(valid_boxes != 0)
-        size_boxes_sq = valid_boxes.shape[0]
-        canonical_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(instances_canonical.device)
-        canonical_full[valid_boxes[:,0]] = instances_canonical 
-        canonical_full = canonical_full.view(batch_size, i_dim, h, w)
-        instances_canonical = canonical_full
-        pred_depths_instances_rc_list.append(instances_canonical)
-    
+
+        canonical_full[valid_boxes[:,0]] = depth_instances_rc
+        depth_instances_rc = canonical_full.view(batch_size, max_instances_size, h, w)
+        pred_depths_instances_rc_list.append(depth_instances_rc)
+   
         # Metric
         if self.loss_type == 0:
-            depth_instances_r = (self.relu(instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+            depth_instances_r = (self.relu(depth_instances_rc * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
         else:
-            depth_instances_r = instances_canonical * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1)
+            depth_instances_r = depth_instances_rc * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1)
        
         # depth_r: b, c, h, w
         pred_depths_instances_r_list.append(depth_instances_r)
@@ -698,7 +692,7 @@ class RegressionInstancesSemanticNoMaskingCanonical(nn.Module):
         instances_scale_shift = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
         instances_canonical = self.instances_canonical(input_feature_map_instances_roi, boxes, labels)
 
-        instances_scale, instances_shift = pick_predictions_instances_scale(instances_scale_shift, labels)
+        instances_scale, instances_shift = pick_predictions_instances_scale_shift(instances_scale_shift, labels)
         pred_scale_instances_list.append(instances_scale)
         pred_shift_instances_list.append(instances_shift)
 
@@ -920,7 +914,7 @@ class RegressionInstancesSharedCanonical(nn.Module):
         # Change boxes #
         input_feature_map_instances_roi = roi_select_features(input_feature_map_instances, boxes, labels) 
         instances_scale_shift = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
-        instances_scale, instances_shift = pick_predictions_instances_scale(instances_scale_shift, labels)
+        instances_scale, instances_shift = pick_predictions_instances_scale_shift(instances_scale_shift, labels)
         pred_scale_instances_list.append(instances_scale)
         pred_shift_instances_list.append(instances_shift)
 
@@ -1281,7 +1275,7 @@ class RegressionInstancesPerClassC(nn.Module):
         # Change boxes #
         input_feature_map_instances_roi = roi_select_features(input_feature_map_instances, boxes, labels)
         instances_scale_shift = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
-        instances_scale, instances_shift = pick_predictions_instances_scale(instances_scale_shift, labels)
+        instances_scale, instances_shift = pick_predictions_instances_scale_shift(instances_scale_shift, labels)
 
         input_feature_map_instances_roi_canonical = roi_select_features_canonical_shared(input_feature_map_instances, boxes, labels)
         input_feature_map_instances_roi_canonical = input_feature_map_instances_roi_canonical.view(batch_size*(self.num_semantic_classes-1), hidd_size, h_hid, w_hid)
@@ -1345,12 +1339,6 @@ class RegressionInstancesPerClassC(nn.Module):
         result["pred_shift_instances_list"] = pred_shift_instances_list
 
         return result
-
-
-
-
-
-
 
 
 
