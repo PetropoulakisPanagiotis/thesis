@@ -13,43 +13,37 @@ class NewCRFDepth(nn.Module):
     """
     Depth network based on neural window FC-CRFs architecture
     """
-    def __init__(self, version=None, pretrained=None, 
-                    frozen_stages=-1, min_depth=0.1, max_depth=100.0, max_tree_depth=6, 
-                    bin_num=16, update_block=0, loss_type=0, train_decoder=0, 
-                    predict_unc=False, num_semantic_classes=14, num_instances=63, var=0, padding_instances=0, **kwargs):
+    def __init__(self, version=None, pretrained=None, min_depth=0.1, max_depth=100.0, max_tree_depth=6, 
+                    bin_num=16, update_block=0, loss_type=0, train_decoder=0, predict_unc=False, \
+                    num_semantic_classes=14, num_instances=63, var=0, padding_instances=0, **kwargs):
         super().__init__()
 
-        self.with_auxiliary_head = False
-        self.with_neck = False
-        
-        # 1 train last layer of decoder 
         self.freeze_backbone = True
-        self.train_decoder = train_decoder 
+        self.train_decoder = train_decoder # train the last layer of decoder 
         
-        # GRU iter
+        # Bins
         self.max_tree_depth = max_tree_depth 
         self.bin_num = bin_num
         self.min_depth = min_depth
         self.max_depth = max_depth
+        
+        # Instances         
         self.num_semantic_classes = num_semantic_classes
         self.num_instances = num_instances
         self.var = var
         self.padding_instances = padding_instances
 
-        # Uncertainty
+        # Uncertainty from decoder head
         self.predict_unc = predict_unc
 
-        # 0 silog loss relu 
+        # 0 silog (use relu) or l1 
         self.update_block = update_block  
         if loss_type == 0:
             self.loss_type = 0 
         else:
             self.loss_type = 1
         
-        norm_cfg = dict(type='BN', requires_grad=True)
-        window_size = int(version[-2:])
-
-        # Backbone dims #
+        # Backbone dims
         if version[:-2] == 'base':
             embed_dim = 128
             depths = [2, 2, 18, 2]
@@ -66,72 +60,62 @@ class NewCRFDepth(nn.Module):
             num_heads = [3, 6, 12, 24]
             in_channels = [96, 192, 384, 768]
         
-        self.hidden_dim = 32   #128
-        self.context_dim = 32  #96 
+        self.hidden_dim = 128
+        self.context_dim = 96 
+
         # Set update block #
-        if self.update_block == 0: # IEBins
-            self.update = BasicUpdateBlockDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=16)
+        if self.update_block == 0: 
+            self.update = IEBINS(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=bin_num)
+        
         elif self.update_block == 1: # Seg - Module concat mask bins  
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = RegressionSemanticNoMaskingCanonicalConcProjMaskBins(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, operation_mask=None)                
+       
         elif self.update_block == 2: # Canonical - one scale per image and no projection segmentation
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = RegressionInstancesSharedCanonicalBins(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
+        
         elif self.update_block == 6: # Canonical - one scale per image and no projection 
             self.update = BasicUpdateBlockCSNoProjectDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+        
         elif self.update_block == 8: # Canonical - one scale per image and NO GRU
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = Regression(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+        
         elif self.update_block == 12: # Canonical - one scale per image and no projection segmentation
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = RegressionSemanticNoMaskingCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)        
+        
         elif self.update_block == 13: # Canonical - one scale per image and no projection segmentation
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = RegressionSemanticNoMaskingCanonicalConc(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
+        
         elif self.update_block == 15: # Canonical - one scale per image and no projection segmentation
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = RegressionSemanticNoMaskingCanonicalConcProjMask(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, operation_mask=None)
+        
         elif self.update_block == 18:
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = UniformSingle(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+        
         elif self.update_block == 20: # Canonical - one scale per image and no projection segmentation
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = RegressionInstancesSemanticNoMaskingCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)         
+        
         elif self.update_block == 21: # Canonical - one scale per image and no projection segmentation
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = RegressionInstancesAgnostic(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
+        
         elif self.update_block == 22: # Canonical - one scale per image and no projection segmentation
-            self.hidden_dim = 128     #128
-            self.context_dim = 96
             self.update = RegressionInstancesSharedCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
+        
         elif self.update_block == 23: # Canonical - one scale per image and no projection segmentation
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = RegressionInstancesPerClassC(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
+        
         elif self.update_block == 24: # Canonical - one scale per image and no projection segmentation
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = UniformSemanticNoMaskingCanonicalConc(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
+        
         elif self.update_block == 25: # Canonical - one scale per image and no projection segmentation
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = RegressionInstancesSharedCanonicalModule(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
+        
         elif self.update_block == 26: # Canonical - one scale per image and no projection segmentation
-            self.hidden_dim = 128   #128
-            self.context_dim = 96
             self.update = RegressionInstancesNoSharedCanonicalModule(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
+        
         else:
             pass
 
+        window_size = int(version[-2:]) # tiny07
         backbone_cfg = dict(
             embed_dim=embed_dim,
             depths=depths,
@@ -141,9 +125,12 @@ class NewCRFDepth(nn.Module):
             drop_path_rate=0.3,
             patch_norm=True,
             use_checkpoint=False,
-            frozen_stages=frozen_stages
+            frozen_stages=-1
         )
 
+        self.backbone = SwinTransformer(**backbone_cfg)
+        
+        norm_cfg = dict(type='BN', requires_grad=True)
         embed_dim = 512
         decoder_cfg = dict(
             in_channels=in_channels,
@@ -156,9 +143,8 @@ class NewCRFDepth(nn.Module):
             align_corners=False
         )
 
-        self.backbone = SwinTransformer(**backbone_cfg)
        
-        # Decoder layers # 
+        # Decoder layers
         v_dim = decoder_cfg['num_classes']*4
         win = 7
         crf_dims = [128, 256, 512, 1024]
@@ -166,33 +152,21 @@ class NewCRFDepth(nn.Module):
         self.crf3 = NewCRF(input_dim=in_channels[3], embed_dim=crf_dims[3], window_size=win, v_dim=v_dims[3], num_heads=32)
         self.crf2 = NewCRF(input_dim=in_channels[2], embed_dim=crf_dims[2], window_size=win, v_dim=v_dims[2], num_heads=16)
         self.crf1 = NewCRF(input_dim=in_channels[1], embed_dim=crf_dims[1], window_size=win, v_dim=v_dims[1], num_heads=8)
-        #self.crf0 = NewCRF(input_dim=in_channels[0], embed_dim=crf_dims[0], window_size=win, v_dim=v_dims[0], num_heads=4) # Used in NDDepth 
 
-        # Last layer - "downsampling" encoder # 
+        # PSP: Pyramid Pooling Module + Convs 
         self.psp_module = PSP(**decoder_cfg)
 
-        # Depth upsampling #
-        self.up_mode = 'bilinear'
-        if self.up_mode == 'mask':
-            self.mask_head = nn.Sequential(
-                nn.Conv2d(v_dims[0], 64, 3, padding=1),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(64, 16*9, 1, padding=0))
+        # Project decoder features to hidden_dim of update_block
+        self.project = ProjectionV2(v_dims[0], self.hidden_dim) 
 
-        # GRU #
-        self.project = ProjectionCustom(v_dims[0], self.hidden_dim) # Project features to GRU input 
-        if self.update_block != 8 and self.update_block != 10:
-            self.project_context = ProjectionCustom(in_channels[0], self.hidden_dim) # Project features to GRU input  
-
-        # Predict uncertainty from decoder features #
+        # Predict uncertainty from the decoder features
         if self.predict_unc: 
-            self.uncer_head = UncerHead(input_dim=crf_dims[0])
+            self.uncer_head = UncertaintyHead(input_dim=crf_dims[0])
  
-        # Initialize layers #
+        # Initialize layers
         self.init_weights(pretrained=pretrained)
 
-	    # Freeze some weights #
-        # Also train project  #
+	    # Freeze some layers
         if self.freeze_backbone:
             for param in self.backbone.parameters():
                 param.requires_grad = False
@@ -206,10 +180,12 @@ class NewCRFDepth(nn.Module):
                 for param in self.crf1.parameters():
                     param.requires_grad = False
             else:
-                print("Training last decoder layer")
+                print("[Train last layer of decoder (crf1)]")
+
 
     def init_weights(self, pretrained=None):
-        """Initialize the weights in backbone and heads.
+        """
+        Initialize the weights in backbone and heads.
 
         Args:
             pretrained (str, optional): Path to pre-trained weights.
@@ -218,61 +194,33 @@ class NewCRFDepth(nn.Module):
         print(f'== Load encoder backbone from: {pretrained}')
         self.backbone.init_weights(pretrained=pretrained)
         self.psp_module.init_weights()
-        if self.with_auxiliary_head:
-            if isinstance(self.auxiliary_head, nn.ModuleList):
-                for aux_head in self.auxiliary_head:
-                    aux_head.init_weights()
-            else:
-                self.auxiliary_head.init_weights()
 
-    def upsample_mask(self, disp, mask):
-        """ Upsample disp [H/4, W/4, 1] -> [H, W, 1] using convex combination """
-        N, C, H, W = disp.shape
-        mask = mask.view(N, 1, 9, 4, 4, H, W)
-        mask = torch.softmax(mask, dim=2)
 
-        up_disp = F.unfold(disp, kernel_size=3, padding=1)
-        up_disp = up_disp.view(N, C, 9, 1, 1, H, W)
-
-        up_disp = torch.sum(mask * up_disp, dim=2)
-        up_disp = up_disp.permute(0, 1, 4, 2, 5, 3)
-        return up_disp.reshape(N, C, 4*H, 4*W)
-
-    def forward(self, imgs, epoch=1, step=100, masks=None, instances=None, boxes=None, labels=None):
+    def forward(self, imgs, masks=None, instances=None, boxes=None, labels=None):
 
         feats = self.backbone(imgs)
         psp_out = self.psp_module(feats)
 
-        # crf concat with encoder features
+        # CRF concat with bacbone features
         e3 = self.crf3(feats[3], psp_out)
         e3 = nn.PixelShuffle(2)(e3)
         e2 = self.crf2(feats[2], e3)
         e2 = nn.PixelShuffle(2)(e2)
         e1 = self.crf1(feats[1], e2)
         e1 = nn.PixelShuffle(2)(e1) 
-        e0 = self.project(e1)
-        #e0 = self.crf0(feats[0], e1) # NDDepth - remove tanh after? we also need project after btw 
+        e0 = self.project(e1)      # To hidden_dim  
 
-        max_tree_depth = self.max_tree_depth
-
-        if self.up_mode == 'mask':
-            mask = self.mask_head(e1)
-
-        # Uncertainty prediction from the decoder #
+        # Uncertainty prediction from the decoder
         if self.predict_unc:
             unc_decoder = self.uncer_head(e0)
 
         b, c, h, w = e1.shape
-        device = e1.device
- 
-        depth = torch.zeros([b, 1, h, w]).to(device)
-        context = feats[0]
 
-        if self.update_block != 8 and self.update_block != 10 and self.update_block != 11:
-            context = self.project_context(context)
-        gru_hidden = torch.tanh(e0)
+        depth = torch.zeros([b, 1, h, w]).to(e1.device)
+        context = feats[0] # Ealry feature map - backbone
 
-        # Predict depth with GRU. context: early feature map and hidden: late feature map #
+        input_feature_map = torch.tanh(e0) # From crf
+
         if (self.update_block >= 9 and self.update_block < 18) or self.update_block >= 20 or self.update_block == 1 or self.update_block == 2:
             masks = upsample(masks, scale_factor=1/4)
             if instances != None:
@@ -281,54 +229,30 @@ class NewCRFDepth(nn.Module):
                and self.update_block != 18 and self.update_block != 24:
                 masks = (masks > 0.4).float()
             if self.update_block >= 20 and self.update_block != 24 or self.update_block == 2:
-                result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks, instances, boxes, labels)
+                result = self.update(depth, context, input_feature_map, self.max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks, instances, boxes, labels)
             else:
-                result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks)
+                result = self.update(depth, context, input_feature_map, self.max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks)
         else:
-            result = self.update(depth, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
-            #result = self.update(depth, unc, context, gru_hidden, max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
+            result = self.update(depth, context, input_feature_map, self.max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
            
 
-        if self.up_mode == 'mask':
-            for i in range(max_tree_depth):
-                if (self.update_block < 20 or self.update_block == 24) and self.update_block != 2:
-                    result["pred_depths_r_list"][i] = self.upsample_mask(result["pred_depths_r_list"][i], mask)  
-                    result["pred_depths_rc_list"][i] = self.upsample_mask(result["pred_depths_rc_list"][i], mask.detach())
-                
-                if (self.update_block >= 20 and self.update_block != 24) or self.update_block == 2:
-                    result["pred_depths_instances_r_list"][i] = self.upsample_mask(result["pred_depths_instances_r_list"][i], mask)  
-                    result["pred_depths_instances_rc_list"][i] = self.upsample_mask(result["pred_depths_instances_rc_list"][i], mask.detach())
+        for i in range(self.max_tree_depth):
 
-                if self.update_block != 8 and self.update_block != 12 and self.update_block != 13 \
-                   and self.update_block != 15 \
-                   and self.update_block != 20 and self.update_block != 21 and self.update_block != 22 and self.update_block != 23 and self.update_block != 25 and self.update_block != 26:
-                    result["uncertainty_maps_list"][i] = self.upsample_mask(result["uncertainty_maps_list"][i], mask.detach())
-                    result["pred_depths_c_list"][i] = self.upsample_mask(result["pred_depths_c_list"][i], mask.detach())
-
-            if self.update_block == 2: # Predict uncertainty from GRU       
-                for i in range(max_tree_depth):
-                    result["pred_depths_u_list"][i] = self.upsample_mask(result["pred_depths_u_list"][i], mask.detach())
-
-            if self.predict_unc:
-                unc_decoder = self.upsample_mask(unc_decoder, mask.detach())
-                result["unc_decoder"] = unc_decoder
-        else:
-            for i in range(max_tree_depth):
-
-                if (self.update_block < 20 or self.update_block == 24) and self.update_block != 2:
-                    result["pred_depths_r_list"][i] = upsample(result["pred_depths_r_list"][i], scale_factor=4)
+            if (self.update_block < 20 or self.update_block == 24) and self.update_block != 2:
+                result["pred_depths_r_list"][i] = upsample(result["pred_depths_r_list"][i], scale_factor=4)
+                if self.update_block != 0:
                     result["pred_depths_rc_list"][i] = upsample(result["pred_depths_rc_list"][i], scale_factor=4) 
 
-                if (self.update_block >= 20 and self.update_block != 24) or self.update_block == 2:
-                    result["pred_depths_instances_r_list"][i] = upsample(result["pred_depths_instances_r_list"][i], scale_factor=4)  
-                    result["pred_depths_instances_rc_list"][i] = upsample(result["pred_depths_instances_rc_list"][i], scale_factor=4)
+            if (self.update_block >= 20 and self.update_block != 24) or self.update_block == 2:
+                result["pred_depths_instances_r_list"][i] = upsample(result["pred_depths_instances_r_list"][i], scale_factor=4)  
+                result["pred_depths_instances_rc_list"][i] = upsample(result["pred_depths_instances_rc_list"][i], scale_factor=4)
 
-                if self.update_block != 8 and self.update_block != 12 \
-                    and self.update_block != 13 and self.update_block != 15 \
-                    and self.update_block != 20 and self.update_block != 21 and self.update_block != 22 \
-                    and self.update_block != 23 and self.update_block != 25 and self.update_block != 26:
-                    result["pred_depths_c_list"][i] = upsample(result["pred_depths_c_list"][i], scale_factor=4) 
-                    result["uncertainty_maps_list"][i] = upsample(result["uncertainty_maps_list"][i], scale_factor=4) 
+            if self.update_block != 8 and self.update_block != 12 \
+                and self.update_block != 13 and self.update_block != 15 \
+                and self.update_block != 20 and self.update_block != 21 and self.update_block != 22 \
+                and self.update_block != 23 and self.update_block != 25 and self.update_block != 26:
+                result["pred_depths_c_list"][i] = upsample(result["pred_depths_c_list"][i], scale_factor=4) 
+                result["uncertainty_maps_list"][i] = upsample(result["uncertainty_maps_list"][i], scale_factor=4) 
 
             if self.predict_unc:
                 unc_decoder = upsample(unc_decoder, scale_factor=4)
@@ -336,12 +260,13 @@ class NewCRFDepth(nn.Module):
 
         return result
 
-class UncerHead(nn.Module):
-    """
-    NDDepth uncertainty head [0,1]
-    """
-    def __init__(self, input_dim=100):
-        super(UncerHead, self).__init__()
+
+"""
+UncertaintyHead [0,1]
+"""
+class UncertaintyHead(nn.Module):
+    def __init__(self, input_dim=128):
+        super(UncertaintyHead, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
         self.sigmoid = nn.Sigmoid()
 

@@ -255,22 +255,17 @@ def main_worker(gpu, ngpus_per_node, args):
                 checkpoint = torch.load(args.checkpoint_path, map_location=loc)
             
             # Fix weights #
-            if args.update_block != 0:
-                # Canonical #
-                weights_to_remove_1 = "update"
-                weights_to_remove_2 = "project"
-                keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove_1 in key]
-                keys_to_remove.extend([key for key in checkpoint['model'].keys() if weights_to_remove_2 in key]) 
+            weights_to_remove_1 = "update"
+            weights_to_remove_2 = "project"
+            keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove_1 in key]
+            keys_to_remove.extend([key for key in checkpoint['model'].keys() if weights_to_remove_2 in key]) 
 
-                for key_to_remove in keys_to_remove:
-                    checkpoint['model'].pop(key_to_remove)
+            for key_to_remove in keys_to_remove:
+                checkpoint['model'].pop(key_to_remove)
 
-                model.load_state_dict(checkpoint['model'], strict=False)
-                #optimizer.load_state_dict(checkpoint['optimizer'])
-            else:
-                model.load_state_dict(checkpoint['model'])
-                optimizer.load_state_dict(checkpoint['optimizer'])
-            
+            model.load_state_dict(checkpoint['model'], strict=False)
+            #optimizer.load_state_dict(checkpoint['optimizer'])
+
             if not args.retrain:
                 try:
                     global_step = checkpoint['global_step']
@@ -357,7 +352,9 @@ def main_worker(gpu, ngpus_per_node, args):
         pred_depths_r_list, pred_depths_rc_list, pred_depths_instances_r_list, \
          pred_depths_instances_rc_list, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list, unc, labels  \
           = [], [], [], [], [], [], [], None, None
-        instances, boxes, labels = None, None, None
+        
+        segmentation_map, instances, boxes, labels = None, None, None, None
+       
         if args.distributed:
             dataloader.train_sampler.set_epoch(epoch)
 
@@ -373,6 +370,7 @@ def main_worker(gpu, ngpus_per_node, args):
             b, _, h, w = depth_gt.shape
 
             if args.dataset == 'nyu' and args.segmentation:
+                args.max_tree_depth = 1
                 segmentation_map = torch.autograd.Variable(sample_batched['segmentation_map'].cuda(args.gpu, non_blocking=True))
                 if args.instances:
                     instances = torch.autograd.Variable(sample_batched['instances_masks'].cuda(args.gpu, non_blocking=True))

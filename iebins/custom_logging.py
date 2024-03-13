@@ -31,7 +31,8 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
             
             # Uncertainty decoder 
             if args.predict_unc:
-                writer.add_image('uncer_decoder_est{}/image/{}'.format(ii, i), colormap(unc_decoder[i, :, :, :].data, name='viridis'), global_step)
+                writer.add_image('uncer_decoder_est/image/{}'.format(i), colormap(unc_decoder[i, :, :, :].data, name='viridis'), global_step)
+
             # Bins 
             else:            
                 if args.update_block != 8 and not (args.update_block >= 12 and args.update_block <= 15) and args.update_block != 20 and args.update_block != 21 \
@@ -89,7 +90,8 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
                                       name='magma'), global_step)
             # Uncertainty decoder 
             if args.predict_unc:
-                writer.add_image('uncer_decoder_est{}/image/{}'.format(ii, i), colormap(unc_decoder[i, :, :, :].data, name='viridis'), global_step)
+                writer.add_image('uncer_decoder_est/image/{}'.format(i), colormap(unc_decoder[i, :, :, :].data, name='viridis'), global_step)
+
             # Bins 
             else:
                 if args.update_block != 8 and args.update_block != 12 \
@@ -128,7 +130,8 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
    
             # Metric         
             for ii in range(max_tree_depth):
-                writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].clamp(min=1e-3).data), name='magma'), global_step)
+                writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].clamp(min=1e-3).data), \
+                                 name='magma'), global_step)
 
             # Canonical 
             if args.update_block != 0:
@@ -138,16 +141,28 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
 
             # Uncertainty decoder 
             if args.predict_unc:
-                writer.add_image('uncer_depth_est{}/image/{}'.format(ii, i), colormap(unc_decoder[i, :, :, :].data, name='viridis'), global_step)
+                writer.add_image('uncer_decoder_est/image/{}'.format(i), colormap(unc_decoder[i, :, :, :].clamp(min=1e-3).data, name='viridis'), global_step)
+
             # Bins
             else:
-                if args.update_block != 8 and args.update_block != 12 \
-                   and args.update_block != 13 and args.update_block != 15:            
-                    for ii in range(max_tree_depth):
-                        writer.add_image('depth_labels_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].clamp(min=1e-3).data), \
-                                         name='magma'), global_step)
-                        
-                        writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].data), global_step)
+                for ii in range(max_tree_depth):
+                    writer.add_image('depth_labels_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].clamp(min=1e-3).data), \
+                                     name='magma'), global_step)
+                    
+                    writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].clamp(min=1e-3).data), global_step)
+
+
+def debug_visualize_gt_instances(instances, mask, depth_gt):
+    instances[:, 2:, :, :] = 0
+    
+    instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
+    
+    mask = mask * instances_gt_mask 
+    depth_gt = depth_gt * instances_gt_mask
+    
+    cv2.imshow("gt instances viz", depth_gt[0, 0, :, :].cpu().numpy())
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 
 def debug_result(result, gt_depth):
@@ -209,15 +224,3 @@ def debug_result(result, gt_depth):
         print(torch.min(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
         print(torch.mean(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
         print(torch.std(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
-
-def debug_visualize_gt_instances(instances, mask, depth_gt):
-    instances[:, 2:, :, :] = 0
-    
-    instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
-    
-    mask = mask * instances_gt_mask 
-    depth_gt = depth_gt * instances_gt_mask
-    
-    cv2.imshow("gt instances viz", depth_gt[0, 0, :, :].cpu().numpy())
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
