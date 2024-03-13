@@ -402,7 +402,7 @@ def main_worker(gpu, ngpus_per_node, args):
             if args.update_block != 8 and args.update_block != 10 and args.update_block != 11 and args.update_block != 12 \
                and args.update_block != 13 and args.update_block != 15 and \
                args.update_block != 20 and args.update_block != 21 and args.update_block != 22 \
-               and args.update_block != 23 and args.update_block != 25 and args.update_block != 26:            
+               and args.update_block != 23 and args.update_block != 25 and args.update_block != 26 and args.update_block != 4:            
                 pred_depths_c_list = result["pred_depths_c_list"]
                 uncertainty_maps_list = result["uncertainty_maps_list"]
             if args.instances:
@@ -413,7 +413,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 pred_shift_instances_list = result["pred_shift_instances_list"]
                 
             # Canonical #
-            if args.update_block != 0 and args.update_block != 3:
+            if args.update_block != 0 and args.update_block != 3 and args.update_block != 4:
                 pred_depths_rc_list = result["pred_depths_rc_list"]
             
             if args.predict_unc == True:
