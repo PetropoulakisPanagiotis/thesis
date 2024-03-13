@@ -69,8 +69,9 @@ def online_eval(model, update_block, dataloader_eval, gpu, epoch, ngpus, group, 
             else:
                 result = model(image)
 
-            pred_depths_r_list = result["pred_depths_r_list"]
-            if args.instances: ### fix aggregation after
+            if not args.instances:
+                pred_depths_r_list = result["pred_depths_r_list"]
+            else:
                 pred_depths_r_list = result["pred_depths_instances_r_list"] 
             
             # uncertainty #
@@ -396,9 +397,9 @@ def main_worker(gpu, ngpus_per_node, args):
             #debug_result(result, depth_gt)           
  
             # Unpack #            
-            pred_depths_r_list = result["pred_depths_r_list"]
+            if not args.instances:
+                pred_depths_r_list = result["pred_depths_r_list"]
 
-            max_tree_depth = len(pred_depths_r_list)
             if args.update_block != 8 and args.update_block != 10 and args.update_block != 11 and args.update_block != 12 \
                and args.update_block != 13 and args.update_block != 15 and \
                args.update_block != 20 and args.update_block != 21 and args.update_block != 22 \
@@ -413,7 +414,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 pred_shift_instances_list = result["pred_shift_instances_list"]
                 
             # Canonical #
-            if args.update_block != 0 and args.update_block != 3 and args.update_block != 4:
+            if args.update_block != 0 and args.update_block != 3 and args.update_block != 4 and not args.instances:
                 pred_depths_rc_list = result["pred_depths_rc_list"]
             
             if args.predict_unc == True:
@@ -428,7 +429,7 @@ def main_worker(gpu, ngpus_per_node, args):
             #debug_visualize_gt_instances(instances, mask, depth_gt)
 
             # Loss #
-            for curr_tree_depth in range(max_tree_depth):
+            for curr_tree_depth in range(args.max_tree_depth):
                 if args.segmentation:
                     if args.instances:
                         pred_d = torch.sum((pred_depths_instances_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
@@ -510,7 +511,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     writer.add_scalar('var_average', var_sum.item()/var_cnt, global_step)
                     depth_gt = torch.where(depth_gt < 1e-3, depth_gt * 0 + 1e-3, depth_gt)
            
-                tb_visualization(writer, global_step, args, num_images, depth_gt, image, max_tree_depth, pred_depths_r_list, \
+                tb_visualization(writer, global_step, args, num_images, depth_gt, image, args.max_tree_depth, pred_depths_r_list, \
                                  pred_depths_rc_list, pred_depths_instances_r_list, pred_depths_instances_rc_list, num_semantic_classes, \
                                  instances, segmentation_map, labels, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list, unc)
 

@@ -124,6 +124,55 @@ def get_label(depth_prediction, bin_edges, bin_num):
         return label_bin
 
 
+def normalize_box(box, height=480, width=640):
+    with torch.no_grad():
+        return torch.stack(((box[:, 0] / height).float(), 
+                            (box[:, 1] / width).float(), 
+	                        (box[:, 2] / height).float(), 
+	                        (box[:, 3] / width).float()), dim=1)
+
+
+def project_box_to_feature_map(box, downsampling, height=480, width=640, padding=0):
+    global padding_global    
+    padding = padding_global
+    
+    with torch.no_grad():
+        if padding == 0:
+            return torch.ceil(box / downsampling).int()
+        else:
+            new_box = torch.ceil(box / downsampling).int()
+            height /= downsampling
+            width /= downsampling
+
+            new_box = torch.stack((
+                (new_box[:, 0] - padding).clamp(min=0).int(), 
+                (new_box[:, 1] - padding).clamp(min=0).int(), 
+                (new_box[:, 2] + padding).clamp(max=height-1).int(), 
+                (new_box[:, 3] + padding).clamp(max=width-1).int()), dim=1)
+
+            return new_box 
+
+
+def get_valid_normalized_projected_boxes(feature_map, boxes, labels, downsampling):
+    h, w = feature_map.shape[2:]
+    b, num_instances, _ = boxes.shape
+
+    with torch.no_grad():
+        boxes_reshaped = boxes.view(b * num_instances, 4)
+
+        labels_reshaped = labels.view(b * num_instances, 1)
+        boxes_valid_idx = torch.nonzero(labels_reshaped != 0)
+
+        boxes_valid = boxes_reshaped[boxes_valid_idx[:, 0]]
+
+        num_valid_boxes, _ = boxes_valid.shape
+
+        boxes_valid_projected = project_box_to_feature_map(boxes_valid, downsampling)
+        boxes_valid_normalized_projected = normalize_box(boxes_valid_projected, height=h, width=w)
+
+    return boxes_valid_normalized_projected, num_valid_boxes
+
+
 def pick_predictions_instances_scale(prediction, labels):
 
     batch_size, i_dim = labels.shape[0:2]
@@ -181,39 +230,6 @@ def pick_predictions_instances_canonical(prediction, labels):
     
     return canonical_full
 
-def normalize_box(box, height=480, width=640):
-    with torch.no_grad():
-        return torch.stack(((box[:, :, 0] / height).float(), 
-                            (box[:, :, 1] / width).float(), 
-	                        (box[:, :, 2] / height).float(), 
-	                        (box[:, :, 3] / width).float()), dim=2)
-
-def normalize_box_v2(box, height=480, width=640):
-    with torch.no_grad():
-        return torch.stack(((box[:, 0] / height).float(), 
-                            (box[:, 1] / width).float(), 
-	                        (box[:, 2] / height).float(), 
-	                        (box[:, 3] / width).float()), dim=1)
-
-def project_box_to_features(box, downsampling, height=480, width=640, padding=0):
-    padding = padding_global
-    with torch.no_grad():
-        if padding == 0:
-            return torch.ceil(box / downsampling).int()
-        else:
-            new_box = torch.ceil(box / downsampling).int()
-            height /= downsampling
-            width /= downsampling
-            new_box = torch.stack((
-                (new_box[:, 0]-padding).clamp(min=0).int(), 
-                (new_box[:, 1]-padding).clamp(min=0).int(), 
-                (new_box[:, 2]+padding).clamp(max=height-1).int(), 
-                (new_box[:, 3]+padding).clamp(max=width-1).int()), dim=1)
-            return new_box 
-
-
-
-
 def roi_select_features(feature_map, box, labels, downsampling=4):
     # Can be more efficient to skip zero maps?
     with torch.no_grad():
@@ -231,7 +247,7 @@ def roi_select_features(feature_map, box, labels, downsampling=4):
         box_coordinates = box_coordinates[valid_boxes[:, 0]]
         i_dim = box_coordinates.shape[0] 
 
-        box_coordinates = project_box_to_features(box_coordinates, downsampling)
+        box_coordinates = project_box_to_feature_map(box_coordinates, downsampling)
 
         ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
 
@@ -276,7 +292,7 @@ def roi_select_features_module(feature_map, box, labels, class_label, downsampli
         box_coordinates = box_coordinates[valid_boxes[:, 0]]
         i_dim = box_coordinates.shape[0] 
 
-        box_coordinates = project_box_to_features(box_coordinates, downsampling)
+        box_coordinates = project_box_to_feature_map(box_coordinates, downsampling)
 
         ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
 
@@ -327,7 +343,7 @@ def roi_select_features_canonical_shared(feature_map, box, labels, downsampling=
                 box_coordinates = box_coordinates[valid_boxes[:, 0]]
                 i_dim = box_coordinates.shape[0] 
 
-                box_coordinates = project_box_to_features(box_coordinates, downsampling)
+                box_coordinates = project_box_to_feature_map(box_coordinates, downsampling)
 
                 ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
 
@@ -379,7 +395,7 @@ def roi_select_features_ag(feature_map, box, labels, downsampling=4):
         box_coordinates = box_coordinates[valid_boxes[:, 0]]
         i_dim = box_coordinates.shape[0] 
 
-        box_coordinates = project_box_to_features(box_coordinates, downsampling)
+        box_coordinates = project_box_to_feature_map(box_coordinates, downsampling)
 
         ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
 
@@ -423,7 +439,7 @@ def roi_select_features_ag(feature_map, box, labels, downsampling=4):
         box_coordinates = box_coordinates[valid_boxes[:, 0]]
         i_dim = box_coordinates.shape[0] 
 
-        box_coordinates = project_box_to_features(box_coordinates, downsampling)
+        box_coordinates = project_box_to_feature_map(box_coordinates, downsampling)
 
         ymin, xmin, ymax, xmax = box_coordinates.split(1, dim=1)
 
