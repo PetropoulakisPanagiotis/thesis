@@ -525,13 +525,13 @@ class UniformInstancesSharedCanonical(nn.Module):
         padding_global = padding_instances
       
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1) # Do not include null 
-        self.instances_canonical = ROISelectSharedCanonicalUniform(128, 4, num_semantic_classes=bin_num+1) 
+        self.instances_canonical = ROISelectSharedCanonicalUniform(128, bin_num=bin_num+1) 
     
         # Pick variation #      
         if var == 1:
-            self.instances_canonical = ROISelectSharedCanonicalBigUniform(128, 4, num_semantic_classes=bin_num+1)          
+            self.instances_canonical = ROISelectSharedCanonicalBigUniform(128, bin_num=bin_num+1)          
         if var == 2:
-            self.instances_canonical = ROISelectSharedCanonicalHugeUniform(128, 4, num_semantic_classes=bin_num+1)       
+            self.instances_canonical = ROISelectSharedCanonicalHugeUniform(128, bin_num=bin_num+1)       
         if var == 3:
             self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
         if var == 4:

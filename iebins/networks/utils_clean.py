@@ -172,6 +172,26 @@ def get_valid_normalized_projected_boxes(feature_map, boxes, labels, downsamplin
 
     return boxes_valid_normalized_projected, num_valid_boxes
 
+def get_valid_num_instances_per_batch(feature_map, boxes, labels):
+
+    h, w = feature_map.shape[2:]
+    b, num_instances, _ = boxes.shape
+
+    with torch.no_grad():
+        boxes_reshaped = boxes.view(b * num_instances, 4)
+
+        labels_reshaped = labels.view(b * num_instances, 1)
+        boxes_valid_idx = torch.nonzero(labels_reshaped != 0)
+
+        boxes_valid = boxes_reshaped[boxes_valid_idx[:, 0]]
+
+        num_valid_boxes, _ = boxes_valid.shape
+
+        instances_per_batch = torch.nonzero(labels != 0)
+        instances_per_batch = torch.bincount(instances_per_batch[:, 0])
+    
+
+    return instances_per_batch, num_valid_boxes
 
 def pick_predictions_instances_scale(prediction, labels):
 

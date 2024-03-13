@@ -73,6 +73,7 @@ class SSHead(nn.Module):
 ROISelectScale start
 """
 
+
 """
 Predict scale/shift for a ROI with bbox concat
 """
@@ -188,15 +189,96 @@ class ROISelectScaleHuge(nn.Module):
 ROISelectScale end
 """
 
+
 """
 ROISelectSharedCanonicalUniform start
 """
 
 
+class ROISelectSharedCanonicalUniform(nn.Module):
+    def __init__(self, input_dim=32, hidden_dim=128, bin_num=40):
+        super(ROISelectSharedCanonicalUniform, self).__init__()
+          
+        self.input_dim = input_dim
+        self.bin_num = bin_num    
+
+        self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, bin_num, 3, padding=1)
+
+    def forward(self, x, boxes, labels):
+        h, w = x.shape[2:]
+
+        instances_per_batch, num_valid_boxes = get_valid_num_instances_per_batch(x, boxes, labels)
+
+        out = F.relu(self.conv1(x))
+        out = torch.softmax(self.conv2(out), 1)
+
+        out = torch.cat([out[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)        
+        out = out.view(num_valid_boxes, self.bin_num, h, w)
+        
+        return out
+
+
+class ROISelectSharedCanonicalBigUniform(nn.Module):
+    def __init__(self, input_dim=32, hidden_dim=128, bin_num=40):
+        super(ROISelectSharedCanonicalBigUniform, self).__init__()
+        
+        self.input_dim = input_dim
+        self.bin_num = bin_num
+
+        self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, hidden_dim, 3, padding=1)
+        self.conv3 = nn.Conv2d(hidden_dim, bin_num, 3, padding=1)
+
+    def forward(self, x, boxes, labels):
+        h, w = x.shape[2:]
+
+        instances_per_batch, num_valid_boxes = get_valid_num_instances_per_batch(x, boxes, labels)
+
+        out = F.relu(self.conv1(x))
+        out = F.relu(self.conv2(out))
+        out = torch.sigmoid(self.conv3(out))
+
+        out = torch.cat([out[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
+        out = out.view(num_valid_boxes, self.bin_num, h, w)
+        
+        return out
+
+
+class ROISelectSharedCanonicalHugeUniform(nn.Module):
+    def __init__(self, input_dim=32, hidden_dim=128, bin_num=40):
+        super(ROISelectSharedCanonicalHugeUniform, self).__init__()
+              
+        self.input_dim = input_dim
+        self.bin_num = bin_num
+
+        self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, hidden_dim, 3, padding=1)
+        self.conv3 = nn.Conv2d(hidden_dim, hidden_dim, 3, padding=1)
+        self.conv4 = nn.Conv2d(hidden_dim, hidden_dim, 3, padding=1)
+        self.conv5 = nn.Conv2d(hidden_dim, bin_num, 3, padding=1)
+
+    def forward(self, x, boxes, labels):
+        h, w = x.shape[2:]
+
+        instances_per_batch, num_valid_boxes = get_valid_num_instances_per_batch(x, boxes, labels)
+
+        out = F.relu(self.conv1(x))
+        out = F.relu(self.conv2(x))
+        out = F.relu(self.conv3(x))
+        out = F.relu(self.conv4(x))
+        out = torch.softmax(self.conv5(out), 1)
+
+        out = torch.cat([out[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
+        out = out.view(num_valid_boxes, self.bin_num, h, w)
+        
+        return out
+
 
 """
 ROISelectSharedCanonicalUniform end
 """
+
 
 class ROISelectScaleModule(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
@@ -474,19 +556,6 @@ class CRIHeadSharedBig(nn.Module):
 
         return out
 
-class CRIHeadSharedBigUniform(nn.Module):
-    def __init__(self, input_dim=128, hidden_dim=128, num_classes=1):
-        super(CRIHeadSharedBigUniform, self).__init__()
-        self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
-        self.conv2 = nn.Conv2d(hidden_dim, hidden_dim, 3, padding=1)
-        self.conv3 = nn.Conv2d(hidden_dim, num_classes, 3, padding=1)
-
-    def forward(self, x):
-        out = F.relu(self.conv1(x))
-        out = F.relu(self.conv2(out))
-        out = torch.softmax(self.conv3(out), 1)
-
-        return out
 
 class CRIHeadModuleBig(nn.Module):
     def __init__(self, input_dim=128, hidden_dim=128, num_classes=1):
@@ -496,9 +565,7 @@ class CRIHeadModuleBig(nn.Module):
         self.conv3 = nn.Conv2d(hidden_dim, num_classes, 3, padding=1)
 
     def forward(self, x):
-        out = F.relu(self.conv1(x))
-        out = F.relu(self.conv2(out))
-        out = torch.sigmoid(self.conv3(out))
+
 
         return out
 
@@ -531,24 +598,6 @@ class CRIHeadHuge(nn.Module):
         out = F.relu(self.conv3(x))
         out = F.relu(self.conv4(x))
         out = torch.sigmoid(self.conv5(out))
-
-        return out
-
-class CRIHeadHugeUniform(nn.Module):
-    def __init__(self, input_dim=128, hidden_dim=128, num_classes=1):
-        super(CRIHeadHugeUniform, self).__init__()
-        self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
-        self.conv2 = nn.Conv2d(hidden_dim, hidden_dim, 3, padding=1)
-        self.conv3 = nn.Conv2d(hidden_dim, hidden_dim, 3, padding=1)
-        self.conv4 = nn.Conv2d(hidden_dim, 32, 3, padding=1)
-        self.conv5 = nn.Conv2d(32, num_classes, 3, padding=1)
-
-    def forward(self, x):
-        out = F.relu(self.conv1(x))
-        out = F.relu(self.conv2(x))
-        out = F.relu(self.conv3(x))
-        out = F.relu(self.conv4(x))
-        out = torch.softmax(self.conv5(out), 1)
 
         return out
 
@@ -731,36 +780,6 @@ class ROISelectSharedCanonical(nn.Module):
         
         return out
 
-class ROISelectSharedCanonicalUniform(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
-        super(ROISelectSharedCanonicalUniform, self).__init__()
-              
-        self.canonical_head = CRIHeadUniform(input_dim, hidden_dim=128, num_classes=num_semantic_classes)
-        self.downsampling = downsampling   
-        self.num_semantic_classes = num_semantic_classes
-        self.input_dim = input_dim
-        self.bin_num = 1 if self.num_semantic_classes <= 20 else self.num_semantic_classes
-
-    def forward(self, x, boxes, labels):
-
-        h, w = x.shape[2:]
-        b, i, _ = boxes.shape
-
-        boxes_tmp = boxes.view(b * i, 4)
-        valid_boxes = labels.view(b * i, 1)
-        valid_boxes = torch.nonzero(valid_boxes != 0)
-        boxes_tmp = boxes_tmp[valid_boxes[:, 0]]
-        i_dim, _ = boxes_tmp.shape
-
-        instances_per_batch = torch.nonzero(labels != 0)
-        instances_per_batch = torch.bincount(instances_per_batch[:, 0])
-
-        out = self.canonical_head(x)
-        out = torch.cat([out[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
-        
-        out = out.view(i_dim, self.bin_num, h, w)
-        
-        return out
 
 class ROISelectSharedCanonicalBig(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
@@ -821,36 +840,6 @@ class ROISelectSharedCanonicalBig(nn.Module):
         
         return out
 
-class ROISelectSharedCanonicalBigUniform(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
-        super(ROISelectSharedCanonicalBigUniform, self).__init__()
-              
-        self.canonical_head = CRIHeadSharedBigUniform(input_dim, hidden_dim=128, num_classes=num_semantic_classes)
-        self.downsampling = downsampling   
-        self.num_semantic_classes = num_semantic_classes
-        self.input_dim = input_dim
-        self.bin_num = 1 if self.num_semantic_classes <= 20 else self.num_semantic_classes
-
-    def forward(self, x, boxes, labels):
-
-        h, w = x.shape[2:]
-        b, i, _ = boxes.shape
-
-        boxes_tmp = boxes.view(b * i, 4)
-        valid_boxes = labels.view(b * i, 1)
-        valid_boxes = torch.nonzero(valid_boxes != 0)
-        boxes_tmp = boxes_tmp[valid_boxes[:, 0]]
-        i_dim, _ = boxes_tmp.shape
-
-        instances_per_batch = torch.nonzero(labels != 0)
-        instances_per_batch = torch.bincount(instances_per_batch[:, 0])
-
-        out = self.canonical_head(x)
-        out = torch.cat([out[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
-        out = out.view(i_dim, self.bin_num, h, w)
-        
-        return out
-
 class ROISelectSharedCanonicalHuge(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
         super(ROISelectSharedCanonicalHuge, self).__init__()
@@ -880,35 +869,6 @@ class ROISelectSharedCanonicalHuge(nn.Module):
         
         return out
 
-class ROISelectSharedCanonicalHugeUniform(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
-        super(ROISelectSharedCanonicalHugeUniform, self).__init__()
-              
-        self.canonical_head = CRIHeadHugeUniform(input_dim, hidden_dim=128, num_classes=num_semantic_classes)
-        self.downsampling = downsampling   
-        self.num_semantic_classes = num_semantic_classes
-        self.input_dim = input_dim
-        self.bin_num = 1 if self.num_semantic_classes <= 20 else self.num_semantic_classes
-
-    def forward(self, x, boxes, labels):
-
-        h, w = x.shape[2:]
-        b, i, _ = boxes.shape
-
-        boxes_tmp = boxes.view(b * i, 4)
-        valid_boxes = labels.view(b * i, 1)
-        valid_boxes = torch.nonzero(valid_boxes != 0)
-        boxes_tmp = boxes_tmp[valid_boxes[:, 0]]
-        i_dim, _ = boxes_tmp.shape
-
-        instances_per_batch = torch.nonzero(labels != 0)
-        instances_per_batch = torch.bincount(instances_per_batch[:, 0])
-
-        out = self.canonical_head(x)
-        out = torch.cat([out[i, :, :, :].unsqueeze(0).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
-        out = out.view(i_dim, self.bin_num, h, w)
-        
-        return out
 
 class CRIHeadAg(nn.Module):
     def __init__(self, input_dim=128, hidden_dim=128, num_classes=1):
