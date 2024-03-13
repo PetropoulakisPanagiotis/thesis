@@ -134,7 +134,7 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
                                  name='magma'), global_step)
 
             # Canonical 
-            if args.update_block != 0:
+            if args.update_block != 0 and args.update_block != 3:
                 for ii in range(max_tree_depth):
                     writer.add_image('depth_canonical_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].clamp(min=1e-3).data), \
                                      name='magma'), global_step)

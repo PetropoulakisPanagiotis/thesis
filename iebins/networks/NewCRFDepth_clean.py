@@ -67,14 +67,17 @@ class NewCRFDepth(nn.Module):
         if self.update_block == 0: 
             self.update = IEBINS(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=bin_num)
         
+        elif self.update_block == 3:
+            self.update = Uniform(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num)
+        
+        elif self.update_block == 18:
+            self.update = UniformSingleScale(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+        
         elif self.update_block == 1: # Seg - Module concat mask bins  
             self.update = RegressionSemanticNoMaskingCanonicalConcProjMaskBins(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, operation_mask=None)                
        
         elif self.update_block == 2: # Canonical - one scale per image and no projection segmentation
             self.update = RegressionInstancesSharedCanonicalBins(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
-        
-        elif self.update_block == 6: # Canonical - one scale per image and no projection 
-            self.update = BasicUpdateBlockCSNoProjectDepth(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
         
         elif self.update_block == 8: # Canonical - one scale per image and NO GRU
             self.update = Regression(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
@@ -87,10 +90,7 @@ class NewCRFDepth(nn.Module):
         
         elif self.update_block == 15: # Canonical - one scale per image and no projection segmentation
             self.update = RegressionSemanticNoMaskingCanonicalConcProjMask(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, operation_mask=None)
-        
-        elif self.update_block == 18:
-            self.update = UniformSingle(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
-        
+
         elif self.update_block == 20: # Canonical - one scale per image and no projection segmentation
             self.update = RegressionInstancesSemanticNoMaskingCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)         
         
@@ -217,9 +217,12 @@ class NewCRFDepth(nn.Module):
         b, c, h, w = e1.shape
 
         depth = torch.zeros([b, 1, h, w]).to(e1.device)
-        context = feats[0] # Ealry feature map - backbone
 
-        input_feature_map = torch.tanh(e0) # From crf
+        # Ealry feature map - backbone
+        context = feats[0] 
+        
+        # From crf
+        input_feature_map = torch.tanh(e0) 
 
         if (self.update_block >= 9 and self.update_block < 18) or self.update_block >= 20 or self.update_block == 1 or self.update_block == 2:
             masks = upsample(masks, scale_factor=1/4)
@@ -229,18 +232,20 @@ class NewCRFDepth(nn.Module):
                and self.update_block != 18 and self.update_block != 24:
                 masks = (masks > 0.4).float()
             if self.update_block >= 20 and self.update_block != 24 or self.update_block == 2:
-                result = self.update(depth, context, input_feature_map, self.max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks, instances, boxes, labels)
+                result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, self.max_depth, masks, instances, boxes, labels)
             else:
-                result = self.update(depth, context, input_feature_map, self.max_tree_depth, self.bin_num, self.min_depth, self.max_depth, masks)
+                result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, self.max_depth, masks)
         else:
-            result = self.update(depth, context, input_feature_map, self.max_tree_depth, self.bin_num, self.min_depth, self.max_depth)
-           
+            if self.update_block == 0:
+                result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, self.max_depth, max_tree_depth=self.max_tree_depth)
+            else:
+                result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, self.max_depth)
 
         for i in range(self.max_tree_depth):
 
             if (self.update_block < 20 or self.update_block == 24) and self.update_block != 2:
                 result["pred_depths_r_list"][i] = upsample(result["pred_depths_r_list"][i], scale_factor=4)
-                if self.update_block != 0:
+                if self.update_block != 0 and self.update_block != 3:
                     result["pred_depths_rc_list"][i] = upsample(result["pred_depths_rc_list"][i], scale_factor=4) 
 
             if (self.update_block >= 20 and self.update_block != 24) or self.update_block == 2:

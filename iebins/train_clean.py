@@ -200,6 +200,9 @@ def main_worker(gpu, ngpus_per_node, args):
     num_semantic_classes = 14
     num_instances = 63
  
+    if args.update_block != 0:
+        args.max_tree_depth = 1
+    
     # Model #
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
@@ -303,6 +306,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 eval_summary_path = os.path.join(args.log_directory, args.model_name, 'eval')
             eval_summary_writer = SummaryWriter(eval_summary_path, flush_secs=30)
         
+
         # Log hparams #
         hparams = {
             "epochs": args.num_epochs,
@@ -369,8 +373,9 @@ def main_worker(gpu, ngpus_per_node, args):
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
             b, _, h, w = depth_gt.shape
 
+
+
             if args.dataset == 'nyu' and args.segmentation:
-                args.max_tree_depth = 1
                 segmentation_map = torch.autograd.Variable(sample_batched['segmentation_map'].cuda(args.gpu, non_blocking=True))
                 if args.instances:
                     instances = torch.autograd.Variable(sample_batched['instances_masks'].cuda(args.gpu, non_blocking=True))
@@ -408,7 +413,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 pred_shift_instances_list = result["pred_shift_instances_list"]
                 
             # Canonical #
-            if args.update_block != 0:
+            if args.update_block != 0 and args.update_block != 3:
                 pred_depths_rc_list = result["pred_depths_rc_list"]
             
             if args.predict_unc == True:
