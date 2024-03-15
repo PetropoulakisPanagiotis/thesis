@@ -107,8 +107,10 @@ class NewCRFDepth(nn.Module):
                                                           loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                                           num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
         
-        elif self.update_block == 20: # Canonical - one scale per image and no projection segmentation
-            self.update = RegressionInstancesSemanticNoMaskingCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)         
+        elif self.update_block == 20: 
+            self.update = RegressionInstances(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
+                                              bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
+                                              num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)         
         
         elif self.update_block == 21: # Canonical - one scale per image and no projection segmentation
             self.update = RegressionInstancesAgnostic(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        

@@ -482,27 +482,23 @@ def pick_predictions_instances_scale_shift(prediction_scale_shift, labels):
     
 
 def pick_predictions_instances_canonical(prediction, labels): 
+    batch_size, labels_max_size = labels.shape[0:2]
     h, w = prediction.shape[2:]
-    batch_size, i_dim = labels.shape[0:2]
 
-    labels_fast = torch.where(labels == 0, 1, labels) 
-    labels_fast -= 1
-    labels_fast = labels_fast.view(batch_size*i_dim)
-    
-    valid_boxes = labels.view(batch_size * i_dim, 1)
-    valid_boxes = torch.nonzero(valid_boxes != 0)
-    
-    size_boxes_sq = valid_boxes.shape[0]
+    # Prediction --> num_classes - 1 does not include null #
+    labels_reshaped = labels.view(batch_size*labels_max_size)
+    labels_valid_idx = torch.nonzero(labels_reshaped != 0)
+    labels_valid_num = labels_valid_idx.shape[0]
 
-    labels_fast = labels_fast[valid_boxes[:,0]]
-    
-    canonical = prediction[torch.arange(size_boxes_sq), labels_fast].unsqueeze(1)
+    labels_valid = labels_reshaped[labels_valid_idx[:,0]]
+    labels_valid -= 1 
 
+    canonical = prediction[torch.arange(labels_valid_num), labels_valid].unsqueeze(1)
 
-    canonical_full = torch.zeros((batch_size*i_dim, 1, h, w)).to(prediction.device)
-    canonical_full[valid_boxes[:,0]] = canonical 
+    canonical_full = torch.zeros((batch_size*labels_max_size, 1, h, w)).to(prediction.device)
+    canonical_full[labels_valid_idx[:,0]] = canonical 
 
-    canonical_full = canonical_full.view(batch_size, i_dim, h, w)
+    canonical_full = canonical_full.view(batch_size, labels_max_size, h, w)
     
     return canonical_full
 
