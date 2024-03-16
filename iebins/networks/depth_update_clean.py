@@ -84,7 +84,7 @@ class Regression(nn.Module):
         
         # Metric
         if self.loss_type == 0:
-            depth_r = self.relu(depth_rc).clamp(min=1e-3)
+            depth_r = self.relu(depth_r).clamp(min=1e-3)
 
         pred_depths_r_list.append(depth_r)
 

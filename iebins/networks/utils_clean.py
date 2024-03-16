@@ -401,7 +401,7 @@ def pick_predictions_instances_scale_shift(prediction_scale_shift, labels):
     return pred_scale_full, pred_shift_full
     
 
-def pick_predictions_prediction(prediction, labels): 
+def pick_predictions_instances_canonical(prediction, labels): 
     batch_size, labels_max_size = labels.shape[0:2]
     h, w = prediction.shape[2:]
 
@@ -432,7 +432,7 @@ def pick_predictions_instances_canonical_shared_class(prediction, labels):
     prediction = prediction.view(batch_size*num_semantic_classes*num_semantic_classes, h, w)   
 
     # Pick the correct prediction for each class map #
-    prediction = prediction[torch.tensor(range(0, batch_size*num_semantic_classes*(num_semantic_classes), num_semantic_classes)).to(labels.device), :, :]
+    prediction = prediction[torch.tensor(range(0, batch_size*num_semantic_classes*num_semantic_classes, num_semantic_classes)).to(labels.device), :, :]
     prediction = prediction.view(batch_size, num_semantic_classes, h, w) 
     
     prediction = prediction.unsqueeze(1).repeat(1, num_max_instances, 1,1,1)

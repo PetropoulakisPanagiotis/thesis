@@ -13,9 +13,10 @@ class NewCRFDepth(nn.Module):
     """
     Depth network based on neural window FC-CRFs architecture
     """
-    def __init__(self, version=None, pretrained=None, min_depth=0.1, max_depth=100.0, max_tree_depth=6, 
+    def __init__(self, version=None, pretrained=None, min_depth=0.1, max_depth=100.0, max_tree_depth=1, 
                     bin_num=16, update_block=0, loss_type=0, train_decoder=0, predict_unc=False, \
-                    num_semantic_classes=14, num_instances=63, var=0, padding_instances=0, **kwargs):
+                    num_semantic_classes=14, num_instances=63, var=0, padding_instances=0, \
+                    segmentation_active= False, instances_active=False, **kwargs):
         super().__init__()
 
         self.freeze_backbone = True
@@ -27,7 +28,10 @@ class NewCRFDepth(nn.Module):
         self.min_depth = min_depth
         self.max_depth = max_depth
         
-        # Instances         
+        # Instances 
+        self.segmentation_active = segmentation_active
+        self.instances_active = instances_active
+        
         self.num_semantic_classes = num_semantic_classes
         self.num_instances = num_instances
         self.var = var
@@ -66,19 +70,25 @@ class NewCRFDepth(nn.Module):
         # Set update block for depth prediction head
         if self.update_block == 0: 
             self.update = IEBINS(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=bin_num)
-                
+            print("[VARIATION IEBINS]\n")   
+
         elif self.update_block == 4: 
             self.update = Regression(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
                                                 bin_num=self.bin_num, loss_type=self.loss_type)
+            print("[VARIATION Regression]\n")
+   
         elif self.update_block == 8: 
             self.update = RegressionSingleScale(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
                                                 bin_num=self.bin_num, loss_type=self.loss_type)
+            print("[VARIATION RegressionSingleScale]\n")
 
         elif self.update_block == 3:
             self.update = Uniform(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num)
+            print("[VARIATION Uniform]\n")
         
         elif self.update_block == 18:
             self.update = UniformSingleScale(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type)
+            print("[VARIATION UniformSingleScale]\n")
         
         ################
         # Segmentation #
@@ -86,19 +96,24 @@ class NewCRFDepth(nn.Module):
         elif self.update_block == 1:  
             self.update = UniformSegmentationModuleListConcatMasks(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
                                                                    loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)                
+            print("[VARIATION UniformSegmentationModuleListConcatMasks]\n")
 
         elif self.update_block == 12: 
             self.update = RegressionSegmentationNoMasking(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
                                                           loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)        
+            print("[VARIATION RegressionSegmentationNoMasking]\n")
         
         elif self.update_block == 13: 
             self.update = RegressionSegmentationNoMaskingConcatMasks(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
                                                                      bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
+            print("[VARIATION RegressionSegmentationNoMaskingConcatMasks]\n")
         
         elif self.update_block == 15: 
             self.update = RegressionSegmentationModuleListConcatMasks(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
                                                                            bin_num=self.bin_num, loss_type=self.loss_type, \
                                                                            num_semantic_classes=self.num_semantic_classes)
+            print("[VARIATION RegressionSegmentationModuleListConcatMasks]\n")
+        
         #############
         # Instances #
         #############
@@ -106,32 +121,38 @@ class NewCRFDepth(nn.Module):
             self.update = UniformInstancesSharedCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
                                                           loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                                           num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
+            print("[VARIATION UniformInstancesSharedCanonical]\n")
         
         elif self.update_block == 20: 
             self.update = RegressionInstances(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
                                               bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                               num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)         
+            print("[VARIATION RegressionInstances]\n")
         
         elif self.update_block == 22: 
             self.update = RegressionInstancesSharedCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
                                                              bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                                              num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
+            print("[VARIATION RegressionInstancesSharedCanonical]\n")
         
         elif self.update_block == 23: 
             self.update = RegressionInstancesSharedCanonicalClass(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
                                                                   bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                                                   num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
+            print("[VARIATION RegressionInstancesSharedCanonicalClass]\n")
         
 
         elif self.update_block == 25: 
             self.update = RegressionInstancesSharedCanonicalModuleScale(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
                                                                         bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                                                         num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
+            print("[VARIATION RegressionInstancesSharedCanonicalModuleScale]\n")
         
         elif self.update_block == 26: 
             self.update = RegressionInstancesModule(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
                                                     loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                                     num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
+            print("[VARIATION RegressionInstancesModule]\n")
         
         else:
             print("No implementation is available for the given number of update_block. Exit")
@@ -220,6 +241,14 @@ class NewCRFDepth(nn.Module):
 
     def forward(self, imgs, masks=None, instances=None, boxes=None, labels=None):
 
+        if self.segmentation_active and masks == None:
+            print("Model mode == Segmentation. Please provide segmentation masks")
+            exit()
+
+        if self.instances_active and (instances == None or boxes == None or labels == None):
+            print("Model mode == Instances. Please provide instance masks")
+            exit()
+
         feats = self.backbone(imgs)
         psp_out = self.psp_module(feats)
 
@@ -246,46 +275,53 @@ class NewCRFDepth(nn.Module):
         # From crf
         input_feature_map = torch.tanh(e0) 
 
-        # Pass to update_block to predict the depth map
-        if (self.update_block >= 9 and self.update_block < 18) or self.update_block >= 20 or self.update_block == 1 or self.update_block == 2:
-            
+
+        #################################################
+        # Pass to update_block to predict the depth map #
+        #################################################
+
+        # Segmentation/Instances #
+        if self.segmentation_active or self.instances_active:
             # Downsample masks to feature map dim
             masks = upsample(masks, scale_factor=1/4)
-            if instances != None:
+            
+            if self.instances_active:
                 instances = upsample(instances, scale_factor=1/4)
-            if self.update_block != 13 \
-               and self.update_block != 18 and self.update_block != 24:
-                masks = (masks > 0.4).float()
-           
-            if self.update_block >= 20 and self.update_block != 24 or self.update_block == 2:
-                result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, self.max_depth, masks, instances, boxes, labels)
+                result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, self.max_depth, \
+                                     masks, instances, boxes, labels)
             else:
                 result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, self.max_depth, masks)
+        # Vanilla #
         else:
             if self.update_block == 0:
-                result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, self.max_depth, max_tree_depth=self.max_tree_depth)
+                result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, \
+                                     self.max_depth, max_tree_depth=self.max_tree_depth)
             else:
                 result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, self.max_depth)
 
-        # Process result and upsample 
+
+        # Process result and upsample # 
         for i in range(self.max_tree_depth):
 
-            if (self.update_block < 20 or self.update_block == 24) and self.update_block != 2:
+            if not self.instances_active:
                 result["pred_depths_r_list"][i] = upsample(result["pred_depths_r_list"][i], scale_factor=4)
-                if self.update_block != 0 and self.update_block != 3 and self.update_block != 4:
+                
+                # Canonical prediction #
+                if self.update_block == 8 or self.update_block == 18 or self.update_block == 12 or \
+                   self.update_block == 13 or self.update_block == 15:
                     result["pred_depths_rc_list"][i] = upsample(result["pred_depths_rc_list"][i], scale_factor=4) 
-
-            if (self.update_block >= 20 and self.update_block != 24) or self.update_block == 2:
+            else:
                 result["pred_depths_instances_r_list"][i] = upsample(result["pred_depths_instances_r_list"][i], scale_factor=4)  
                 result["pred_depths_instances_rc_list"][i] = upsample(result["pred_depths_instances_rc_list"][i], scale_factor=4)
 
-            if self.update_block != 8 and self.update_block != 12 \
-                and self.update_block != 13 and self.update_block != 15 \
-                and self.update_block != 20 and self.update_block != 21 and self.update_block != 22 \
-                and self.update_block != 23 and self.update_block != 25 and self.update_block != 26 and self.update_block != 4:
+               
+            # Uncertainty via bins #
+            if self.update_block == 0 or self.update_block == 3 or self.update_block == 18 or\
+               self.update_block == 1 or self.update_block == 2:
                 result["pred_depths_c_list"][i] = upsample(result["pred_depths_c_list"][i], scale_factor=4) 
                 result["uncertainty_maps_list"][i] = upsample(result["uncertainty_maps_list"][i], scale_factor=4) 
 
+            # Uncertainty from the decoder block #
             if self.predict_unc:
                 unc_decoder = upsample(unc_decoder, scale_factor=4)
                 result["unc_decoder"] = unc_decoder

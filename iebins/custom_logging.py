@@ -23,29 +23,25 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
                                  name='magma'), global_step)
 
             # Canonical
-            if args.update_block != 0:
-                for ii in range(max_tree_depth):
-                    writer.add_image('depth_canonical_est{}/image/{}/'.format(ii, i), 
-                                      colormap(torch.log10(torch.sum(pred_depths_instances_rc_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), \
-                                      name='magma'), global_step)
+            for ii in range(max_tree_depth):
+                writer.add_image('depth_canonical_est{}/image/{}/'.format(ii, i), 
+                                  colormap(torch.log10(torch.sum(pred_depths_instances_rc_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), \
+                                  name='magma'), global_step)
             
             # Uncertainty decoder 
             if args.predict_unc:
                 writer.add_image('uncer_decoder_est/image/{}'.format(i), colormap(unc_decoder[i, :, :, :].data, name='viridis'), global_step)
 
             # Bins 
-            else:            
-                if args.update_block != 8 and not (args.update_block >= 12 and args.update_block <= 15) and args.update_block != 20 and args.update_block != 21 \
-                        and args.update_block != 22 and args.update_block != 23 and args.update_block != 24 and args.update_block != 25 and args.update_block != 26:
-
-                    for ii in range(max_tree_depth):
-                        writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
-                                         colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), \
-                                         name='magma'), global_step)
-                        
-                        writer.add_image('uncer_bins_est{}/image/{}/'.format(ii, i), 
-                                         colormap(torch.sum(uncertainty_maps_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).unsqueeze(0).data), global_step)
-            
+            if args.update_block == 2:
+                for ii in range(max_tree_depth):
+                    writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
+                                     colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), \
+                                     name='magma'), global_step)
+                    
+                    writer.add_image('uncer_bins_est{}/image/{}/'.format(ii, i), 
+                                     colormap(torch.sum(uncertainty_maps_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).unsqueeze(0).data), global_step)
+        
             # Expensive visualization 
             if expensive_viz: 
                 max_viz_instances = 5
@@ -64,11 +60,10 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
                                          colormap(torch.log10((pred_depths_instances_r_list[ii][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data),\
                                          name='magma'), global_step)
                     # Canonical
-                    if args.update_block != 0:
-                        for ii in range(max_tree_depth):
-                            writer.add_image('depth_canonical_est{}/image/{}/instance{}'.format(ii, i, idx), 
-                                              colormap(torch.log10((pred_depths_instances_rc_list[ii][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), \
-                                              name='magma'), global_step)
+                    for ii in range(max_tree_depth):
+                        writer.add_image('depth_canonical_est{}/image/{}/instance{}'.format(ii, i, idx), 
+                                          colormap(torch.log10((pred_depths_instances_rc_list[ii][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), \
+                                          name='magma'), global_step)
 
     elif args.segmentation:
         for i in range(num_images):
@@ -83,27 +78,24 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
                                  name='magma'), global_step)
             
             # Canonical
-            if args.update_block != 0:
-                for ii in range(max_tree_depth):
-                    writer.add_image('depth_canonical_est{}/image/{}/'.format(ii, i), 
-                                      colormap(torch.log10(torch.sum(pred_depths_rc_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), \
-                                      name='magma'), global_step)
+            for ii in range(max_tree_depth):
+                writer.add_image('depth_canonical_est{}/image/{}/'.format(ii, i), 
+                                  colormap(torch.log10(torch.sum(pred_depths_rc_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), \
+                                  name='magma'), global_step)
+            
             # Uncertainty decoder 
             if args.predict_unc:
                 writer.add_image('uncer_decoder_est/image/{}'.format(i), colormap(unc_decoder[i, :, :, :].data, name='viridis'), global_step)
 
             # Bins 
-            else:
-                if args.update_block != 8 and args.update_block != 12 \
-                       and args.update_block != 13 and args.update_block != 15:            
+            if args.update_block == 1:
+                for ii in range(max_tree_depth):
+                    writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
+                                     colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), \
+                                     name='magma'), global_step)
                     
-                    for ii in range(max_tree_depth):
-                        writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
-                                         colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), \
-                                         name='magma'), global_step)
-                        
-                        writer.add_image('uncer_bins_est{}/image/{}/'.format(ii, i), 
-                                         colormap(torch.sum(uncertainty_maps_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), global_step)
+                    writer.add_image('uncer_bins_est{}/image/{}/'.format(ii, i), 
+                                     colormap(torch.sum(uncertainty_maps_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), global_step)
 
             # Expensive visualization
             if expensive_viz:   
@@ -116,11 +108,10 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
                                          name='magma'), global_step)
                     
                     # Canonical
-                    if args.update_block != 0:
-                        for ii in range(max_tree_depth):
-                            writer.add_image('depth_canonical_est{}/image/{}/class{}'.format(ii, i, j), 
-                                              colormap(torch.log10((pred_depths_rc_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), \
-                                              name='magma'), global_step)
+                    for ii in range(max_tree_depth):
+                        writer.add_image('depth_canonical_est{}/image/{}/class{}'.format(ii, i, j), 
+                                          colormap(torch.log10((pred_depths_rc_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), \
+                                          name='magma'), global_step)
 
     else:
         for i in range(num_images):
@@ -134,7 +125,7 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
                                  name='magma'), global_step)
 
             # Canonical 
-            if args.update_block != 0 and args.update_block != 3 and args.update_block != 4:
+            if args.update_block == 8 or args.update_block == 18:
                 for ii in range(max_tree_depth):
                     writer.add_image('depth_canonical_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].clamp(min=1e-3).data), \
                                      name='magma'), global_step)
@@ -145,7 +136,7 @@ def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max
 
             # Bins
             else:
-                if args.update_block != 8 and args.update_block != 4:
+                if args.update_block == 0 or args.update_block == 3 or args.update_block == 18:
                     for ii in range(max_tree_depth):
                         writer.add_image('depth_labels_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].clamp(min=1e-3).data), \
                                          name='magma'), global_step)
