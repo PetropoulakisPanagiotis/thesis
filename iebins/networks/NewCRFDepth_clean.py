@@ -74,12 +74,12 @@ class NewCRFDepth(nn.Module):
 
         elif self.update_block == 4: 
             self.update = Regression(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
-                                                bin_num=self.bin_num, loss_type=self.loss_type)
+                                                loss_type=self.loss_type)
             print("[VARIATION Regression]\n")
    
         elif self.update_block == 8: 
             self.update = RegressionSingleScale(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
-                                                bin_num=self.bin_num, loss_type=self.loss_type)
+                                                loss_type=self.loss_type)
             print("[VARIATION RegressionSingleScale]\n")
 
         elif self.update_block == 3:
@@ -99,18 +99,18 @@ class NewCRFDepth(nn.Module):
             print("[VARIATION UniformSegmentationModuleListConcatMasks]\n")
 
         elif self.update_block == 12: 
-            self.update = RegressionSegmentationNoMasking(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
+            self.update = RegressionSegmentationNoMasking(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
                                                           loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)        
             print("[VARIATION RegressionSegmentationNoMasking]\n")
         
         elif self.update_block == 13: 
             self.update = RegressionSegmentationNoMaskingConcatMasks(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
-                                                                     bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
+                                                                     loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
             print("[VARIATION RegressionSegmentationNoMaskingConcatMasks]\n")
         
         elif self.update_block == 15: 
             self.update = RegressionSegmentationModuleListConcatMasks(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
-                                                                           bin_num=self.bin_num, loss_type=self.loss_type, \
+                                                                           loss_type=self.loss_type, \
                                                                            num_semantic_classes=self.num_semantic_classes)
             print("[VARIATION RegressionSegmentationModuleListConcatMasks]\n")
         
@@ -125,31 +125,31 @@ class NewCRFDepth(nn.Module):
         
         elif self.update_block == 20: 
             self.update = RegressionInstances(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
-                                              bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
+                                              loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                               num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)         
             print("[VARIATION RegressionInstances]\n")
         
         elif self.update_block == 22: 
             self.update = RegressionInstancesSharedCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
-                                                             bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
+                                                             loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                                              num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
             print("[VARIATION RegressionInstancesSharedCanonical]\n")
         
         elif self.update_block == 23: 
             self.update = RegressionInstancesSharedCanonicalClass(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
-                                                                  bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
+                                                                  loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                                                   num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
             print("[VARIATION RegressionInstancesSharedCanonicalClass]\n")
         
 
         elif self.update_block == 25: 
             self.update = RegressionInstancesSharedCanonicalModuleScale(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
-                                                                        bin_num=self.bin_num, loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
+                                                                        loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                                                         num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
             print("[VARIATION RegressionInstancesSharedCanonicalModuleScale]\n")
         
         elif self.update_block == 26: 
-            self.update = RegressionInstancesModule(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
+            self.update = RegressionInstancesModule(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
                                                     loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                                     num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
             print("[VARIATION RegressionInstancesModule]\n")

@@ -69,7 +69,7 @@ class IEBINS(nn.Module):
 Regression prediction 
 """
 class Regression(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0):
+    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0):
         super(Regression, self).__init__()
 
         self.r_head = RegressionHead(hidden_dim, hidden_dim) # Canonical regression [0, 1]
@@ -98,7 +98,7 @@ class Regression(nn.Module):
 Regression prediction with single scale per image 
 """
 class RegressionSingleScale(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0):
+    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0):
         super(RegressionSingleScale, self).__init__()
 
         self.sigmoid_head = SigmoidHead(hidden_dim, hidden_dim) # Canonical regression [0, 1]
@@ -335,7 +335,7 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
 
 
 class RegressionSegmentationNoMasking(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5):
+    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0, num_semantic_classes=5):
         super(RegressionSegmentationNoMasking, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -386,7 +386,7 @@ class RegressionSegmentationNoMasking(nn.Module):
 
 
 class RegressionSegmentationNoMaskingConcatMasks(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14):
+    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0, num_semantic_classes=14):
         super(RegressionSegmentationNoMaskingConcatMasks, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -436,7 +436,7 @@ class RegressionSegmentationNoMaskingConcatMasks(nn.Module):
 
 
 class RegressionSegmentationModuleListConcatMasks(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5):
+    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0, num_semantic_classes=5):
         super(RegressionSegmentationModuleListConcatMasks, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -452,7 +452,7 @@ class RegressionSegmentationModuleListConcatMasks(nn.Module):
 
         self.relu = nn.ReLU(inplace=True)
 
-    def forward(self, depth, context, input_feature_map, bin_num, min_depth, max_depth, masks):
+    def forward(self, depth, context, input_feature_map, min_depth, max_depth, masks):
         pred_depths_r_list = []    # Metric 
         pred_depths_rc_list = []   # Canonical
         pred_scale_list = []
@@ -610,7 +610,7 @@ class UniformInstancesSharedCanonical(nn.Module):
 
 
 class RegressionInstances(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, \
+    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0, \
                  num_semantic_classes=14, num_instances=63,var=0,padding_instances=0):
         super(RegressionInstances, self).__init__()
         self.num_semantic_classes = num_semantic_classes
@@ -638,28 +638,28 @@ class RegressionInstances(nn.Module):
             self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes-1)       
         if var == 3:
             self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalA(128, 4, num_semantic_classes=self.num_semantic_classes-1)   
+            self.instances_canonical = ROISelectCanonicalA(128, num_semantic_classes=self.num_semantic_classes-1)   
         if var == 4:
             self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalB(128, 4, num_semantic_classes=self.num_semantic_classes-1)   
+            self.instances_canonical = ROISelectCanonicalB(128, num_semantic_classes=self.num_semantic_classes-1)   
         if var == 5:
             self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalC(128, 4, num_semantic_classes=self.num_semantic_classes-1)   
+            self.instances_canonical = ROISelectCanonicalC(128, num_semantic_classes=self.num_semantic_classes-1)   
         if var == 6:
             self.instances_scale_and_shift = ROISelectScaleB(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalC(128, 4, num_semantic_classes=self.num_semantic_classes-1)          
+            self.instances_canonical = ROISelectCanonicalC(128, num_semantic_classes=self.num_semantic_classes-1)          
         if var == 7:
             self.instances_scale_and_shift = ROISelectScaleA(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalC(128, 4, num_semantic_classes=self.num_semantic_classes-1) 
+            self.instances_canonical = ROISelectCanonicalC(128, num_semantic_classes=self.num_semantic_classes-1) 
         if var == 8:
             self.instances_scale_and_shift = ROISelectScaleC(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
             self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes-1) 
         if var == 9:
             self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalD(128, 4, num_semantic_classes=self.num_semantic_classes-1) 
+            self.instances_canonical = ROISelectCanonicalD(128, num_semantic_classes=self.num_semantic_classes-1) 
         if var == 10:
             self.instances_scale_and_shift = ROISelectScaleC(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalD(128, 4, num_semantic_classes=self.num_semantic_classes-1)
+            self.instances_canonical = ROISelectCanonicalD(128, num_semantic_classes=self.num_semantic_classes-1)
 
         self.relu = nn.ReLU(inplace=True)
 
@@ -702,7 +702,7 @@ class RegressionInstances(nn.Module):
 
 
 class RegressionInstancesSharedCanonical(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, num_instances=63,var=0, padding_instances=0):
+    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0, num_semantic_classes=14, num_instances=63,var=0, padding_instances=0):
         super(RegressionInstancesSharedCanonical, self).__init__()
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
@@ -718,13 +718,13 @@ class RegressionInstancesSharedCanonical(nn.Module):
         padding_global = padding_instances
       
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-        self.instances_canonical = ROISelectSharedCanonical(128, 4, num_semantic_classes=1)       
+        self.instances_canonical = ROISelectSharedCanonical(128, num_semantic_classes=1)       
         
         # Pick variation #      
         if var == 1:
-            self.instances_canonical = ROISelectSharedCanonicalBig(128, 4, num_semantic_classes=1)          
+            self.instances_canonical = ROISelectSharedCanonicalBig(128, num_semantic_classes=1)          
         if var == 2:
-            self.instances_canonical = ROISelectSharedCanonicalHuge(128, 4, num_semantic_classes=1)       
+            self.instances_canonical = ROISelectSharedCanonicalHuge(128, num_semantic_classes=1)       
         if var == 3:
             self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
         if var == 4:
@@ -789,7 +789,7 @@ class RegressionInstancesSharedCanonical(nn.Module):
 
 
 class RegressionInstancesSharedCanonicalClass(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, num_instances=63,var=0, padding_instances=0):
+    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0, num_semantic_classes=14, num_instances=63,var=0, padding_instances=0):
         super(RegressionInstancesSharedCanonicalClass, self).__init__()
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
@@ -805,13 +805,13 @@ class RegressionInstancesSharedCanonicalClass(nn.Module):
         padding_global = padding_instances
       
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-        self.instances_canonical = ROISelectCanonicalSharedClass(128, 4, num_semantic_classes=self.num_semantic_classes-1)
+        self.instances_canonical = ROISelectCanonicalSharedClass(128, num_semantic_classes=self.num_semantic_classes-1)
 
         # Pick variation #      
         if var == 1 or var == 3:
             self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
         if var == 2 or var == 3:
-            self.instances_canonical = ROISelectCanonicalSharedClassBig(128, 4, num_semantic_classes=self.num_semantic_classes-1)
+            self.instances_canonical = ROISelectCanonicalSharedClassBig(128, num_semantic_classes=self.num_semantic_classes-1)
         
         self.relu = nn.ReLU(inplace=True)
     
@@ -868,7 +868,7 @@ class RegressionInstancesSharedCanonicalClass(nn.Module):
 
 
 class RegressionInstancesSharedCanonicalModuleScale(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, num_instances=63,var=0, padding_instances=0):
+    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0, num_semantic_classes=14, num_instances=63,var=0, padding_instances=0):
         super(RegressionInstancesSharedCanonicalModuleScale, self).__init__()
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
@@ -887,14 +887,14 @@ class RegressionInstancesSharedCanonicalModuleScale(nn.Module):
         for i in range(num_semantic_classes - 1):
             self.instances_scale_and_shift.append(ROISelectScaleModule(128, downsampling=4, num_semantic_classes=1))
 
-        self.instances_canonical = ROISelectSharedCanonical(128, 4, num_semantic_classes=1)      
+        self.instances_canonical = ROISelectSharedCanonical(128, num_semantic_classes=1)      
 
         # Pick variation #      
         if var == 1 or var == 3:
             for i in range(num_semantic_classes - 1):
                 self.instances_scale_and_shift.append(ROISelectScaleModuleBig(128, downsampling=4, num_semantic_classes=1))        
         if var == 2 or var == 3:       
-             self.instances_canonical = ROISelectSharedCanonicalBig(128, 4, num_semantic_classes=1)    
+             self.instances_canonical = ROISelectSharedCanonicalBig(128, num_semantic_classes=1)    
         
         self.relu = nn.ReLU(inplace=True)
 
@@ -963,7 +963,7 @@ class RegressionInstancesSharedCanonicalModuleScale(nn.Module):
 
 
 class RegressionInstancesModule(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, num_instances=63,var=0, padding_instances=0):
+    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0, num_semantic_classes=14, num_instances=63,var=0, padding_instances=0):
         super(RegressionInstancesModule, self).__init__()
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
@@ -984,7 +984,7 @@ class RegressionInstancesModule(nn.Module):
 
         self.instances_canonical = nn.ModuleList()
         for i in range(num_semantic_classes - 1):
-            self.instances_canonical.append(ROISelectCanonicalModule(128, 4, num_semantic_classes=1))     
+            self.instances_canonical.append(ROISelectCanonicalModule(128, num_semantic_classes=1))     
         
         # Pick variation #      
         if var == 1 or var == 3:
@@ -992,7 +992,7 @@ class RegressionInstancesModule(nn.Module):
                 self.instances_scale_and_shift.append(ROISelectScaleModuleBig(128, downsampling=4, num_semantic_classes=1))        
         if var == 2 or var == 3:
             for i in range(num_semantic_classes - 1):
-                self.instances_canonical.append(ROISelectCanonicalModuleBig(128, 4, num_semantic_classes=1))     
+                self.instances_canonical.append(ROISelectCanonicalModuleBig(128, num_semantic_classes=1))     
 
         self.relu = nn.ReLU(inplace=True)
 

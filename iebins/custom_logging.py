@@ -6,10 +6,25 @@ import cv2
 from utils_clean import inv_normalize, find_indexes_valid_instances, colormap
 
 
-def tb_visualization(writer, global_step, args, num_images, depth_gt, image, max_tree_depth, pred_depths_r_list, pred_depths_rc_list, \
+def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, current_loss_unc_decoder, var_sum, var_cnt, num_images, \
+                     depth_gt, image, max_tree_depth, pred_depths_r_list, pred_depths_rc_list, \
                      pred_depths_instances_r_list, pred_depths_instances_rc_list, num_semantic_classes, instances, segmentation_map, \
                      labels, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list, unc_decoder, expensive_viz=True):
 
+    depth_gt = torch.where(depth_gt < 1e-3, depth_gt * 0 + 1e-3, depth_gt)
+    
+    if args.loss_type == 0:
+        writer.add_scalar('silog_loss', current_loss_depth, global_step)
+    else:
+        writer.add_scalar('l1_loss', current_loss_depth, global_step)
+
+    # Decoder loss #
+    if args.predict_unc:
+        writer.add_scalar('unc_decoder_loss', current_loss_unc_decoder, global_step)
+
+    writer.add_scalar('learning_rate', current_lr, global_step)
+    writer.add_scalar('var_average', var_sum/var_cnt, global_step)
+    
     if args.instances:
         for i in range(num_images):
 

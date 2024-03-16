@@ -11,11 +11,12 @@ from dataloaders.dataloader_dataset import DatasetPreprocess, ToTensorCustom
 from utils_clean import DistributedSamplerNoEvenlyDivisible
 
 
-class NewDataLoader(object):
+class DataLoaderCustom(object):
     def __init__(self, args, mode):
         if args.dataset == 'nyu':
             self.semantic_classes = json.load(open(args.data_path.split('train')[0] + 'labels.json', 'r'))
             self.num_semantic_classes = len(self.semantic_classes)
+            self.num_instances = 63 # Max instances in one image
 
         if mode == 'train':
             self.training_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation))

@@ -61,7 +61,7 @@ class ProjectionV2(nn.Module):
 Upsample input tensor by a factor of 2
 """
 def upsample(x, scale_factor=2, mode="bilinear", align_corners=False):
-    return F.interpolate(x, scale_factor=scale_factor, mode=mode, align_corners=align_corners)
+    return F.interpolate(x, scale_factor=scale_factor, mode=mode, align_corners=align_corners, recompute_scale_factor=False)
 
 
 def get_uniform_bins(feature_map, min_depth=0, max_depth=0, bin_num=5):

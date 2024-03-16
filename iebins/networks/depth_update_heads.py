@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from .depth_update_clean import padding_global
 from .utils_clean import *
 
+
 """
 Canonical/Depth and scale/shift heads
 """
@@ -390,10 +391,9 @@ class ROISelectCanonical(nn.Module):
 
 
 class ROISelectCanonicalA(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, num_semantic_classes=14):
         super(ROISelectCanonicalA, self).__init__()
               
-        self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
@@ -416,10 +416,9 @@ class ROISelectCanonicalA(nn.Module):
 
 
 class ROISelectCanonicalB(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, num_semantic_classes=14):
         super(ROISelectCanonicalB, self).__init__()
               
-        self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
@@ -444,10 +443,9 @@ class ROISelectCanonicalB(nn.Module):
 
 
 class ROISelectCanonicalC(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, num_semantic_classes=14):
         super(ROISelectCanonicalC, self).__init__()
               
-        self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
@@ -473,10 +471,9 @@ class ROISelectCanonicalC(nn.Module):
 
 
 class ROISelectCanonicalD(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, num_semantic_classes=14):
         super(ROISelectCanonicalD, self).__init__()
               
-        self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
@@ -509,9 +506,8 @@ ROISelectSharedCanonical start
 
 
 class ROISelectSharedCanonical(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, num_semantic_classes=14):
         super(ROISelectSharedCanonical, self).__init__()
-        self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
@@ -534,9 +530,8 @@ class ROISelectSharedCanonical(nn.Module):
 
 
 class ROISelectSharedCanonicalBig(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, num_semantic_classes=14):
         super(ROISelectSharedCanonicalBig, self).__init__()
-        self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
@@ -561,10 +556,9 @@ class ROISelectSharedCanonicalBig(nn.Module):
 
 
 class ROISelectSharedCanonicalHuge(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, num_semantic_classes=14):
         super(ROISelectSharedCanonicalHuge, self).__init__()
               
-        self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
@@ -603,9 +597,8 @@ ROISelectSharedCanonicalClass start
 
 
 class ROISelectCanonicalSharedClass(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, num_semantic_classes=14):
         super(ROISelectCanonicalSharedClass, self).__init__()
-        self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
@@ -620,9 +613,8 @@ class ROISelectCanonicalSharedClass(nn.Module):
         return out
 
 class ROISelectCanonicalSharedClassBig(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, num_semantic_classes=14):
         super(ROISelectCanonicalSharedClassBig, self).__init__()
-        self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
@@ -742,9 +734,8 @@ ROISelectScaleModule end
 ROISelectCanonicalModule start
 """
 class ROISelectCanonicalModule(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, num_semantic_classes=14):
         super(ROISelectCanonicalModule, self).__init__()
-        self.downsampling = downsampling   
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
@@ -772,15 +763,14 @@ class ROISelectCanonicalModule(nn.Module):
         return out
 
 class ROISelectCanonicalModuleBig(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, num_semantic_classes=14):
         super(ROISelectCanonicalModuleBig, self).__init__()
+        self.num_semantic_classes = num_semantic_classes
+        self.input_dim = input_dim
+
         self.conv1 = nn.Conv2d(input_dim, 128, 3, padding=1)
         self.conv2 = nn.Conv2d(128, 128, 3, padding=1)
         self.conv3 = nn.Conv2d(128, num_classes, 3, padding=1)
-
-        self.downsampling = downsampling   
-        self.num_semantic_classes = num_semantic_classes
-        self.input_dim = input_dim
 
     def forward(self, x, boxes, labels, class_label):
         with torch.no_grad(): 

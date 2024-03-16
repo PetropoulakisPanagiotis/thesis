@@ -54,6 +54,68 @@ def get_num_lines(file_path):
     return len(lines)
 
 
+def load_checkpoint_custom(checkpoint_path, gpu, retrain, model, optimizer):
+    if checkpoint_path != '':
+        if os.path.isfile(checkpoint_path):
+            print("== Loading checkpoint '{}'".format(checkpoint_path))
+            if gpu is None:
+                checkpoint = torch.load(checkpoint_path)
+            else:
+                loc = 'cuda:{}'.format(gpu)
+                checkpoint = torch.load(checkpoint_path, map_location=loc)
+           
+            # Skip weights of some layers #
+            weights_to_remove_1 = "update"
+            weights_to_remove_2 = "project"
+            keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove_1 in key]
+            keys_to_remove.extend([key for key in checkpoint['model'].keys() if weights_to_remove_2 in key]) 
+
+            for key_to_remove in keys_to_remove:
+                checkpoint['model'].pop(key_to_remove)
+
+            model.load_state_dict(checkpoint['model'], strict=False)
+            #optimizer.load_state_dict(checkpoint['optimizer'])
+
+            if not retrain:
+                try:
+                    global_step = checkpoint['global_step']
+                    best_eval_measures_higher_better = checkpoint['best_eval_measures_higher_better'].cpu()
+                    best_eval_measures_lower_better = checkpoint['best_eval_measures_lower_better'].cpu()
+                    best_eval_steps = checkpoint['best_eval_steps']
+                except KeyError:
+                    print("Could not load values for online evaluation")
+
+            print("== Loaded checkpoint '{}' (global_step {})".format(checkpoint_path, checkpoint['global_step']))
+        
+            del checkpoint
+        else:
+            print("== No checkpoint found at '{}'".format(checkpoint_path))
+
+
+def set_hparams_dict(args, num_semantic_classes):
+    hparams = {
+        "epochs": args.num_epochs,
+        "loss_type": args.loss_type,
+        "batch_size": args.batch_size,
+        "learning_rate": args.learning_rate,
+        "weight_decay": args.weight_decay,
+        "update_block": args.update_block,
+        "max_tree_depth": args.max_tree_depth,
+        "bin_num": args.bin_num,
+        "min_depth": args.min_depth,
+        "max_depth": args.max_depth,
+        "train_decoder": args.train_decoder,
+        "predict_unc": args.predict_unc,
+        "num_semantic_classes": num_semantic_classes,
+        "segmentation": args.segmentation,
+        "instances": args.instances,
+        "var": args.var,
+        "padding_instances": args.padding_instances,
+    }
+
+    return hparams
+        
+
 def colorize(value, vmin=None, vmax=None, cmap='Greys'):
     value = value.cpu().numpy()[:, :, :]
     value = np.log10(value)
