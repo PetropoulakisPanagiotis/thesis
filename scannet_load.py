@@ -216,19 +216,33 @@ class ScanNet():
             label = SEMANTIC_LABEL_LIST_40[idx]
             SEMANTIC_LABEL_LIST_20.add_label(label)
 
-        print(SEMANTIC_LABEL_LIST_20[5].color)
-        exit()
+    def viz(self, image, depth, seg, inst):
+        cv2.imshow('image', image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+        depth_normalized = cv2.normalize(depth, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+
+        depth_colormap = cv2.applyColorMap(np.uint8(255 * depth_normalized), cv2.COLORMAP_JET)
+
+        cv2.imshow('Depth Colormap', depth_colormap)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+
     def get_item(self, idx):
         assert idx < len(self.filenames) and idx >= 0
 
         # rgb #
         rgb_path = self.dataset_path + "/" + self.split + "/rgb/" + self.filenames[idx] + ".jpg"
         rgb = cv2.imread(rgb_path, cv2.IMREAD_UNCHANGED)
-        rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
+        #rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
 
         # depth #
         depth_path = self.dataset_path + "/" + self.split + "/depth/" + self.filenames[idx] + ".png"
-        depth = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)
+        depth = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED).astype(np.float32)
+        depth /= 1000
+
 
         # extr #
         extr_path = self.dataset_path + "/" + self.split + "/extrinsics/" + self.filenames[idx] + ".json"
@@ -268,4 +282,5 @@ class ScanNet():
 if __name__ == '__main__':
 
     dataset = ScanNet('/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted')
-    print(dataset.get_item(0))
+    rgb, depth, extr, sem, inst = dataset.get_item(0)
+    dataset.viz(rgb, depth, sem, inst)
