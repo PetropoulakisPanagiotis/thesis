@@ -4,6 +4,12 @@ import cv2
 from dataclasses import dataclass
 from typing import Tuple, Union
 from scipy.spatial.transform import Rotation
+from matplotlib.colors import ListedColormap, LinearSegmentedColormap
+
+cmap_name = "custom_colormap"
+colors = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]
+custom_cmap_labels = LinearSegmentedColormap.from_list(cmap_name, colors, N=14)
+custom_cmap_instances = LinearSegmentedColormap.from_list(cmap_name, colors, N=40)
 
 SCANNET_COLOR_MAP_20 = {
     0: (0., 0., 0.),
@@ -46,150 +52,23 @@ SCANNET_COLOR_MAP_20 = {
     39: (82., 84., 163.),
     40: (100., 85., 144.),
 }
-
+# set missing colors in dictionary, for source of colors see:
+# https://github.com/ScanNet/ScanNet/blob/master/BenchmarkScripts/util.py
 SCANNET_COLOR_MAP_20[13] = (178, 76, 76)
 SCANNET_COLOR_MAP_20[31] = (120, 185, 128)
 
-@dataclass(frozen=True)
-class _LabelBase:
-    class_name: str
 
-@dataclass(frozen=True)
-class SemanticLabel(_LabelBase):
-    is_thing: Union[bool, None]
-    use_orientations: Union[bool, None]
-    color: Tuple[int]
-
-class _LabelListBase:
-    def __init__(
-        self,
-        label_list: Tuple[_LabelBase] = ()
-    ) -> None:
-        self.label_list = list(label_list)
-        # a copy of a the class names list for faster name to idx lookup
-        self._class_names = ()
-        self._update_internal_lists()
-        # for iterator
-        self._idx = 0
-
-    def __len__(self):
-        return len(self.label_list)
-
-    def __getitem__(self, idx):
-        return self.label_list[idx]
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        try:
-            el = self[self._idx]
-            self._idx += 1
-            return el
-        except IndexError:
-            self._idx = 0
-            raise StopIteration     # done iterating
-
-    def add_label(self, label: _LabelBase):
-        self.label_list.append(label)
-        self._update_internal_lists()
-
-    def _update_internal_lists(self):
-        self._class_names = tuple(item.class_name for item in self.label_list)
-
-    def _name_to_idx(self, name: str) -> int:
-        return self._class_names.index(name)
-
-    def index(self, value: Union[_LabelBase, str]) -> int:
-        if isinstance(value, _LabelBase):
-            return self.label_list.index(value)
-        else:
-            return self._name_to_idx(value)
-
-    def __contains__(self, value: Union[_LabelBase, str]) -> bool:
-        if isinstance(value, _LabelBase):
-            return value in self.label_list
-        else:
-            return value in self._class_names
-
-    @property
-    def class_names(self) -> Tuple[str]:
-        return self._class_names
-
-class SemanticLabelList(_LabelListBase):
-    @property
-    def colors(self) -> Tuple[Tuple[int]]:
-        return tuple(item.color for item in self.label_list)
-
-    @property
-    def colors_array(self) -> np.ndarray:
-        return np.array(self.colors, dtype=np.uint8)
-
-    @property
-    def classes_is_thing(self) -> Tuple[bool]:
-        return tuple(item.is_thing for item in self.label_list)
-
-    @property
-    def classes_use_orientations(self) -> Tuple[bool]:
-        return [item.use_orientations for item in self.label_list]
-
-SEMANTIC_CLASS_COLORS_SCANNET_40 = tuple(
-        tuple(int(val) for val in SCANNET_COLOR_MAP_20[idx])
-        for idx in sorted(SCANNET_COLOR_MAP_20.keys())
-    )
-
-# set missing colors in dictionary, for source of colors see:
-
-# https://github.com/ScanNet/ScanNet/blob/master/BenchmarkScripts/util.py
-
-
-SEMANTIC_LABEL_LIST_40 = SemanticLabelList([
-        # class_name, is_thing, use orientations, color
-        SemanticLabel('void',           False, None, SEMANTIC_CLASS_COLORS_SCANNET_40[0]),  # unannotated
-        SemanticLabel('wall',           False, None, SEMANTIC_CLASS_COLORS_SCANNET_40[1]),
-        SemanticLabel('floor',          False, None, SEMANTIC_CLASS_COLORS_SCANNET_40[2]),
-        SemanticLabel('cabinet',        True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[3]),
-        SemanticLabel('bed',            True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[4]),
-        SemanticLabel('chair',          True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[5]),
-        SemanticLabel('sofa',           True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[6]),
-        SemanticLabel('table',          True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[7]),
-        SemanticLabel('door',           True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[8]),
-        SemanticLabel('window',         True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[9]),
-        SemanticLabel('bookshelf',      True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[10]),
-        SemanticLabel('picture',        True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[11]),
-        SemanticLabel('counter',        True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[12]),
-        SemanticLabel('blinds',         True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[13]),
-        SemanticLabel('desk',           True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[14]),
-        SemanticLabel('shelves',        True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[15]),
-        SemanticLabel('curtain',        True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[16]),
-        SemanticLabel('dresser',        True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[17]),
-        SemanticLabel('pillow',         True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[18]),
-        SemanticLabel('mirror',         True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[19]),
-        SemanticLabel('floor mat',      True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[20]),
-        SemanticLabel('clothes',        True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[21]),
-        SemanticLabel('ceiling',        False, None, SEMANTIC_CLASS_COLORS_SCANNET_40[22]),
-        SemanticLabel('books',          True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[23]),
-        SemanticLabel('refrigerator',   True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[24]),  # renamed from refridgerator
-        SemanticLabel('television',     True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[25]),
-        SemanticLabel('paper',          True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[26]),
-        SemanticLabel('towel',          True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[27]),
-        SemanticLabel('shower curtain', True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[28]),  # sometimes also referred to as: 'shower'
-        SemanticLabel('box',            True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[29]),
-        SemanticLabel('whiteboard',     True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[30]),
-        SemanticLabel('person',         True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[31]),
-        SemanticLabel('night stand',    True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[32]),
-        SemanticLabel('toilet',         True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[33]),
-        SemanticLabel('sink',           True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[34]),
-        SemanticLabel('lamp',           True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[35]),
-        SemanticLabel('bathtub',        True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[36]),
-        SemanticLabel('bag',            True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[37]),
-        SemanticLabel('otherstructure', True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[38]),
-        SemanticLabel('otherfurniture', True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[39]),
-        SemanticLabel('otherprop',      True,  None, SEMANTIC_CLASS_COLORS_SCANNET_40[40])
-    ])
-
+CLASS_LABELS_20 = ('void', 'wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window',
+                   'bookshelf', 'picture', 'counter', 'desk', 'curtain', 'refrigerator',
+                   'shower curtain', 'toilet', 'sink', 'bathtub', 'otherfurniture')
 
 VALID_CLASS_IDS_20 = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 24, 28, 33, 34, 36, 39)
+
+SEMANTIC_CLASS_COLORS_SCANNET_20 = tuple(
+            tuple(int(val) for val in SCANNET_COLOR_MAP_20[idx])  # convert float to int
+            for idx in ((0,) + (VALID_CLASS_IDS_20))
+        )
+
 class ScanNet():
     def __init__(self, dataset_path: str, split: str = 'train') -> None:
 
@@ -201,20 +80,18 @@ class ScanNet():
         with open(file_names_path, 'r') as f:
             self.filenames = f.read().splitlines()
 
-
         self.intr = np.eye(3)
         self.intr[0][0] = 577.8706114969136
         self.intr[0][2] = 319.87654320987656
         self.intr[1][1] = 577.8706114969136
         self.intr[1][2] = 238.88888888888889
 
+        self.color_mappings = {}
 
-        SEMANTIC_LABEL_LIST_20 = SemanticLabelList([
-            SemanticLabel('void', False, None, SEMANTIC_CLASS_COLORS_SCANNET_40[0])
-        ])
-        for idx in VALID_CLASS_IDS_20:
-            label = SEMANTIC_LABEL_LIST_40[idx]
-            SEMANTIC_LABEL_LIST_20.add_label(label)
+        for i in range(len(SEMANTIC_CLASS_COLORS_SCANNET_20)):
+            self.color_mappings[i] = SEMANTIC_CLASS_COLORS_SCANNET_20[i]
+
+        self.labels = CLASS_LABELS_20
 
     def viz(self, image, depth, seg, inst):
         cv2.imshow('image', image)
@@ -229,7 +106,41 @@ class ScanNet():
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
+        # Create an empty RGB image to hold the colored segmentation map
+        segmentation_colored = np.zeros((seg.shape[0], seg.shape[1], 3), dtype=np.uint8)
 
+        # Apply the color mapping to the segmentation map
+        for class_idx, color in self.color_mappings.items():
+            segmentation_colored[seg == class_idx] = color
+            print(class_idx)
+
+        # Display the colored segmentation map
+        cv2.imshow('Segmentation Map Colored', segmentation_colored)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+
+        # Get unique instance IDs
+        unique_ids = np.unique(inst)
+
+        # Create an empty RGB image to hold the colored instance map
+        instance_colored = np.zeros((inst.shape[0], inst.shape[1], 3), dtype=np.uint8)
+
+        # Assign unique colors to each instance
+        for instance_id in unique_ids:
+            if instance_id == 0:  # Skip background
+                continue
+
+            # Generate a random color for each instance
+            color = np.random.randint(0, 256, size=3)
+ 
+            # Assign the color to pixels corresponding to the current instance
+            instance_colored[inst == instance_id] = color
+
+        # Display the colored instance map
+        cv2.imshow('Instance Map Colored', instance_colored)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
     def get_item(self, idx):
         assert idx < len(self.filenames) and idx >= 0
 
@@ -267,7 +178,7 @@ class ScanNet():
         transformation_matrix[:3, 3] = [tx, ty, tz]
         extr = transformation_matrix
 
-        sem, inst = None, None
+        sem, inst, sem_map, inst_map, boxes = None, None, None, None, None
         if self.split != 'test':
             # sem #
             sem_path = self.dataset_path + "/" + self.split + "/semantic_refined_" + str(self.semantic_n_classes) + "/" + self.filenames[idx] + ".png"
@@ -277,10 +188,64 @@ class ScanNet():
             inst_path = self.dataset_path + "/" + self.split + "/instance_refined/" + self.filenames[idx] + ".png"
             inst = cv2.imread(inst_path, cv2.IMREAD_UNCHANGED).astype('int32')
 
-        return rgb, depth, extr, sem, inst
+            sem_map = create_one_hot_mask_classes_np(sem, 20)
+            inst_map, boxes = create_instance_masks_and_boxes(inst, 63)
+
+        return rgb, depth, extr, sem, inst, sem_map, inst_map, boxes
+
+def create_one_hot_mask_classes_np(segmentation_map, num_classes):
+    # segmentation_map: (h, w)
+    # (classes, h, w)
+    one_hot_mask = np.zeros((num_classes, *segmentation_map.shape), dtype=np.float32)
+
+    # Set the corresponding class index to 1
+    for class_idx in range(num_classes):
+        one_hot_mask[class_idx] = (segmentation_map == class_idx).astype(np.float32)
+ 
+    return one_hot_mask
+
+def create_instance_masks_and_boxes(instance_map, max_instances=32):
+    # Get unique instance IDs including 0 (background)
+    unique_ids = np.unique(instance_map)
+    # Initialize lists to hold binary masks and bounding boxes for each instance
+    masks = []
+    boxes = []
+    offset = 2
+    # Iterate over the unique instance IDs
+    for instance_id in unique_ids:
+        if instance_id == 0:  # Skip background
+            continue
+        # Create a binary mask for the current instance
+        instance_mask = np.uint8(instance_map == instance_id)
+        # Find the coordinates of all pixels where instance ID is present
+        ys, xs = np.where(instance_mask)
+        # Calculate bounding box coordinates
+        xmin = max(np.min(xs) - offset, 0)
+        xmax = min(np.max(xs) + offset, instance_mask.shape[1] - 1)
+        ymin = max(np.min(ys) - offset, 0)
+        ymax = min(np.max(ys) + offset, instance_mask.shape[0] - 1)
+        instance_mask[instance_mask == 1] = [255]
+        instance_mask = cv2.cvtColor(instance_mask, cv2.COLOR_GRAY2BGR)
+
+        # Append the binary mask and bounding box to the lists
+        masks.append(instance_mask)
+        boxes.append((xmin, ymin, xmax, ymax))
+
+        cv2.rectangle(instance_mask, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+        cv2.imshow("instance", instance_mask)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    # Append zero masks and boxes for remaining instances if needed
+    num_remaining = max_instances - len(masks)
+    for _ in range(num_remaining):
+        masks.append(np.zeros_like(instance_map, dtype=np.uint8))
+        boxes.append((0, 0, 0, 0))
+
+    return masks, boxes
 
 if __name__ == '__main__':
 
     dataset = ScanNet('/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted')
-    rgb, depth, extr, sem, inst = dataset.get_item(0)
+    rgb, depth, extr, sem, inst, sem_map, inst_map, boxes = dataset.get_item(0)
     dataset.viz(rgb, depth, sem, inst)
