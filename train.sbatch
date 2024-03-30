@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name="m-3"
-#SBATCH --nodelist=node[14]
+#SBATCH --job-name="segu-1"
+#SBATCH --nodelist=node[11]
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1,VRAM:48G
 #SBATCH --mem=24G
-#SBATCH --time=24:00:00
+#SBATCH --time=27:00:00
 #SBATCH --mail-type=NONE
-#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-m-3-%j.out
-#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-m-3-%j.out
-srun python /usr/stud/petp/code/thesis/iebins/train.py /usr/stud/petp/code/thesis/configs/m_3.txt
+#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-segu-1-%j.out
+#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-segu-1-%j.out
+srun python /usr/stud/petp/code/thesis/iebins/train_clean.py /usr/stud/petp/code/thesis/configs/segu_1.txt
 
 # SBATCH --nodelist=node[12,14,15,16,17,18]
 # SBATCH --nodelist=node[11,12,13,16,17,18]

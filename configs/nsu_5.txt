@@ -22,8 +22,8 @@
 --input_width 640
 
 --batch_size 8
---num_epochs 170
---learning_rate 4e-4
+--num_epochs 180
+--learning_rate 2e-4
 --weight_decay 1e-2
 --adam_eps 1e-3
 
@@ -33,16 +33,12 @@
 
 --eigen_crop
 
---exp_name var1-b
---update_block 20
-
---segmentation
---instances
---var 1
+--exp_name nsu-5
+--update_block 3
 
 --loss_type 1
 
---bin_num 16
+--bin_num 40
 --min_depth 0
---max_depth 1
+--max_depth 10
 --max_tree_depth 1

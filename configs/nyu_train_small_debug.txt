@@ -21,9 +21,9 @@
 --input_height 480
 --input_width 640
 
---batch_size 2
+--batch_size 1
 --num_epochs 5000
---learning_rate 3e-4
+--learning_rate 2e-4
 --weight_decay 1e-2
 --adam_eps 1e-3
 
@@ -36,12 +36,12 @@
 --exp_name debug
 --update_block 23
 --segmentation
---instances 
+--instances
 --padding_instances 10
---var 3
+--var 1
 
 --loss_type 1
 --bin_num 40
 --min_depth 0
---max_depth 1
---max_tree_depth 1
+--max_depth 10
+--max_tree_depth 5

@@ -181,7 +181,7 @@ def convert_instances_and_semantic_mask(i, scene, instances_input, label_map, im
             "id": annotation_id,
             "category_id": labels[ii],
             "segmentation": segmentation,
-            "bbox": bbox[ii].tolist(),
+            "bbox": boxes[ii].tolist(),
             "area": areas[ii].tolist()
         }
 
@@ -287,5 +287,5 @@ if __name__ == "__main__":
 
     for i, (instance, label, image) in enumerate(zip(instances, labels, images)):
         convert_instances_and_semantic_mask(i, scenes[i],  instance.T, label.T, image.T, mapping_894_to_40, mapping_40_to_13, mapping_13_to_5)
-        convert_image_and_depth(i, scenes[i], depth_raw[i, :, :].T, image.T)
+        #convert_image_and_depth(i, scenes[i], depth_raw[i, :, :].T, image.T)
     print("Finished")

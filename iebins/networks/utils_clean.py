@@ -292,13 +292,17 @@ def roi_select_features_canonical_shared(feature_map, boxes, labels, downsamplin
 
                 zeros_mask = torch.cat([torch.zeros_like(feature_map[i, :, :, :].unsqueeze(0)).repeat(times,1,1,1) for i, times in enumerate(instances_per_batch)], dim=0)
 
+                instances_per_batch_non_zero_idx = instances_per_batch.nonzero()
+                instances_per_batch = instances_per_batch[instances_per_batch_non_zero_idx].squeeze(-1)
+                
                 instances_per_batch = torch.cat((torch.tensor([1]).to(labels.device), instances_per_batch))
                 instances_per_batch = torch.cumsum(instances_per_batch, dim=0)
 
                 masks = (zeros_mask + row_mask) * (zeros_mask + col_mask)
                 batches_masks = torch.cat([torch.sum(masks[instances_per_batch[i] - 1:instances_per_batch[i+1]], dim=0).unsqueeze(0) for i in range(instances_per_batch.shape[0] - 1)], dim=0)
-                masked_feature_map = feature_map * batches_masks
-                feature_maps_final[:, class_i, :, :] = masked_feature_map
+                masked_feature_map = feature_map[instances_per_batch_non_zero_idx].squeeze(1) * batches_masks
+                feature_maps_final[instances_per_batch_non_zero_idx[:], class_i, :, :, :] = masked_feature_map.unsqueeze(1)
+                feature_maps_final = feature_maps_final.squeeze(1)
 
             if False: 
                 for i in range(masked_feature_map.shape[0]): 

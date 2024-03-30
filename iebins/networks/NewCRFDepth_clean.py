@@ -307,7 +307,7 @@ class NewCRFDepth(nn.Module):
                 result["pred_depths_r_list"][i] = upsample(result["pred_depths_r_list"][i], scale_factor=4)
                 
                 # Canonical prediction #
-                if self.update_block == 8 or self.update_block == 18 or self.update_block == 12 or \
+                if self.update_block == 1 or self.update_block == 8 or self.update_block == 18 or self.update_block == 12 or \
                    self.update_block == 13 or self.update_block == 15:
                     result["pred_depths_rc_list"][i] = upsample(result["pred_depths_rc_list"][i], scale_factor=4) 
             else:
