@@ -5,11 +5,8 @@ from dataclasses import dataclass
 from typing import Tuple, Union
 from scipy.spatial.transform import Rotation
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
-
-cmap_name = "custom_colormap"
-colors = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]
-custom_cmap_labels = LinearSegmentedColormap.from_list(cmap_name, colors, N=14)
-custom_cmap_instances = LinearSegmentedColormap.from_list(cmap_name, colors, N=40)
+import open3d as o3d 
+import matplotlib.pyplot as plt
 
 SCANNET_COLOR_MAP_20 = {
     0: (0., 0., 0.),
@@ -52,6 +49,7 @@ SCANNET_COLOR_MAP_20 = {
     39: (82., 84., 163.),
     40: (100., 85., 144.),
 }
+
 # set missing colors in dictionary, for source of colors see:
 # https://github.com/ScanNet/ScanNet/blob/master/BenchmarkScripts/util.py
 SCANNET_COLOR_MAP_20[13] = (178, 76, 76)
@@ -75,6 +73,7 @@ class ScanNet():
         self.dataset_path = dataset_path
         self.split = split
         self.semantic_n_classes = 20
+        self.max_instances = 30
 
         file_names_path = self.dataset_path + "/" + split + ".txt"
         with open(file_names_path, 'r') as f:
@@ -147,13 +146,11 @@ class ScanNet():
         # rgb #
         rgb_path = self.dataset_path + "/" + self.split + "/rgb/" + self.filenames[idx] + ".jpg"
         rgb = cv2.imread(rgb_path, cv2.IMREAD_UNCHANGED)
-        #rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
 
         # depth #
         depth_path = self.dataset_path + "/" + self.split + "/depth/" + self.filenames[idx] + ".png"
         depth = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED).astype(np.float32)
-        depth /= 1000
-
+        #depth /= 1000
 
         # extr #
         extr_path = self.dataset_path + "/" + self.split + "/extrinsics/" + self.filenames[idx] + ".json"
@@ -166,7 +163,6 @@ class ScanNet():
         tx = extr['x']
         ty = extr['y']
         tz = extr['z']
-        print(extr)
         # Create rotation matrix from quaternions
         rotation_matrix = Rotation.from_quat([x, y, z, w]).as_matrix()
 
@@ -188,8 +184,8 @@ class ScanNet():
             inst_path = self.dataset_path + "/" + self.split + "/instance_refined/" + self.filenames[idx] + ".png"
             inst = cv2.imread(inst_path, cv2.IMREAD_UNCHANGED).astype('int32')
 
-            sem_map = create_one_hot_mask_classes_np(sem, 20)
-            inst_map, boxes = create_instance_masks_and_boxes(inst, 63)
+            sem_map = create_one_hot_mask_classes_np(sem, self.semantic_n_classes + 1)
+            inst_map, boxes = create_instance_masks_and_boxes(sem, inst, self.max_instances)
 
         return rgb, depth, extr, sem, inst, sem_map, inst_map, boxes
 
@@ -204,7 +200,7 @@ def create_one_hot_mask_classes_np(segmentation_map, num_classes):
  
     return one_hot_mask
 
-def create_instance_masks_and_boxes(instance_map, max_instances=32):
+def create_instance_masks_and_boxes(seg_map, instance_map, max_instances=32):
     # Get unique instance IDs including 0 (background)
     unique_ids = np.unique(instance_map)
     # Initialize lists to hold binary masks and bounding boxes for each instance
@@ -215,8 +211,13 @@ def create_instance_masks_and_boxes(instance_map, max_instances=32):
     for instance_id in unique_ids:
         if instance_id == 0:  # Skip background
             continue
-        # Create a binary mask for the current instance
+
+
         instance_mask = np.uint8(instance_map == instance_id)
+        # Do not include void instances 
+        if seg_map[np.where(instance_mask)][0] == 0:
+            continue
+
         # Find the coordinates of all pixels where instance ID is present
         ys, xs = np.where(instance_mask)
         # Calculate bounding box coordinates
@@ -224,17 +225,18 @@ def create_instance_masks_and_boxes(instance_map, max_instances=32):
         xmax = min(np.max(xs) + offset, instance_mask.shape[1] - 1)
         ymin = max(np.min(ys) - offset, 0)
         ymax = min(np.max(ys) + offset, instance_mask.shape[0] - 1)
-        instance_mask[instance_mask == 1] = [255]
-        instance_mask = cv2.cvtColor(instance_mask, cv2.COLOR_GRAY2BGR)
-
-        # Append the binary mask and bounding box to the lists
         masks.append(instance_mask)
         boxes.append((xmin, ymin, xmax, ymax))
 
+
+        """
+        instance_mask[instance_mask == 1] = [255]
+        instance_mask = cv2.cvtColor(instance_mask, cv2.COLOR_GRAY2BGR)
         cv2.rectangle(instance_mask, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
         cv2.imshow("instance", instance_mask)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+        """
 
     # Append zero masks and boxes for remaining instances if needed
     num_remaining = max_instances - len(masks)
@@ -247,5 +249,35 @@ def create_instance_masks_and_boxes(instance_map, max_instances=32):
 if __name__ == '__main__':
 
     dataset = ScanNet('/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted')
-    rgb, depth, extr, sem, inst, sem_map, inst_map, boxes = dataset.get_item(0)
-    dataset.viz(rgb, depth, sem, inst)
+    rgb_1, depth_1, extr_1, sem, inst, sem_map, inst_map, boxes = dataset.get_item(0)
+    rgb_2, depth_2, extr_2, sem_1, inst_1, sem_map_1, inst_map_1, boxes_1 = dataset.get_item(20)
+    #dataset.viz(rgb, depth, sem, inst)
+
+    image_1_name = "00000"
+    scene_name = "scene0191_00"
+
+    print(rgb_1.shape)
+    #depth_1 = o3d.io.read_image("/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/train/depth/" + scene_name + "/" + image_1_name + ".png")
+    #rgb_1 = o3d.io.read_image("/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/train/rgb/" + scene_name + "/" + image_1_name + ".jpg")
+    rgb_1 = o3d.geometry.Image(rgb_1)
+    depth_1 = o3d.geometry.Image(depth_1)
+
+    rgb_2 = o3d.geometry.Image(np.array(rgb_2))
+    depth_2 = o3d.geometry.Image(np.array(depth_2))
+
+    intr = dataset.intr
+    cam1 = o3d.camera.PinholeCameraIntrinsic()
+    cam1.set_intrinsics(640, 480, intr[0][0], intr[1][1], intr[0][2], intr[1][2])
+    print(cam1.intrinsic_matrix)
+    rgbd_image_1 = o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_1, depth_1, convert_rgb_to_intensity=False)
+    pcd_1 = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image_1, cam1, np.linalg.inv(extr_1))
+
+    rgbd_image_2 = o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_2, depth_2, convert_rgb_to_intensity=False)
+    pcd_2 = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image_2, cam1, np.linalg.inv(extr_2))
+    pcd_2.colors = o3d.utility.Vector3dVector(np.zeros_like(np.asarray(pcd_2.points)))
+
+    # Flip it, otherwise the pointcloud will be upside down
+    pcd_1.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+    pcd_2.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+    o3d.visualization.draw_geometries([pcd_1, pcd_2])
+
