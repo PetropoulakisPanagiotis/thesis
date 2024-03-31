@@ -22,7 +22,7 @@ class DataLoaderCustom(object):
             self.semantic_classes = ('void', 'wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window',
                    'bookshelf', 'picture', 'counter', 'desk', 'curtain', 'refrigerator',
                    'shower curtain', 'toilet', 'sink', 'bathtub', 'otherfurniture')
-            self.num_semantic_classes = 20
+            self.num_semantic_classes = 21
             self.num_instances = 20
 
         if mode == 'train':

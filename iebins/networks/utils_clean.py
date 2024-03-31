@@ -388,7 +388,7 @@ def pick_predictions_instances_scale_shift(prediction_scale_shift, labels):
 
     pred_scale = prediction_scale_shift[:, ::2]
     pred_shift = prediction_scale_shift[:, 1::2]
-
+    print(labels)
     # Pick scale/shift that corresponds to the correct class #
     pred_scale = pred_scale[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)
     pred_shift = pred_shift[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)

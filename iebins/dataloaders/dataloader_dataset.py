@@ -439,10 +439,10 @@ class ToTensorCustom(object):
 
             segmentation_map = torch.from_numpy(seg_map)
             
-            instances_masks = torch.stack([torch.from_numpy(arr.astype(np.float32)) for arr in instances_map])
-            instances_bbox = torch.stack([torch.from_numpy(arr.astype(np.float32)) for arr in boxes])
-            instances_labels = torch.stack([torch.from_numpy(arr.astype(np.float32)) for arr in instances_labels])
-
+            instances_masks = torch.stack([torch.from_numpy(arr).to(torch.float32) for arr in instances_map])
+            instances_bbox = torch.stack([torch.from_numpy(arr).to(torch.int32) for arr in boxes])
+            instances_labels = torch.from_numpy(instances_labels).to(torch.long) 
+            
             result_dict['instances_masks'] = instances_masks
             result_dict['segmentation_map'] = segmentation_map
             result_dict['instances_labels'] = instances_labels
@@ -604,7 +604,7 @@ def create_instance_masks_and_boxes_scannet_np(seg_map, instance_map, max_instan
                 continue
 
             masks.append(instance_mask)
-            labels.append(np.asarray([instance_class]))
+            labels.append(instance_class)
 
             # Box #
             ys, xs = np.where(instance_mask)
@@ -628,5 +628,5 @@ def create_instance_masks_and_boxes_scannet_np(seg_map, instance_map, max_instan
         for _ in range(num_remaining):
             masks.append(np.zeros_like(instance_map, dtype=np.uint8))
             boxes.append(np.asarray([0, 0, 0, 0]))
-            labels.append(np.asarray([0]))
-        return masks, boxes, labels
+            labels.append(0)
+        return masks, boxes, np.array(labels)
