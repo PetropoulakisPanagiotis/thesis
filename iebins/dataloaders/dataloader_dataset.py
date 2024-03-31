@@ -4,6 +4,7 @@ import random
 
 import cv2
 import numpy as np
+from scipy.spatial.transform import Rotation
 from PIL import Image
 
 import torch
@@ -16,39 +17,68 @@ from utils_clean import _is_pil_image, _is_numpy_image, custom_cmap_instances
 class DatasetPreprocess(Dataset):
     def __init__(self, args, mode, transform=None):
         self.args = args
-        if mode == 'online_eval':
-            with open(args.filenames_file_eval, 'r') as f:
-                self.filenames = f.readlines()
-        else:
-            with open(args.filenames_file, 'r') as f:
-                self.filenames = f.readlines()
 
+        if self.args.dataset == 'scanne':
+            with open(args.filenames_file_eval, 'r') as f:
+                self.filenames = f.read.splitlines()
+        else:
+            if mode == 'online_eval':
+                with open(args.filenames_file_eval, 'r') as f:
+                    self.filenames = f.readlines()
+            else:
+                with open(args.filenames_file, 'r') as f:
+                    self.filenames = f.readlines()        
+        
         self.mode = mode
         self.transform = transform
         self.to_tensor = ToTensorCustom
 
     def __getitem__(self, idx):
         sample_path = self.filenames[idx]
+        if self.args.dataset == 'scannet':
+            sample_path = sample_path[:-1]
+
         # focal = float(sample_path.split()[2])
         focal = 518.8579
 
         if self.mode == 'train':
-            if self.args.dataset == 'kitti':
-                rgb_file = sample_path.split()[0]
-                depth_file = os.path.join(sample_path.split()[1])
-
-                if self.args.use_right is True and random.random() > 0.5:
-                    rgb_file.replace('image_02', 'image_03')
-                    depth_file.replace('image_02', 'image_03')
-            else:
-                rgb_file = sample_path.split()[0]
-                depth_file = sample_path.split()[1]
-
             # Open images 
-            image_path = os.path.join(self.args.data_path, rgb_file)
-            depth_path = os.path.join(self.args.gt_path, depth_file)
-            image = Image.open(image_path)
-            depth_gt = Image.open(depth_path)
+            if self.args.dataset == 'scannet':
+                rgb_path = self.args.data_path + "rgb/" + sample_path + ".jpg"
+                rgb = cv2.imread(rgb_path, cv2.IMREAD_UNCHANGED)
+                image = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                """
+                cv2.imshow('Image', image)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+                """
+                depth_path = self.args.data_path + "depth/" + sample_path + ".png"
+                depth_gt = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED).astype(np.float32)       
+            
+                """
+                depth_normalized = cv2.normalize(depth_gt/ 1000, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+                depth_colormap = cv2.applyColorMap(np.uint8(255 * depth_normalized), cv2.COLORMAP_JET)
+                cv2.imshow('Depth Colormap', depth_colormap)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+                """
+            else:
+                if self.args.dataset == 'kitti':
+                    rgb_file = sample_path.split()[0]
+                    depth_file = os.path.join(sample_path.split()[1])
+
+                    if self.args.use_right is True and random.random() > 0.5:
+                        rgb_file.replace('image_02', 'image_03')
+                        depth_file.replace('image_02', 'image_03')
+                else:
+                    rgb_file = sample_path.split()[0]
+                    depth_file = sample_path.split()[1]
+
+
+                image_path = os.path.join(self.args.data_path, rgb_file)
+                depth_path = os.path.join(self.args.gt_path, depth_file)
+                image = Image.open(image_path)
+                depth_gt = Image.open(depth_path)
 
             if self.args.dataset == 'nyu' and self.args.segmentation:
                 
@@ -59,6 +89,7 @@ class DatasetPreprocess(Dataset):
                 instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas, num_semantic_classes = \
                                  load_image_annotations_nyu(annotations_file)
 
+            
             # Not used in NYU
             if self.args.do_kb_crop is True: 
                 height = image.height
@@ -70,7 +101,7 @@ class DatasetPreprocess(Dataset):
 
 
             # To avoid blank boundaries due to pixel registration
-            if self.args.dataset == 'nyu' or self.args.dataset == 'nyud':
+            if self.args.dataset == 'nyu' or self.args.dataset == 'nyud' and self.args.dataset != 'scannet':
                 if self.args.input_height == 480:
                     depth_gt = np.array(depth_gt)
                     valid_mask = np.zeros_like(depth_gt)
@@ -85,7 +116,7 @@ class DatasetPreprocess(Dataset):
                     image = image.crop((43, 45, 608, 472))
 
             # Random rotate: not used in NYU
-            if self.args.do_random_rotate is True and self.args.dataset != 'nyu':
+            if self.args.do_random_rotate is True and self.args.dataset != 'nyu' and self.args.dataset != 'scannet':
                 random_angle = (random.random() - 0.5) * 2 * self.args.degree
                 image = self.rotate_image(image, random_angle)
                 depth_gt = self.rotate_image(depth_gt, random_angle, flag=Image.NEAREST)
@@ -97,7 +128,7 @@ class DatasetPreprocess(Dataset):
             depth_gt = np.expand_dims(depth_gt, axis=2)
 
             # Fix depth range
-            if self.args.dataset == 'nyu' or self.args.dataset == 'nyud':
+            if self.args.dataset == 'nyu' or self.args.dataset == 'nyud' or self.args.dataset == 'scannet':
                 depth_gt = depth_gt / 1000.0
             else:
                 depth_gt = depth_gt / 256.0
@@ -113,44 +144,55 @@ class DatasetPreprocess(Dataset):
                 image, depth_gt = self.train_preprocess(image, depth_gt, self.args, segmentation_map)
 
             # https://github.com/ShuweiShao/URCDC-Depth
-            if self.args.dataset != 'nyu':
+            if self.args.dataset != 'nyu' and self.args.dataset != 'scannet':
                 image, depth_gt = self.Cut_Flip(image, depth_gt)
 
-            sample = {'image': image, 'depth': depth_gt, 'focal': focal}
+            sample = {'image': image, 'depth': depth_gt, 'focal': focal, 'has_valid_depth': True}
         else:
-            if self.mode == 'online_eval':
-                data_path = self.args.data_path_eval
+            if self.args.dataset == 'scannet':
+                rgb_path = self.args.data_path + "rgb/" + sample_path + ".jpg"
+                rgb = cv2.imread(rgb_path, cv2.IMREAD_UNCHANGED)
+                image = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                image = np.asarray(image, dtype=np.float32) / 255.0
+
+                depth_path = self.args.data_path + "depth/" + sample_path + ".png"
+                depth_gt = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED).astype(np.float32)    
+        
+                has_valid_depth = True
             else:
-                data_path = self.args.data_path
+                if self.mode == 'online_eval':
+                    data_path = self.args.data_path_eval
+                else:
+                    data_path = self.args.data_path
 
-            image_path = os.path.join(data_path,  sample_path.split()[0])
+                image_path = os.path.join(data_path,  sample_path.split()[0])
 
-            # Normalize
-            image = np.asarray(Image.open(image_path), dtype=np.float32) / 255.0
+                # Normalize
+                image = np.asarray(Image.open(image_path), dtype=np.float32) / 255.0
 
-            if self.mode == 'online_eval':
-                gt_path = self.args.gt_path_eval
-                depth_path = os.path.join(gt_path, sample_path.split()[1])
-
-                if self.args.dataset == 'kitti':
+                if self.mode == 'online_eval':
+                    gt_path = self.args.gt_path_eval
                     depth_path = os.path.join(gt_path, sample_path.split()[1])
-                has_valid_depth = False
-                try:
-                    depth_gt = Image.open(depth_path)
-                    has_valid_depth = True
-                except IOError:
-                    depth_gt = False
-                    #print('Missing gt for {}'.format(image_path))
 
-                if has_valid_depth:
-                    depth_gt = np.asarray(depth_gt, dtype=np.float32)
-                    depth_gt = np.expand_dims(depth_gt, axis=2)
+                    if self.args.dataset == 'kitti':
+                        depth_path = os.path.join(gt_path, sample_path.split()[1])
+                    has_valid_depth = False
+                    try:
+                        depth_gt = Image.open(depth_path)
+                        has_valid_depth = True
+                    except IOError:
+                        depth_gt = False
+                        #print('Missing gt for {}'.format(image_path))
+            
+            if has_valid_depth:
+                depth_gt = np.asarray(depth_gt, dtype=np.float32)
+                depth_gt = np.expand_dims(depth_gt, axis=2)
 
-                    # Fix depth ranges 
-                    if self.args.dataset == 'nyu' or self.args.dataset == 'nyud':
-                        depth_gt = depth_gt / 1000.0
-                    else:
-                        depth_gt = depth_gt / 256.0
+                # Fix depth ranges 
+                if self.args.dataset == 'nyu' or self.args.dataset == 'nyud' or self.args.dataset == 'scannet':
+                    depth_gt = depth_gt / 1000.0
+                else:
+                    depth_gt = depth_gt / 256.0
 
             if self.args.dataset == 'nyu' and self.args.segmentation:
                 annotations_file = os.path.join(data_path, sample_path.split()[0])
@@ -184,11 +226,15 @@ class DatasetPreprocess(Dataset):
             sample['instances_labels'] = instances_labels
             sample['instances_bbox'] = instances_bbox
             sample['instances_areas'] = instances_areas
-       
+
+        if self.args.dataset == 'scannet':
+            sample['dataset_path'] = self.args.data_path
+            sample['filename'] = sample_path      
+ 
         # ToTensorCustom 
         if self.transform:
             sample = self.transform([sample, self.args.dataset])
-
+     
         return sample
 
 
@@ -304,11 +350,15 @@ class ToTensorCustom(object):
         dataset = sample_dataset[1]
 
         image, focal = sample['image'], sample['focal']
+        depth = sample['depth']
         #image_numpy = image.copy()
         
         image = self.to_tensor(image)
         image = self.normalize(image)
 
+        depth = self.to_tensor(depth)
+        
+        # Intr #
         if dataset == 'kitti':
             K_p = np.array([[716.88, 0, 596.5593, 0],
                           [0, 716.88, 149.854, 0],
@@ -326,6 +376,24 @@ class ToTensorCustom(object):
 
             inv_K_p = np.linalg.pinv(K_p)
             inv_K_p = torch.from_numpy(inv_K_p)
+
+        elif dataset == 'scannet':
+            K_p = np.array([[577.8706114969136, 0, 319.87654320987656, 0],
+                          [0, 577.8706114969136, 238.88888888888889, 0],
+                          [0, 0, 1, 0],
+                          [0, 0, 0, 1]], dtype=np.float32)
+
+            inv_K_p = np.linalg.pinv(K_p)
+            inv_K_p = torch.from_numpy(inv_K_p)
+
+
+        result_dict = {}
+
+        result_dict['kp'] = K_p
+        result_dict['ikp'] = inv_K_p
+        result_dict['image'] = image
+        result_dict['depth'] = depth
+        result_dict['has_valid_depth'] = sample['has_valid_depth']
 
         if dataset == 'nyu' and self.segmentation:
             segmentation_map = torch.from_numpy(sample['segmentation_map'])
@@ -360,40 +428,27 @@ class ToTensorCustom(object):
             zero_tensors = [torch.zeros((1, 1), dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_areas = torch.cat([instances_areas] + zero_tensors, dim=0)
 
-            if self.mode == 'test':
-                return {'image': image, 'inv_K_p': inv_K_p, 'focal': focal, 'instances_masks': instances_masks, \
-                         'segmentation_map': segmentation_map, 'instances_labels': instances_labels, \
-                         'instances_bbox': instances_bbox, 'instances_areas': instances_areas
-                }
+            result_dict['instances_masks'] = instances_masks
+            result_dict['segmentation_map'] = segmentation_map
+            result_dict['instances_labels'] = instances_labels
+            result_dict['instances_bbox'] = instances_bbox
+            result_dict['instances_areas'] = instances_areas
 
-            depth = sample['depth']
-            if self.mode == 'train':
-                depth = self.to_tensor(depth)
+        elif dataset == 'scannet' and self.segmentation:
+            seg_map, instances_map, boxes, instances_labels = load_image_annotations_scannet(sample['dataset_path'], sample['filename'])
 
-                return {'image': image, 'depth': depth, 'focal': focal, 'instances_masks': instances_masks, \
-                        'segmentation_map': segmentation_map, 'instances_labels': instances_labels, \
-                        'instances_bbox': instances_bbox, 'instances_areas': instances_areas
-                        }
-            else:
-                has_valid_depth = sample['has_valid_depth']
-                return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth, \
-                         'instances_masks': instances_masks, 'segmentation_map': segmentation_map, \
-                         'instances_labels': instances_labels, 'instances_bbox': instances_bbox, \
-                         'instances_areas': instances_areas
-                       }
+            segmentation_map = torch.from_numpy(seg_map)
+            
+            instances_masks = torch.stack([torch.from_numpy(arr.astype(np.float32)) for arr in instances_map])
+            instances_bbox = torch.stack([torch.from_numpy(arr.astype(np.float32)) for arr in boxes])
+            instances_labels = torch.stack([torch.from_numpy(arr.astype(np.float32)) for arr in instances_labels])
 
-        else:
-            if self.mode == 'test':
-                return {'image': image, 'inv_K_p': inv_K_p, 'focal': focal}
+            result_dict['instances_masks'] = instances_masks
+            result_dict['segmentation_map'] = segmentation_map
+            result_dict['instances_labels'] = instances_labels
+            result_dict['instances_bbox'] = instances_bbox
 
-            depth = sample['depth']
-            if self.mode == 'train':
-                depth = self.to_tensor(depth)
-                return {'image': image, 'depth': depth, 'focal': focal}
-            else:
-                has_valid_depth = sample['has_valid_depth']
-                return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth}
-
+        return result_dict
 
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):
@@ -469,6 +524,46 @@ def load_image_annotations_nyu(json_file_path):
            np.asarray(areas_instances, dtype=np.int32), num_semantic_classes
 
 
+def load_image_annotations_scannet(dataset_path, filename):
+
+        # Extrinsics #
+        extr_path = dataset_path + "extrinsics/" + filename + ".json"
+        with open(extr_path, 'r') as f:
+            extr = json.load(f)
+
+        rotation_matrix = Rotation.from_quat([extr['quat_x'], extr['quat_y'], extr['quat_z'], extr['quat_w']]).as_matrix()
+        transformation_matrix = np.eye(4)
+        transformation_matrix[:3, :3] = rotation_matrix
+        transformation_matrix[:3, 3] = [extr['x'], extr['y'], extr['z']]
+        extrinsics = transformation_matrix
+
+        seg_map, instances_map, boxes = None, None, None
+        if 'test/' not in dataset_path:
+            # Segmentation #
+            seg_path = dataset_path + "semantic_refined_20/"+ filename + ".png"
+            seg_map_original = cv2.imread(seg_path, cv2.IMREAD_UNCHANGED)
+
+            # (class, h, w) #
+            seg_map = create_one_hot_mask_classes_np(seg_map_original, 20 + 1)
+            """
+            segmentation_colored = np.zeros((seg_map.shape[0], seg_map.shape[1], 3), dtype=np.uint8)
+            for class_idx, color in self.color_mappings.items():
+                segmentation_colored[seg_map == class_idx] = color
+                print(class_idx)
+            cv2.imshow('Segmentation Map Colored', segmentation_colored)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+            """
+
+            # Instances #
+            inst_path = dataset_path + "instance_refined/" + filename + ".png"
+            instances_map = cv2.imread(inst_path, cv2.IMREAD_UNCHANGED).astype('int32')
+
+            instances_map, boxes, instances_labels = create_instance_masks_and_boxes_scannet_np(seg_map_original, instances_map)
+
+        return seg_map, instances_map, boxes, instances_labels
+
+
 def create_one_hot_mask_classes_np(segmentation_map, num_classes):
     # segmentation_map: (h, w)
     # (classes, h, w)
@@ -487,3 +582,51 @@ def create_one_hot_mask_classes_np(segmentation_map, num_classes):
         one_hot_mask[class_idx] = (segmentation_map == class_idx).astype(np.float32)
         
     return one_hot_mask
+
+
+def create_instance_masks_and_boxes_scannet_np(seg_map, instance_map, max_instances=20):
+        unique_ids = np.unique(instance_map)
+        masks = []
+        boxes = []
+        offset = 2
+        labels = []
+        
+        # Iterate over the unique instance IDs
+        for instance_id in unique_ids:
+            if instance_id == 0:  # Skip background
+                continue
+
+            instance_mask = np.uint8(instance_map == instance_id)
+
+            instance_class = seg_map[np.where(instance_mask)][0]
+            # Do not include void instances 
+            if instance_class == 0:
+                continue
+
+            masks.append(instance_mask)
+            labels.append(np.asarray([instance_class]))
+
+            # Box #
+            ys, xs = np.where(instance_mask)
+            xmin = max(np.min(xs) - offset, 0)
+            xmax = min(np.max(xs) + offset, instance_mask.shape[1] - 1)
+            ymin = max(np.min(ys) - offset, 0)
+            ymax = min(np.max(ys) + offset, instance_mask.shape[0] - 1)
+            boxes.append(np.asarray([xmin, ymin, xmax, ymax]))
+
+            """
+            instance_mask[instance_mask == 1] = [255]
+            instance_mask = cv2.cvtColor(instance_mask, cv2.COLOR_GRAY2BGR)
+            cv2.rectangle(instance_mask, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+            cv2.imshow("Instance", instance_mask)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+            """
+
+        # Append zero masks and boxes for remaining instances if needed #
+        num_remaining = max_instances - len(masks)
+        for _ in range(num_remaining):
+            masks.append(np.zeros_like(instance_map, dtype=np.uint8))
+            boxes.append(np.asarray([0, 0, 0, 0]))
+            labels.append(np.asarray([0]))
+        return masks, boxes, labels

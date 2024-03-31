@@ -206,7 +206,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 unc_decoder = result["unc_decoder"]
             
             # gt_depth masking #
-            if args.dataset == 'nyu' or args.dataset == 'nyud':
+            if args.dataset == 'nyu' or args.dataset == 'nyud' or args.dataset == 'scannet':
                 mask = depth_gt > 0.1
             else:
                 mask = depth_gt > 1.0

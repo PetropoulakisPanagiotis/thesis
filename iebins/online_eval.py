@@ -84,7 +84,7 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
 
             # Mask gt_depth #
             if args.instances:
-                mask = torch.sum(instances, dim=1).unsqueeze(-1).to(torch.bool).cpu()
+                mask = torch.sum(instances, dim=1).squeeze(0).to(torch.bool).cpu()
                 gt_depth = (gt_depth * mask).cpu().numpy().squeeze()
             else:
                 gt_depth = gt_depth.cpu().numpy().squeeze()
@@ -120,7 +120,9 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
                                   int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
                     elif args.dataset == 'nyu' or args.dataset == 'nyud':
                         eval_mask[45:471, 41:601] = 1
-
+                    elif args.dataset == 'scannet':
+                        eval_mask[:, :] = 1
+                    
                 valid_mask = np.logical_and(valid_mask, eval_mask)
             
             # Calculate metrics #
