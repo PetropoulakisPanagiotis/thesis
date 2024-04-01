@@ -261,7 +261,7 @@ def roi_select_features_canonical_shared(feature_map, boxes, labels, downsamplin
         batch_size, num_max_instances = boxes.shape[0:2]
         height, width = feature_map.size(-2), feature_map.size(-1)
 
-        feature_maps_final = torch.zeros((batch_size, 13, feature_map.shape[1], height, width)).to(labels.device)
+        feature_maps_final = torch.zeros((batch_size, num_semantic_classes-1, feature_map.shape[1], height, width)).to(labels.device)
         
         for class_i in range(num_semantic_classes - 1):
             instances_per_batch = torch.nonzero(labels == class_i)
@@ -388,7 +388,7 @@ def pick_predictions_instances_scale_shift(prediction_scale_shift, labels):
 
     pred_scale = prediction_scale_shift[:, ::2]
     pred_shift = prediction_scale_shift[:, 1::2]
-    print(labels)
+    
     # Pick scale/shift that corresponds to the correct class #
     pred_scale = pred_scale[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)
     pred_shift = pred_shift[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)

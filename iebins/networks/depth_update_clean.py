@@ -806,7 +806,7 @@ class RegressionInstancesSharedCanonicalClass(nn.Module):
       
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
         self.instances_canonical = ROISelectCanonicalSharedClass(128, num_semantic_classes=self.num_semantic_classes-1)
-
+        
         # Pick variation #      
         if var == 1 or var == 3:
             self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
@@ -835,8 +835,8 @@ class RegressionInstancesSharedCanonicalClass(nn.Module):
         pred_shift_instances_list.append(instances_shift)
 
         # Shared canonical per class #
-        input_feature_map_instances_roi_canonical = roi_select_features_canonical_shared(input_feature_map_instances, boxes, labels)
-
+        input_feature_map_instances_roi_canonical = roi_select_features_canonical_shared(input_feature_map_instances, boxes, labels, num_semantic_classes=self.num_semantic_classes)
+        
         input_feature_map_instances_roi_canonical = input_feature_map_instances_roi_canonical.view(batch_size*(self.num_semantic_classes-1), hidden_dim, height_hidden, width_hidden)
         instances_canonical = self.instances_canonical(input_feature_map_instances_roi_canonical)
         
