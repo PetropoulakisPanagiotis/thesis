@@ -22,8 +22,8 @@ class DataLoaderCustom(object):
             self.semantic_classes = ('void', 'wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window',
                    'bookshelf', 'picture', 'counter', 'desk', 'curtain', 'refrigerator',
                    'shower curtain', 'toilet', 'sink', 'bathtub', 'otherfurniture')
-            self.num_semantic_classes = 21
-            self.num_instances = 20
+            self.num_semantic_classes = len(self.semantic_classes)
+            self.num_instances = 20 # Max instances in one image
 
         if mode == 'train':
             self.training_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation))

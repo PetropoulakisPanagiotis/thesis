@@ -18,9 +18,9 @@ class DatasetPreprocess(Dataset):
     def __init__(self, args, mode, transform=None):
         self.args = args
 
-        if self.args.dataset == 'scanne':
+        if self.args.dataset == 'scannet':
             with open(args.filenames_file_eval, 'r') as f:
-                self.filenames = f.read.splitlines()
+                self.filenames = f.read().splitlines()
         else:
             if mode == 'online_eval':
                 with open(args.filenames_file_eval, 'r') as f:
@@ -35,11 +35,6 @@ class DatasetPreprocess(Dataset):
 
     def __getitem__(self, idx):
         sample_path = self.filenames[idx]
-        if self.args.dataset == 'scannet':
-            sample_path = sample_path[:-1]
-
-        # focal = float(sample_path.split()[2])
-        focal = 518.8579
 
         if self.mode == 'train':
             # Open images 
@@ -47,21 +42,10 @@ class DatasetPreprocess(Dataset):
                 rgb_path = self.args.data_path + "rgb/" + sample_path + ".jpg"
                 rgb = cv2.imread(rgb_path, cv2.IMREAD_UNCHANGED)
                 image = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-                """
-                cv2.imshow('Image', image)
-                cv2.waitKey(0)
-                cv2.destroyAllWindows()
-                """
+                
                 depth_path = self.args.data_path + "depth/" + sample_path + ".png"
                 depth_gt = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED).astype(np.float32)       
             
-                """
-                depth_normalized = cv2.normalize(depth_gt/ 1000, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-                depth_colormap = cv2.applyColorMap(np.uint8(255 * depth_normalized), cv2.COLORMAP_JET)
-                cv2.imshow('Depth Colormap', depth_colormap)
-                cv2.waitKey(0)
-                cv2.destroyAllWindows()
-                """
             else:
                 if self.args.dataset == 'kitti':
                     rgb_file = sample_path.split()[0]
@@ -89,7 +73,6 @@ class DatasetPreprocess(Dataset):
                 instances_masks, segmentation_map, instances_labels, instances_bbox, instances_areas, num_semantic_classes = \
                                  load_image_annotations_nyu(annotations_file)
 
-            
             # Not used in NYU
             if self.args.do_kb_crop is True: 
                 height = image.height
@@ -147,7 +130,7 @@ class DatasetPreprocess(Dataset):
             if self.args.dataset != 'nyu' and self.args.dataset != 'scannet':
                 image, depth_gt = self.Cut_Flip(image, depth_gt)
 
-            sample = {'image': image, 'depth': depth_gt, 'focal': focal, 'has_valid_depth': True}
+            sample = {'image': image, 'depth': depth_gt, 'has_valid_depth': True}
         else:
             if self.args.dataset == 'scannet':
                 rgb_path = self.args.data_path + "rgb/" + sample_path + ".jpg"
@@ -215,9 +198,9 @@ class DatasetPreprocess(Dataset):
                     depth_gt = depth_gt[top_margin:top_margin + 352, left_margin:left_margin + 1216, :]
 
             if self.mode == 'online_eval':
-                sample = {'image': image, 'depth': depth_gt, 'focal': focal, 'has_valid_depth': has_valid_depth}
+                sample = {'image': image, 'depth': depth_gt, 'has_valid_depth': has_valid_depth}
             else:
-                sample = {'image': image, 'focal': focal}
+                sample = {'image': image}
         
         # Fill sample with segmentation info
         if self.args.dataset == 'nyu' and self.args.segmentation:
@@ -349,7 +332,7 @@ class ToTensorCustom(object):
         sample = sample_dataset[0]
         dataset = sample_dataset[1]
 
-        image, focal = sample['image'], sample['focal']
+        image = sample['image']
         depth = sample['depth']
         #image_numpy = image.copy()
         
@@ -629,4 +612,5 @@ def create_instance_masks_and_boxes_scannet_np(seg_map, instance_map, max_instan
             masks.append(np.zeros_like(instance_map, dtype=np.uint8))
             boxes.append(np.asarray([0, 0, 0, 0]))
             labels.append(0)
+
         return masks, boxes, np.array(labels)
