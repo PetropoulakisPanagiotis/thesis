@@ -5,9 +5,41 @@ Cluster etc:
 104 
 105 
 
+
+
+nicr_sa_prepare_dataset scannet /usr/stud/petp/storage/user/petp/datasets/scannet/data /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted
+
+
+python3 download.py --id scene0568_00 -o /usr/stud/petp/storage/user/petp/datasets/scannet/ && python3 download.py --id scene0191_00 -o /usr/stud/petp/storage/user/petp/datasets/scannet/ && python3 download.py --id scene0707_00 -o /usr/stud/petp/storage/user/petp/datasets/scannet/ && python3 download.py --label_map -o /usr/stud/petp/storage/user/petp/datasets/scannet/
+
+
+nicr_sa_prepare_dataset scannet /home/petropoulakis/Desktop/thesis/code/datasets/scannet/data /home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted 
+
+
+python -m pip install .[withpreparation,with3d] --user && pip install --upgrade numpy && pip install markupsafe==2.0.1 && pip install werkzeug==2.0.3
+rm -r *.ply
+
+
+atcremers104 :)
+ssh -X -L 16006:127.0.0.1:6004 petp@131.159.19.192 -p 58022
+
+
 # 10GB  
 
+
+
+
 ssh -X -L 16006:127.0.0.1:6004 petp@atcremers92.mlr.in.tum.de -p 58022
+ssh -X -L 16006:127.0.0.1:6004 petp@131.159.19.194 -p 58022    
+
+
+
+nohup bash your_script.sh > output.txt 2>&1 &
+
+atcremers15.mlr.in.tum.de
+ssh -X -L 16006:127.0.0.1:6004 petp@131.159.19.194 -p 58022
+
+
 
 # 15GB
 ssh -X -L 16006:127.0.0.1:6004 petp@atcremers99.vision.in.tum.de -p 58022
@@ -16,6 +48,7 @@ ssh -X -L 16006:127.0.0.1:6004 petp@atcremers99.vision.in.tum.de -p 58022
 export CUDA_VISIBLE_DEVICES=0
 ssh -X -L 16006:127.0.0.1:6004 petp@atcremers39.in.tum.de -p 58022
 
+python3 extract_official_train_test_set_from_mat.py nyu_depth_v2_labeled.mat splits.mat ../../../datasets/nyu_depth_v2/official_splits/
 
 SLURM 
 node11 - node16 
@@ -40,7 +73,28 @@ mim install mmcv==2.0.0
 ssh -L 16006:127.0.0.1:6004 petp@atcremers92.mlr.in.tum.de -p 58022 
 
 
+        SemanticLabel('void',      False, False, SEMANTIC_CLASS_COLORS_13[0]),
+        SemanticLabel('objects',   True,  False, SEMANTIC_CLASS_COLORS_13[7]),        
+        SemanticLabel('wall',      False, False, SEMANTIC_CLASS_COLORS_13[12]),
+        SemanticLabel('floor',     False, False, SEMANTIC_CLASS_COLORS_13[5]),
+        SemanticLabel('ceiling',   False, False, SEMANTIC_CLASS_COLORS_13[3]),
+                
+                
+                
+                
+        SemanticLabel('bed',       True,  True,  SEMANTIC_CLASS_COLORS_13[1]),
+        SemanticLabel('books',     True,  False, SEMANTIC_CLASS_COLORS_13[2]),
 
+        SemanticLabel('chair',     True,  True,  SEMANTIC_CLASS_COLORS_13[4]),
+
+        SemanticLabel('furniture', True,  False, SEMANTIC_CLASS_COLORS_13[6]),
+
+        SemanticLabel('picture',   True,  False, SEMANTIC_CLASS_COLORS_13[8]),
+        SemanticLabel('sofa',      True,  True,  SEMANTIC_CLASS_COLORS_13[9]),
+        SemanticLabel('table',     True,  False, SEMANTIC_CLASS_COLORS_13[10]),
+        SemanticLabel('tv',        True,  False, SEMANTIC_CLASS_COLORS_13[11]),
+
+        SemanticLabel('window',    True,  False, SEMANTIC_CLASS_COLORS_13[13])
 
 notes:
 add an overview slide: 

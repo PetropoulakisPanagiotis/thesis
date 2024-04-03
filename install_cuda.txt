@@ -49,3 +49,40 @@ export LD_LIBRARY_PATH=/usr/local/cuda-11.3/lib64\
 sudo apt install nvidia-cuda-toolkit
                  
 reboot 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+SLAM:
+
+https://github.com/uoip/g2opy
+.def("x", (const double &(Eigen::Quaterniond::*)() const) & Eigen::Quaterniond::x)
+.def("y", (const double &(Eigen::Quaterniond::*)() const) & Eigen::Quaterniond::y)
+.def("z", (const double &(Eigen::Quaterniond::*)() const) & Eigen::Quaterniond::z)
+.def("w", (const double &(Eigen::Quaterniond::*)() const) & Eigen::Quaterniond::w)
+sudo apt-get install python3.7-dev
+sudo apt install python3.7-distutils
+pip install setuptools==58.2.0
+cmake -DPYBIND11_PYTHON_VERSION=3.9 ..
+python3 setup.py install
+pip install pybind11
+sudo apt-get install libsuitesparse-dev
+
+
+sudo apt install libglew-dev
+https://github.com/stevenlovegrove/Pangolin/pull/318/commits
+https://github.com/uoip/pangolin/pull/46/commits/d840fa5644130826d6214b3c45e127782cc9bd9b
+conda install -c conda-forge libstdcxx-ng=12
+
+https://github.com/uoip/pangolin
+
