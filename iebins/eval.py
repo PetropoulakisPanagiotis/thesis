@@ -13,16 +13,13 @@ import numpy as np
 import random
 from tqdm import tqdm
 
-from networks.NewCRFDepth import NewCRFDepth
-from utils import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, \
-                  entropy_loss, colormap, block_print, enable_print, normalize_result, inv_normalize, \
-                  convert_arg_line_to_args, eval_parser, find_indexes_valid_instances, debug_result
+from dataloaders.dataloader_clean import DataLoaderCustom
+from networks.NewCRFDepth_clean import NewCRFDepth
+from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization
+from utils_clean import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, eval_metrics, \
+                  entropy_loss, colormap, block_print, enable_print, normalize_result, inv_normalize
+from parser_options import convert_arg_line_to_args, eval_parser
 
-def convert_arg_line_to_args(arg_line):
-    for arg in arg_line.split():
-        if not arg.strip():
-            continue
-        yield arg
 
 if sys.argv.__len__() == 2:
     arg_filename_with_prefix = '@' + sys.argv[1]
@@ -34,124 +31,6 @@ elif sys.argv.__len__() == 3:
 else:
     args = eval_parser.parse_args()
 
-if args.dataset == 'kitti' or args.dataset == 'nyu':
-    from dataloaders.dataloader import NewDataLoader
-
-def tb_visualization(writer, step, gt_depth, image, result, args, instances=None, segmentation_map=None, labels=None, num_semantic_classes=14):
-    pred_depths_r_list = result["pred_depths_r_list"]
-    if args.instances:
-        pred_depths_instances_rc_list = result["pred_depths_instances_rc_list"]
-        pred_depths_instances_r_list = result["pred_depths_instances_r_list"]
-    
-    if False:
-        if args.update_block != 7 and args.update_block != 8:            
-            pred_depths_c_list = result["pred_depths_c_list"]
-            uncertainty_maps_list = result["uncertainty_maps_list"]
-    if args.update_block != 0:
-        pred_depths_rc_list = result["pred_depths_rc_list"]
-    if args.update_block == 2:
-        pred_depths_u_list = result["pred_depths_u_list"]
-    if args.predict_unc == True:
-        unc = result["unc"]
-
-    max_tree_depth = len(pred_depths_r_list)
-    num_log_images = image.shape[0]
-    for i in range(num_log_images):
-        if args.dataset == 'nyu':
-            writer.add_image('gt_depth/image/{}'.format(i), colormap(torch.where(gt_depth < 1e-3, gt_depth * 0 + 1e-3, gt_depth)[i, :, :, :].data), step)
-            writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, step)
-            if args.instances:
-                for i in range(num_log_images):
-                    writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, step)
-                    writer.add_image('gt_depth/image/{}'.format(i), colormap(torch.log10(gt_depth[i, :, :, :].data), name='magma'), step)
-                    for ii in range(max_tree_depth):
-                        writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), 
-                                         colormap(torch.log10(torch.sum(pred_depths_instances_r_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), name='magma'), step)
-                    if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20:
-                        for ii in range(max_tree_depth):
-                            writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
-                                             colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), step)
-                            writer.add_image('uncer_bins_est{}/image/{}/'.format(ii, i), 
-                                             colormap(torch.sum(uncertainty_maps_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), step)
-                    if args.update_block != 0:
-                        for ii in range(max_tree_depth):
-                            writer.add_image('depth_canonical_est{}/image/{}/'.format(ii, i), 
-                                              colormap(torch.log10(torch.sum(pred_depths_instances_rc_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), name='magma'), step)
-                    if True: # expensive
-                        max_vizualization = 5
-                        valid_indexes = find_indexes_valid_instances(labels[i])
-                        if(len(valid_indexes) < max_vizualization):
-                            max_vizualization = len(valid_indexes)
-                        picked_items = random.sample(list(valid_indexes.detach().cpu().numpy()), max_vizualization)
-                        for idx, j in enumerate(picked_items):
-                            # Depth #
-                            for ii in range(max_tree_depth):
-                                writer.add_image('depth_metric_est{}/image/{}/instance{}'.format(ii, i, idx), 
-                                                 colormap(torch.log10((pred_depths_instances_r_list[ii][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), name='magma'), step)
-                            if args.update_block != 0:
-                                for ii in range(max_tree_depth):
-                                    writer.add_image('depth_canonical_est{}/image/{}/instance{}'.format(ii, i, idx), 
-                                                      colormap(torch.log10((pred_depths_instances_rc_list[ii][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-5).unsqueeze(0).data), name='magma'), step)
-            elif args.segmentation:
-                for i in range(num_log_images):
-                    writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, step)
-                    writer.add_image('gt_depth/image/{}'.format(i), colormap(torch.log10(gt_depth[i, :, :, :].data), name='magma'), step)
-                    for ii in range(max_tree_depth):
-                        writer.add_image('depth_metric_est{}/image/{}'.format(ii, i), 
-                                         colormap(torch.log10(torch.sum(pred_depths_r_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), step)
-                    if args.update_block != 7 and args.update_block != 8 and args.update_block != 10 and not (args.update_block >= 11 and args.update_block <= 17) and args.update_block != 20:
-                        for ii in range(max_tree_depth):
-                            writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i), 
-                                             colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), step)
-                            writer.add_image('uncer_bins_est{}/image/{}/'.format(ii, i), 
-                                             colormap(torch.sum(uncertainty_maps_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), step)
-                    if args.update_block != 0:
-                        for ii in range(max_tree_depth):
-                            writer.add_image('depth_canonical_est{}/image/{}/'.format(ii, i), 
-                                              colormap(torch.log10(torch.sum(pred_depths_rc_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), name='magma'), step)
-                    if True: # expensive        
-                        for j in range(num_semantic_classes):
-                            # Depth #
-                            for ii in range(max_tree_depth):
-                                writer.add_image('depth_metric_est{}/image/{}/class{}'.format(ii, i, j), 
-                                                 colormap(torch.log10((pred_depths_r_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), name='magma'), step)
-                            if args.update_block != 0:
-                                for ii in range(max_tree_depth):
-                                    writer.add_image('depth_canonical_est{}/image/{}/class{}'.format(ii, i, j), 
-                                                      colormap(torch.log10((pred_depths_rc_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-5).unsqueeze(0).data), name='magma'), step)
-
-            else:
-                for ii in range(max_tree_depth):
-                    pred_depths_r_list[ii] = torch.sum((pred_depths_r_list[ii] * segmentation_map), dim=1).unsqueeze(1)
-                    writer.add_image('depth_r_est0/image/{}'.format(i), colormap(pred_depths_r_list[ii][i, :, :, :].data), step)
-        else:
-            gt_depth_viz  = torch.where(gt_depth < 1e-3, gt_depth * 0 + 1e-3, gt_depth)
-            gt_depth_viz = gt_depth_viz.permute(0, 3, 1, 2)
-            
-            writer.add_image('gt_depth/image/{}'.format(i), colormap(torch.log10(gt_depth_viz[i, :, :, :].data), name='magma'), step)
-            writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, step)
-            for ii in range(max_tree_depth):
-                writer.add_image('depth_r_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_r_list[ii][i, :, :, :].data), name='magma'), step)
-            for ii in range(max_tree_depth):
-                writer.add_image('depth_c_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].data), name='magma'), step)
-
-            if args.update_block != 0:
-                for ii in range(max_tree_depth):
-                    writer.add_image('depth_rc_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].data), name='magma'), step)
-
-            if args.update_block == 2:
-                for ii in range(max_tree_depth):
-                    writer.add_image('depth_u_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_u_list[ii][i, :, :, :].data), name='viridis'), step)
-
-            if args.predict_unc:
-                writer.add_image('unc_head_est{}/image/{}'.format(ii, i), colormap(torch.log10(unc[i, :, :, :].data), name='viridis'), step)
-
-            if args.predict_unc_d3vo:
-                writer.add_image('unc_d3vo_head_est{}/image/{}'.format(ii, i), colormap(torch.log10(unc_d3vo[i, :, :, :].data), name='viridis'), step)
-
-        if False:
-            for ii in range(max_tree_depth):
-                writer.add_image('uncer_est{}/image/{}'.format(ii, i), colormap(torch.log10(uncertainty_maps_list[ii][i, :, :, :].data), name='magma'), step)
 
 def eval_func(model, dataloader_eval, post_process=False):
     eval_measures = torch.zeros(10).cuda()
@@ -163,22 +42,26 @@ def eval_func(model, dataloader_eval, post_process=False):
    
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         with torch.no_grad():
+            pred_depths_r_list, pred_depths_rc_list, pred_depths_instances_r_list, \
+                pred_depths_instances_rc_list, pred_depths_c_list, uncertainty_maps_list, \
+                pred_depths_u_list = [], [], [], [], [], [], []
+            segmentation_map, instances, labels, unc_decoder = None, None, None, None
+
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
             gt_depth = eval_sample_batched['depth']
 
-            if args.dataset == 'nyu' and args.segmentation:
+            if (args.dataset == 'nyu' or args.dataset == 'scannet') and args.segmentation:
                 segmentation_map = torch.autograd.Variable(eval_sample_batched['segmentation_map'].cuda())
                 instances = torch.autograd.Variable(eval_sample_batched['instances_masks'].cuda())
                 boxes = torch.autograd.Variable(eval_sample_batched['instances_bbox'].cuda())
                 labels = torch.autograd.Variable(eval_sample_batched['instances_labels'].cuda())
-                instances_areas = torch.autograd.Variable(eval_sample_batched['instances_areas'].cuda())
             
             has_valid_depth = eval_sample_batched['has_valid_depth']
             if not has_valid_depth:
                 print('Invalid depth. continue.')
                 continue
 
-            # Predict #
+            # Predict
             if args.instances:
                 result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
             elif args.segmentation:
@@ -189,19 +72,33 @@ def eval_func(model, dataloader_eval, post_process=False):
             if False:
                 debug_result(result, gt_depth)
 
-            if False:
-                # Tensorboard #
-                if args.instances:
-                    tb_visualization(writer, step, gt_depth, image, result, args, instances=instances, segmentation_map=segmentation_map, labels=labels)
-                elif args.segmentation:
-                    tb_visualization(writer, step, gt_depth, image, result, args, segmentation_map=segmentation_map)
-                else:
-                    tb_visualization(writer, step, gt_depth, image, result, args)
-
-            # Unpack #            
+            # Unpack           
             pred_depths_r_list = result["pred_depths_r_list"]
             if args.instances:
                 pred_depths_r_list = result["pred_depths_instances_r_list"]
+
+                pred_depths_instances_rc_list = result["pred_depths_instances_rc_list"]
+                pred_depths_instances_r_list = result["pred_depths_instances_r_list"]
+            else:
+                # Canonical segmentation/single scale #
+                if args.update_block != 0 and args.update_block != 4 and args.update_block != 3:    
+                    pred_depths_rc_list = result["pred_depths_rc_list"]
+            
+            # Uncertainty bins #
+            if args.update_block == 0 or args.update_block == 3 or args.update_block == 18 \
+               or args.update_block == 1 or args.update_block == 2:
+                pred_depths_c_list = result["pred_depths_c_list"]
+                uncertainty_maps_list = result["uncertainty_maps_list"]
+
+            # Decoder uncertainty #
+            if args.predict_unc:
+                unc_decoder = result["unc_decoder"]
+
+            # Tensorboard            
+            tb_visualization(writer=writer, global_step=step, args=args, current_loss_depth=None, current_lr=None, current_loss_unc_decoder=None, var_sum=None, var_cnt=None, num_images=1, \
+                     depth_gt=gt_depth, image=image, max_tree_depth=args.max_tree_depth, pred_depths_r_list=pred_depths_r_list, pred_depths_rc_list=pred_depths_rc_list, \
+                     pred_depths_instances_r_list=pred_depths_instances_r_list, pred_depths_instances_rc_list=pred_depths_instances_rc_list, num_semantic_classes=num_semantic_classes, instances=instances, segmentation_map=segmentation_map, \
+                     labels=labels, pred_depths_c_list=pred_depths_c_list, uncertainty_maps_list=uncertainty_maps_list, pred_depths_u_list=pred_depths_u_list, unc_decoder=unc_decoder, expensive_viz=True)
             
             if post_process and False:
                 image_flipped = flip_lr(image)
@@ -228,7 +125,7 @@ def eval_func(model, dataloader_eval, post_process=False):
                     gt_depth = (gt_depth * mask)
                 elif args.segmentation:
                     pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
-                    if True: # Fair comparison
+                    if False: # Fair comparison
                         if args.pick_class != 0:    
                             non_class = torch.nonzero(labels[0] != args.pick_class)
                             if non_class.shape[0] == 63:
@@ -268,6 +165,9 @@ def eval_func(model, dataloader_eval, post_process=False):
         if args.garg_crop or args.eigen_crop:
             gt_height, gt_width = gt_depth.shape
             eval_mask = np.zeros(valid_mask.shape)
+
+            if args.dataset == 'scannet':
+                eval_mask = gt_depth > 0.1
 
             if args.garg_crop:
                 eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height), int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
@@ -316,7 +216,7 @@ def eval_func(model, dataloader_eval, post_process=False):
 
 def main_worker(args):
     
-    dataloader_eval = NewDataLoader(args, 'online_eval')
+    dataloader_eval = DataLoaderCustom(args, 'online_eval')
     num_semantic_classes = dataloader_eval.num_semantic_classes
     num_semantic_classes = 14
     num_instances = 63
@@ -324,7 +224,9 @@ def main_worker(args):
     # depth model
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
-                        predict_unc=args.predict_unc, predict_unc_d3vo=args.predict_unc_d3vo, num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var)
+                        predict_unc=args.predict_unc, num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, \
+                        padding_instances=args.padding_instances, \
+                        segmentation_active=args.segmentation,  instances_active=args.instances)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])

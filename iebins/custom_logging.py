@@ -13,17 +13,20 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
 
     depth_gt = torch.where(depth_gt < 1e-3, depth_gt * 0 + 1e-3, depth_gt)
     
-    if args.loss_type == 0:
+    if args.loss_type == 0 and current_loss_depth is not None:
         writer.add_scalar('silog_loss', current_loss_depth, global_step)
-    else:
+    elif current_loss_depth is not None:
         writer.add_scalar('l1_loss', current_loss_depth, global_step)
 
     # Decoder loss #
-    if args.predict_unc:
+    if args.predict_unc and current_loss_unc_decoder is not None:
         writer.add_scalar('unc_decoder_loss', current_loss_unc_decoder, global_step)
 
-    writer.add_scalar('learning_rate', current_lr, global_step)
-    writer.add_scalar('var_average', var_sum/var_cnt, global_step)
+    if current_lr is not None:
+        writer.add_scalar('learning_rate', current_lr, global_step)
+    
+    if var_sum is not None:
+        writer.add_scalar('var_average', var_sum/var_cnt, global_step)
     
     if args.instances:
         for i in range(num_images):

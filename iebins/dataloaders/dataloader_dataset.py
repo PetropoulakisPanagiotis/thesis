@@ -35,7 +35,6 @@ class DatasetPreprocess(Dataset):
 
     def __getitem__(self, idx):
         sample_path = self.filenames[idx]
-
         if self.mode == 'train':
             # Open images 
             if self.args.dataset == 'scannet':
@@ -137,10 +136,8 @@ class DatasetPreprocess(Dataset):
                 rgb = cv2.imread(rgb_path, cv2.IMREAD_UNCHANGED)
                 image = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
                 image = np.asarray(image, dtype=np.float32) / 255.0
-
                 depth_path = self.args.data_path + "depth/" + sample_path + ".png"
                 depth_gt = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED).astype(np.float32)    
-        
                 has_valid_depth = True
             else:
                 if self.mode == 'online_eval':
@@ -217,7 +214,7 @@ class DatasetPreprocess(Dataset):
         # ToTensorCustom 
         if self.transform:
             sample = self.transform([sample, self.args.dataset])
-     
+        
         return sample
 
 
@@ -507,7 +504,7 @@ def load_image_annotations_nyu(json_file_path):
            np.asarray(areas_instances, dtype=np.int32), num_semantic_classes
 
 
-def load_image_annotations_scannet(dataset_path, filename):
+def load_image_annotations_scannet(dataset_path, filename, num_classes=14):
 
         # Extrinsics #
         extr_path = dataset_path + "extrinsics/" + filename + ".json"
@@ -523,11 +520,11 @@ def load_image_annotations_scannet(dataset_path, filename):
         seg_map, instances_map, boxes = None, None, None
         if 'test/' not in dataset_path:
             # Segmentation #
-            seg_path = dataset_path + "semantic_refined_20/"+ filename + ".png"
+            seg_path = dataset_path + "semantic_refined_13/"+ filename + ".png"
             seg_map_original = cv2.imread(seg_path, cv2.IMREAD_UNCHANGED)
 
             # (class, h, w) #
-            seg_map = create_one_hot_mask_classes_np(seg_map_original, 20 + 1)
+            seg_map = create_one_hot_mask_classes_np(seg_map_original, num_classes)
             """
             segmentation_colored = np.zeros((seg_map.shape[0], seg_map.shape[1], 3), dtype=np.uint8)
             for class_idx, color in self.color_mappings.items():

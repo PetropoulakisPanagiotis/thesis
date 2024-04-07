@@ -19,9 +19,7 @@ class DataLoaderCustom(object):
             self.num_instances = 63 # Max instances in one image
 
         if args.dataset == 'scannet':
-            self.semantic_classes = ('void', 'wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window',
-                   'bookshelf', 'picture', 'counter', 'desk', 'curtain', 'refrigerator',
-                   'shower curtain', 'toilet', 'sink', 'bathtub', 'otherfurniture')
+            self.semantic_classes = ('void','bed', 'books','ceiling', 'chair','floor', 'furniture', 'objects', 'picture', 'sofa', 'table', 'tv', 'wall', 'window')
             self.num_semantic_classes = len(self.semantic_classes)
             self.num_instances = 20 # Max instances in one image
 

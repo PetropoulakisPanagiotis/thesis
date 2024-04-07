@@ -12,6 +12,7 @@ from multiprocessing.pool import Pool
 import sys
 import traceback
 import zipfile
+from scipy.io import loadmat
 
 import cv2
 import numpy as np
@@ -378,7 +379,7 @@ def get_out_path_dict(
                 # add non colored dir
                 out_paths[f'sem_{mode}_{n_class}_dir'] = os.path.join(
                     sdir,
-                    ScanNetMeta.SEMANTIC_DIR_FMT.format(mode, n_class))
+                    ScanNetMeta.SEMANTIC_DIR_FMT.format(mode, 13))
 
                 """
                 #add colored directories
@@ -422,11 +423,12 @@ def get_combined_to_nyu40_dict(tsv_path: str) -> Dict[int, int]:
     for _, row in combined[['id', 'nyu40id']].iterrows():
         raw_id, nyu40_id = row.values
         c_to_nyu40_dict[int(raw_id)] = int(nyu40_id)
-
     return c_to_nyu40_dict
 
 
 def get_combined_to_nyu20_dict(tsv_path: str) -> Dict[int, int]:
+
+    """
     c_to_20 = get_combined_to_nyu40_dict(tsv_path)
     for key, val in c_to_20.items():
         if val in VALID_CLASS_IDS_20:
@@ -435,7 +437,27 @@ def get_combined_to_nyu20_dict(tsv_path: str) -> Dict[int, int]:
             c_to_20[key] = VALID_CLASS_IDS_20.index(val) + 1
         else:
             c_to_20[key] = 0  # set all non valid ids to void
+
     return c_to_20
+    """
+    combined = pd.read_csv(tsv_path, delimiter='\t')
+    c_to_nyu40_dict = {0: 0}
+
+    #create a dict mapping (combined -> nyu40)
+    for _, row in combined[['id', 'nyu40id']].iterrows():
+        raw_id, nyu40_id = row.values
+        c_to_nyu40_dict[int(raw_id)] = int(nyu40_id)
+
+    CLASSES_13_FILEPATH = '/usr/stud/petp/storage/user/petp/datasets/bts/utils/class13Mapping.mat'
+    classes_13 = loadmat(CLASSES_13_FILEPATH)['classMapping13'][0][0]
+    
+    mapping_40_to_13 = np.concatenate([[0], classes_13[0][0]])
+
+    mapping_40_to_13 = {i: mapping_40_to_13[i] for i in range(len(mapping_40_to_13))}
+
+    c_to_nyu13_dict = {key: mapping_40_to_13[value] for key, value in c_to_nyu40_dict.items()}
+
+    return c_to_nyu13_dict
 
 
 def get_combined_to_200_dict(tsv_path: str) -> Dict[int, int]:
@@ -577,6 +599,7 @@ def schedule_scenes(
         549: c_to_549,
     }
 
+    """
     # check if conversion dict is working correctly
     for n_classes, conversion_arr in conversion_dict.items():
         cls_count = len(np.unique(conversion_arr))
@@ -590,6 +613,7 @@ def schedule_scenes(
         class_ids = np.array((0,) + VALID_CLASS_IDS_549)
         mapped = conversion_arr[class_ids]
         assert np.max(mapped) < max_val, f"{n_classes} conversion not correct!"
+    """
 
     def parse_scene_args_gen(scenes: List[str]):  # argument generator for each parse_scene call
         for scene in scenes:

@@ -144,8 +144,8 @@ def main_worker(gpu, ngpus_per_node, args):
     # Initialize vars 
     pred_depths_r_list, pred_depths_rc_list, pred_depths_instances_r_list, \
         pred_depths_instances_rc_list, pred_depths_c_list, uncertainty_maps_list, \
-        pred_depths_u_list, unc_decoder, labels = [], [], [], [], [], [], [], None, None
-    segmentation_map, instances, boxes, labels = None, None, None, None
+        pred_depths_u_list = [], [], [], [], [], [], []
+    segmentation_map, instances, labels, unc_decoder = None, None, None, None
 
     while epoch < args.num_epochs:
         if args.distributed:

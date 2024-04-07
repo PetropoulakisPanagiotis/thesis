@@ -54,10 +54,29 @@ SCANNET_COLOR_MAP_20 = {
 SCANNET_COLOR_MAP_20[13] = (178, 76, 76)
 SCANNET_COLOR_MAP_20[31] = (120, 185, 128)
 
+SEMANTIC_CLASS_COLORS_13 = (
+    (0, 0, 0),
+    (0, 0, 255),
+    (232, 88, 47),
+    (0, 217, 0),
+    (148, 0, 240),
+    (222, 241, 23),
+    (255, 205, 205),
+    (0, 223, 228),
+    (106, 135, 204),
+    (116, 28, 41),
+    (240, 35, 235),
+    (0, 166, 156),
+    (249, 139, 0),
+    (225, 228, 194)
+)
 
-CLASS_LABELS_20 = ('void', 'wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window',
+class_labels_20 = ('void', 'wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window',
                    'bookshelf', 'picture', 'counter', 'desk', 'curtain', 'refrigerator',
                    'shower curtain', 'toilet', 'sink', 'bathtub', 'otherfurniture')
+
+# class_name, is_thing, use orientations, color
+class_labels_13 = ('void','bed', 'books','ceiling', 'chair','floor', 'furniture', 'objects', 'picture', 'sofa', 'table', 'tv', 'wall', 'window')
 
 VALID_CLASS_IDS_20 = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 24, 28, 33, 34, 36, 39)
 
@@ -73,7 +92,7 @@ class ScanNet():
         self.dataset_path = dataset_path
         self.split = split
 
-        self.semantic_n_classes = 20 # 'void' not included
+        self.semantic_n_classes = 13 # 'void' not included
         self.max_instances = 30
 
         file_names_path = self.dataset_path + "/" + split + ".txt"
@@ -87,10 +106,10 @@ class ScanNet():
         self.intrinsic[1][2] = 238.88888888888889
 
         self.color_mappings = {}
-        for i in range(len(SEMANTIC_CLASS_COLORS_SCANNET_20)):
-            self.color_mappings[i] = SEMANTIC_CLASS_COLORS_SCANNET_20[i]
+        for i in range(len(SEMANTIC_CLASS_COLORS_13)):
+            self.color_mappings[i] = SEMANTIC_CLASS_COLORS_13[i]
 
-        self.labels = CLASS_LABELS_20
+        self.labels = class_labels_13
 
     def get_item(self, idx, normalize_depth=False):
         assert idx < len(self.filenames) and idx >= 0
@@ -134,17 +153,18 @@ class ScanNet():
         seg_map, instances_map, boxes = None, None, None
         if self.split != 'test':
             # Segmentation #
-            seg_path = self.dataset_path + "/" + self.split + "/semantic_refined_" + str(self.semantic_n_classes) + "/" + \
-                       self.filenames[idx] + ".png"
+            seg_path = self.dataset_path + "/" + self.split + "/semantic_refined_" + str(20) + "/" + \
+                       self.filenames[idx] + ".png" # 20 but in reality it is mapped to 13
             seg_map_original = cv2.imread(seg_path, cv2.IMREAD_UNCHANGED)
 
             # (class, h, w) #
             seg_map = self.create_one_hot_mask_classes_np(seg_map_original, self.semantic_n_classes + 1)
+
             """
-            segmentation_colored = np.zeros((seg_map.shape[0], seg_map.shape[1], 3), dtype=np.uint8)
+            segmentation_colored = np.zeros((seg_map.shape[1], seg_map.shape[2], 3), dtype=np.uint8)
             for class_idx, color in self.color_mappings.items():
-                segmentation_colored[seg_map == class_idx] = color
-                print(class_idx)
+                segmentation_colored[seg_map_original == class_idx] = color
+
             cv2.imshow('Segmentation Map Colored', segmentation_colored)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
@@ -249,4 +269,4 @@ if __name__ == '__main__':
         # Flip it, otherwise the pointcloud will be upside down
         pcd_1.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
         pcd_2.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
-    o3d.visualization.draw_geometries([pcd_1, pcd_2])
+        o3d.visualization.draw_geometries([pcd_1, pcd_2])
