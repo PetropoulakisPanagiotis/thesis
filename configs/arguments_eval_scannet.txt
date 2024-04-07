@@ -17,6 +17,7 @@
 --segmentation
 --loss_type 1
 --exp_name eval
+--log_directory /usr/stud/petp/code/thesis/tmp/
 --padding 0
 
 --bin_num 40
