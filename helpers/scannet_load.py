@@ -224,27 +224,29 @@ if __name__ == '__main__':
     rgb_1, depth_1, extr_1, seg_map_1, instances_map_1, boxes_1, instances_labels_1 = dataset.get_item(0)
     rgb_2, depth_2, extr_2, seg_map_2, instances_map_2, boxes_2, instances_labels_2 = dataset.get_item(50)
 
-    rgb_1 = o3d.geometry.Image(rgb_1)
-    depth_1 = o3d.geometry.Image(depth_1)
+    if False:
 
-    rgb_2 = o3d.geometry.Image(np.array(rgb_2))
-    depth_2 = o3d.geometry.Image(np.array(depth_2))
+        rgb_1 = o3d.geometry.Image(rgb_1)
+        depth_1 = o3d.geometry.Image(depth_1)
 
-    # Camera #
-    intr = dataset.intrinsic
-    cam1 = o3d.camera.PinholeCameraIntrinsic()
-    cam1.set_intrinsics(640, 480, intr[0][0], intr[1][1], intr[0][2], intr[1][2])
+        rgb_2 = o3d.geometry.Image(np.array(rgb_2))
+        depth_2 = o3d.geometry.Image(np.array(depth_2))
+        
+        # Camera #
+        intr = dataset.intrinsic
+        cam1 = o3d.camera.PinholeCameraIntrinsic()
+        cam1.set_intrinsics(640, 480, intr[0][0], intr[1][1], intr[0][2], intr[1][2])
 
-    # Textured pcl 1 #
-    rgbd_image_1 = o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_1, depth_1, convert_rgb_to_intensity=False)
-    pcd_1 = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image_1, cam1, np.linalg.inv(extr_1))
+        # Textured pcl 1 #
+        rgbd_image_1 = o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_1, depth_1, convert_rgb_to_intensity=False)
+        pcd_1 = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image_1, cam1, np.linalg.inv(extr_1))
 
-    # Textured pcl 2 #
-    rgbd_image_2 = o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_2, depth_2, convert_rgb_to_intensity=False)
-    pcd_2 = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image_2, cam1, np.linalg.inv(extr_2))
-    pcd_2.colors = o3d.utility.Vector3dVector(np.zeros_like(np.asarray(pcd_2.points)))
+        # Textured pcl 2 #
+        rgbd_image_2 = o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_2, depth_2, convert_rgb_to_intensity=False)
+        pcd_2 = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image_2, cam1, np.linalg.inv(extr_2))
+        pcd_2.colors = o3d.utility.Vector3dVector(np.zeros_like(np.asarray(pcd_2.points)))
 
-    # Flip it, otherwise the pointcloud will be upside down
-    pcd_1.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
-    pcd_2.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+        # Flip it, otherwise the pointcloud will be upside down
+        pcd_1.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+        pcd_2.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
     o3d.visualization.draw_geometries([pcd_1, pcd_2])

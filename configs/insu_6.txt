@@ -9,7 +9,7 @@
 --filenames_file /usr/stud/petp/code/thesis/data_splits/nyudepthv2_train_files_with_gt.txt
 
 --do_online_eval
---log_freq 100
+--log_freq 250
 --eval_freq 400
 --log_directory /usr/stud/petp/code/thesis/tmp/
 --data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
@@ -21,9 +21,9 @@
 --input_height 480
 --input_width 640
 
---batch_size 2
+--batch_size 8
 --num_epochs 250
---learning_rate 2e-4
+--learning_rate 1e-4
 --weight_decay 1e-2
 --adam_eps 1e-3
 
@@ -33,11 +33,13 @@
 
 --eigen_crop
 
---exp_name segu-1
---update_block 1
+--exp_name insu-6
+--update_block 2
 --segmentation
+--instances
+--var 1
 
---loss_type 0
+--loss_type 1
 
 --bin_num 40
 --min_depth 0

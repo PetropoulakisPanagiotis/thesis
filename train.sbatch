@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name="segu-1"
-#SBATCH --nodelist=node[11]
+#SBATCH --job-name="insu-6"
+#SBATCH --nodelist=node[17,18]
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1,VRAM:48G
 #SBATCH --mem=24G
-#SBATCH --time=27:00:00
+#SBATCH --time=40:00:00
 #SBATCH --mail-type=NONE
-#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-segu-1-%j.out
-#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-segu-1-%j.out
-srun python /usr/stud/petp/code/thesis/iebins/train_clean.py /usr/stud/petp/code/thesis/configs/segu_1.txt
+#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-insu-6-%j.out
+#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-insu-6-%j.out
+srun python /usr/stud/petp/code/thesis/iebins/train_clean.py /usr/stud/petp/code/thesis/configs/insu_6.txt
 
 # SBATCH --nodelist=node[12,14,15,16,17,18]
 # SBATCH --nodelist=node[11,12,13,16,17,18]
