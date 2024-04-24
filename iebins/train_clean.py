@@ -62,7 +62,7 @@ def main_worker(gpu, ngpus_per_node, args):
                         train_decoder=args.train_decoder, pretrained=args.pretrain, predict_unc=args.predict_unc, 
                         num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, \
                         padding_instances=args.padding_instances, \
-                        segmentation_active=args.segmentation,  instances_active=args.instances)
+                        segmentation_active=args.segmentation,  instances_active=args.instances, roi_align=args.roi_align, roi_align_size=args.roi_align_size)
     model.train()
 
     # Print stats #

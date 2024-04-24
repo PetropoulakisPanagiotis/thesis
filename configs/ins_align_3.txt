@@ -33,10 +33,11 @@
 
 --eigen_crop
 
---exp_name insu-7
+--exp_name ins_align_3
 --update_block 2
 --segmentation
 --instances
+--padding 0
 --var 1
 
 --loss_type 1

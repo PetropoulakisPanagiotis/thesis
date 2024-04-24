@@ -6,6 +6,7 @@ padding_global = 0
 
 from .depth_update_heads import *
 from .utils_clean import *
+from torchvision.ops import RoIAlign
 
 
 """
@@ -507,7 +508,7 @@ Instances variations
 
 class UniformInstancesSharedCanonical(nn.Module):
     def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, \
-                 num_instances=63,var=0, padding_instances=0):
+                 num_instances=63,var=0, padding_instances=0, roi_align=0, roi_align_size=32):
         super(UniformInstancesSharedCanonical, self).__init__()
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
@@ -524,7 +525,15 @@ class UniformInstancesSharedCanonical(nn.Module):
       
         self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1) # Do not include null 
         self.instances_canonical = ROISelectSharedCanonicalUniform(128, bin_num=bin_num+1) 
-    
+
+        self.roi_align = roi_align 
+        if roi_align == 1:
+            output_size = (roi_align_size, roi_align_size)
+            spatial_scale  = 1.0/4
+            sampling_ratio = 4
+
+            self.roiAlign = RoIAlign(output_size, spatial_scale=spatial_scale, sampling_ratio=sampling_ratio)
+        
         # Pick variation #      
         if var == 1:
             self.instances_canonical = ROISelectSharedCanonicalBigUniform(128, bin_num=bin_num+1)          
@@ -553,7 +562,19 @@ class UniformInstancesSharedCanonical(nn.Module):
         max_instances_size = instances.shape[1]
 
         # Mask feature maps based on bboxes #
-        input_feature_map_instances_roi = roi_select_features(input_feature_map, boxes, labels) 
+        if self.roi_align == 0:
+            input_feature_map_instances_roi = roi_select_features(input_feature_map, boxes, labels) 
+        else:
+            boxes_roi, _ = get_valid_boxes(boxes, labels)
+            instances_per_batch, num_valid_boxes = get_valid_num_instances_per_batch(boxes, labels)
+            instances_per_batch = torch.cat((torch.tensor([0]).to(labels.device), instances_per_batch))
+            instances_per_batch = torch.cumsum(instances_per_batch, dim=0)
+           
+            boxes_roi = boxes_roi.to(torch.float32)
+            boxes_roi -= 0.5
+            boxes_roi = [(boxes_roi[instances_per_batch[i]:instances_per_batch[i+1]]) for i in range(instances_per_batch.shape[0] - 1)]
+            
+            input_feature_map_instances_roi = self.roiAlign(input_feature_map, boxes_roi) 
 
         # Scale/Shift #
         instances_scale_shift = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)

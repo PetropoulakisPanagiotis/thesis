@@ -209,28 +209,28 @@ def debug_result(result, gt_depth):
         print(torch.mean(result['pred_shift_list'][-1][:, :]))
         print(torch.std(result['pred_shift_list'][-1][:, :]))
     
-    if True:
+    if False:
         print("Uncertainty decoder:")
         print(torch.max(result['unc_decoder'][0, :, :, :]))
         print(torch.min(result['unc_decoder'][0, :, :, :]))
         print(torch.mean(result['unc_decoder'][0, :, :, :]))
         print(torch.std(result['unc_decoder'][0, :, :, :]))
 
-    if False:
+    if True:
         print("Instances scale:")
-        print(torch.max(result['pred_scale_instances_list'][-1][0, 0]))
-        print(torch.min(result['pred_scale_instances_list'][-1][0, 0]))
-        print(torch.mean(result['pred_scale_instances_list'][-1][0, 0]))
-        print(torch.std(result['pred_scale_instances_list'][-1][0, 0]))  
+        print(torch.max(result['pred_scale_instances_list'][-1][:, :]))
+        print(torch.min(result['pred_scale_instances_list'][-1][:, :]))
+        print(torch.mean(result['pred_scale_instances_list'][-1][:, :]))
+        print(torch.std(result['pred_scale_instances_list'][-1][:, :]))  
         
         print("Instances shift:")
-        print(torch.max(result['pred_shift_instances_list'][-1][0, 0]))
-        print(torch.min(result['pred_shift_instances_list'][-1][0, 0]))
-        print(torch.mean(result['pred_shift_instances_list'][-1][0, 0]))
-        print(torch.std(result['pred_shift_instances_list'][-1][0, 0]))  
+        print(torch.max(result['pred_shift_instances_list'][-1][:, :]))
+        print(torch.min(result['pred_shift_instances_list'][-1][:, :]))
+        print(torch.mean(result['pred_shift_instances_list'][-1][:, :]))
+        print(torch.std(result['pred_shift_instances_list'][-1][:, :]))  
         
         print("Instances canonical:")
-        print(torch.max(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
-        print(torch.min(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
-        print(torch.mean(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
-        print(torch.std(result['pred_depths_instances_rc_list'][-1][0, 0, :, :]))
+        print(torch.max(result['pred_depths_instances_rc_list'][-1][: :, :, :]))
+        print(torch.min(result['pred_depths_instances_rc_list'][-1][:, :, :, :]))
+        print(torch.mean(result['pred_depths_instances_rc_list'][-1][:, :, :, :]))
+        print(torch.std(result['pred_depths_instances_rc_list'][-1][:, :, :, :]))

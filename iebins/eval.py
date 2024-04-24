@@ -73,17 +73,17 @@ def eval_func(model, dataloader_eval, post_process=False):
             else:
                 result = model(image)
 
-            if False:
+            if True:
                 debug_result(result, gt_depth)
 
             # Unpack result         
-            pred_depths_r_list = result["pred_depths_r_list"]
             if args.instances:
                 pred_depths_r_list = result["pred_depths_instances_r_list"]
 
                 pred_depths_instances_rc_list = result["pred_depths_instances_rc_list"]
                 pred_depths_instances_r_list = result["pred_depths_instances_r_list"]
             else:
+                pred_depths_r_list = result["pred_depths_r_list"]
                 # Canonical segmentation/single scale #
                 if args.update_block != 0 and args.update_block != 4 and args.update_block != 3:    
                     pred_depths_rc_list = result["pred_depths_rc_list"]
@@ -132,12 +132,12 @@ def eval_func(model, dataloader_eval, post_process=False):
                 instances[0, non_class] = torch.zeros_like(instances[0, non_class])
                 instances_mask = torch.sum(instances, dim=1)
                 pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
-                mask = torch.sum(instances, dim=1).unsqueeze(-1).to(torch.bool).cpu()
+                mask = torch.sum(instances, dim=1).unsqueeze(0).to(torch.bool).cpu()
                 gt_depth = (gt_depth * mask)
             elif args.segmentation:
                 pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
                 # Fair comparison segmentation - instances: use eval_per_class.sh script   
-                if False: 
+                if True: 
                     if args.pick_class != 0:    
                         non_class = torch.nonzero(labels[0] != args.pick_class)
                         if non_class.shape[0] == 63:

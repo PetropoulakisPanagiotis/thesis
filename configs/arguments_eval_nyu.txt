@@ -13,15 +13,16 @@
 --max_depth_eval 10
 --eigen_crop
 
---update_block 1
+--update_block 2
 --segmentation
+--instances
 --loss_type 1
 --exp_name eval
---padding 0
+--var 0
 
 --bin_num 40
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
 
---checkpoint_path /usr/stud/petp/code/thesis/tmp/segu-6/nyu/model-16800-best_silog_13.79530
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/insu-1/nyu/model-20000-best_silog_14.10570

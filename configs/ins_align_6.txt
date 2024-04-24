@@ -33,10 +33,12 @@
 
 --eigen_crop
 
---exp_name insu-7
+--exp_name ins_align_6
 --update_block 2
 --segmentation
 --instances
+--roi_align 1
+--roi_align_size 28
 --var 1
 
 --loss_type 1

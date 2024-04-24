@@ -37,6 +37,8 @@ train_parser.add_argument('--bin_num',                   type=int,   help='numbe
 train_parser.add_argument('--predict_unc',               dest='predict_unc',  help='true to predict uncertainty from the decoder feature map', action='store_true')
 train_parser.add_argument('--segmentation',              dest='segmentation', help='segmentation variation', action='store_true')
 train_parser.add_argument('--instances',                 dest='instances',    help='instances variation', action='store_true')
+train_parser.add_argument('--roi_align',                 type=int,   help='use roi align', default='0')
+train_parser.add_argument('--roi_align_size',            type=int,   help='size of roi align', default='32')
 
 # Log and save
 train_parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')

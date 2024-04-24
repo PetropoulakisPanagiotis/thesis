@@ -16,7 +16,7 @@ class NewCRFDepth(nn.Module):
     def __init__(self, version=None, pretrained=None, min_depth=0.1, max_depth=100.0, max_tree_depth=1, 
                     bin_num=16, update_block=0, loss_type=0, train_decoder=0, predict_unc=False, \
                     num_semantic_classes=14, num_instances=63, var=0, padding_instances=0, \
-                    segmentation_active= False, instances_active=False, **kwargs):
+                    segmentation_active= False, instances_active=False, roi_align=False, roi_align_size=32, **kwargs):
         super().__init__()
 
         self.freeze_backbone = True
@@ -120,7 +120,8 @@ class NewCRFDepth(nn.Module):
         elif self.update_block == 2: 
             self.update = UniformInstancesSharedCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
                                                           loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
-                                                          num_instances=self.num_instances, var=var, padding_instances=self.padding_instances)        
+                                                          num_instances=self.num_instances, var=var, padding_instances=self.padding_instances, \
+                                                          roi_align=roi_align, roi_align_size=roi_align_size)        
             print("[VARIATION UniformInstancesSharedCanonical]\n")
         
         elif self.update_block == 20: 
