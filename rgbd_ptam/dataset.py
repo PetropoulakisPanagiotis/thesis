@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import cv2
 import os
@@ -40,7 +41,7 @@ class ImageReader(object):
             if self.idx == idx:
                 time.sleep(1e-2)
                 continue
-            
+
             for i in range(self.idx, self.idx + self.ahead):
                 if i not in self.cache and i < len(self.ids):
                     self.cache[i] = self.read(self.ids[i])
@@ -169,51 +170,70 @@ class TUMRGBDDataset(object):
 
     cam = namedtuple('camera', 'fx fy cx cy scale')(
         525.0, 525.0, 319.5, 239.5, 5000)
-    def __init__(self, path, register=True):
-        path = os.path.expanduser(path)
-        if not register:
-            rgb_ids, rgb_timestamps = self.listdir(path, 'rgb')
-            depth_ids, depth_timestamps = self.listdir(path, 'depth')
-        else:
-            rgb_imgs, rgb_timestamps = self.listdir(path, 'rgb')
-            depth_imgs, depth_timestamps = self.listdir(path, 'depth')
- 
-            interval = (rgb_timestamps[1:] - rgb_timestamps[:-1]).mean() * 2/3
-            self.threshold = interval
-            matrix = np.abs(rgb_timestamps[:, np.newaxis] - depth_timestamps)
-            pairs = make_pair(matrix, interval)
-            """
-            first = []
-            for key, value in zip(rgb_timestamps, rgb_imgs):
-                first.append((key, value))
-            second = []
-            for key, value in zip(depth_timestamps, depth_imgs):
-                second.append((key, value))
-            first = dict(first)
-            second = dict(second)
-            matches = associate(first, second)
-            """
-            rgb_ids = []
-            depth_ids = []
-            for i, j in pairs:
-                rgb_ids.append(rgb_imgs[i])
-                depth_ids.append(depth_imgs[j])
 
+    def __init__(self, path):
+        path = os.path.expanduser(path)
+        with open(path + "/associations.txt", 'r') as file:
+            entries = file.readlines()
+
+        timestamps_rgb = []
+        timestamps_depth = []
+        rgb_ids = []
+        depth_ids = []
+        for entry in entries:
+            entry = entry.split(" ")
+            timestamps_rgb.append(float(entry[0]))
+            timestamps_depth.append(float(entry[2]))
+            rgb_ids.append(path + entry[1])
+            depth_ids.append(path + entry[3].rstrip('\n'))
+
+        self.rgb = ImageReader(rgb_ids, timestamps_rgb)
+        self.depth = ImageReader(depth_ids, timestamps_depth)
+        self.timestamps = timestamps_rgb
+
+    def __getitem__(self, idx):
+        return self.rgb[idx], self.depth[idx]
+
+    def __len__(self):
+        return len(self.rgb)
+
+class ScanNetDataset(object):
+    '''
+    path example: 'path/to/your/TUM R-GBD Dataset/rgbd_dataset_freiburg1_xyz'
+    '''
+    cam = None
+
+
+    # valid #
+    cam = namedtuple('camera', 'fx fy cx cy scale')(
+        577.5906635802469, 576.3481987847223, 319.15804639274694, 241.9392752941744, 1000)
+
+    def __init__(self, path, scene='scene0191_00', split='train'):
+        path = os.path.expanduser(path)
+
+
+
+        with open(path + "/" + split + '/rgb_intrinsics/' + scene + ".json", 'r') as json_file:
+            data = json.load(json_file)
+            ScanNetDataset.cam = namedtuple('camera', 'fx fy cx cy scale')(
+            data['fx'],
+            data['fy'],
+            data['cx'],
+            data['cy'],
+            1000.0)
+
+        ids = [(file.split('.')[0]) for file in os.listdir(path + "/" + split + "/rgb/" + scene)]
+        ids = sorted(ids, key=lambda x: str(x))
+
+        rgb_timestamps = [float(id) for id in ids]
+        depth_timestamps = rgb_timestamps
+        rgb_ids = [path + '/' + split + '/rgb/' + scene + "/" + str(item) + '.jpg' for item in ids]
+        depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
+
+        # Read depth #
         self.rgb = ImageReader(rgb_ids, rgb_timestamps)
         self.depth = ImageReader(depth_ids, depth_timestamps)
         self.timestamps = rgb_timestamps
-
-    def sort(self, xs):
-        return sorted(xs, key=lambda x:float(x[:-4]))
-
-    def listdir(self, path, split='rgb', ext='.png'):
-        imgs, timestamps = [], []
-        files = [x for x in os.listdir(os.path.join(path, split)) if x.endswith(ext)]
-        for name in self.sort(files):
-            imgs.append(os.path.join(path, split, name))
-            timestamp = float(name[:-len(ext)].rstrip('.'))
-            timestamps.append(timestamp)
-        return imgs, np.array(timestamps)
 
     def __getitem__(self, idx):
         return self.rgb[idx], self.depth[idx]

@@ -264,7 +264,7 @@ if __name__ == '__main__':
     from components import RGBDFrame
     from feature import ImageFeature
     from params import Params
-    from dataset import TUMRGBDDataset, ICLNUIMDataset
+    from dataset import TUMRGBDDataset, ICLNUIMDataset, ScanNetDataset
 
 
     parser = argparse.ArgumentParser()
@@ -275,14 +275,20 @@ if __name__ == '__main__':
     #     default='path/to/your/TUM_RGBD/rgbd_dataset_freiburg1_room')
     parser.add_argument('--path', type=str, help='dataset path', 
         default='path/to/your/ICL-NUIM_RGBD/living_room_traj3_frei_png')
+
+    parser.add_argument('--scene', type=str,
+        default='scene0568_00')
+
+    parser.add_argument('--split', type=str,
+        default='valid')
     args = parser.parse_args()
-
-
 
     if 'tum' in args.dataset.lower():
         dataset = TUMRGBDDataset(args.path)
     elif 'icl' in args.dataset.lower():
         dataset = ICLNUIMDataset(args.path)
+    elif 'scannet' in args.dataset.lower():
+        dataset = ScanNetDataset(args.path, args.scene, args.split)
 
     params = Params()
     ptam = RGBDPTAM(params)
@@ -328,7 +334,11 @@ if __name__ == '__main__':
     print('num keyframes', len(ptam.graph.keyframes()))
     print('average time', np.mean(durations))
 
-    ptam.save_results(args.path + '/slam_result.txt')
+    out_path = "./results/"
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+
+    ptam.save_results(out_path + 'slam_result.txt')
 
     ptam.stop()
     if not args.no_viz:

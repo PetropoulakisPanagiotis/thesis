@@ -19,7 +19,7 @@ class BundleAdjustment(g2o.SparseOptimizer):
         super().add_post_iteration_action(terminate)
 
         # Robust cost Function (Huber function) delta
-        self.delta = np.sqrt(5.991)   
+        self.delta = np.sqrt(5.991)
         self.aborted = False
 
     def optimize(self, max_iterations=10):
@@ -43,7 +43,14 @@ class BundleAdjustment(g2o.SparseOptimizer):
         super().add_vertex(v_se3) 
 
     def add_point(self, point_id, point, fixed=False, marginalized=True):
-        v_p = g2o.VertexSBAPointXYZ()
+        v_p = g2o.VertexSBAPointXYZ() # <--- 
+
+        t = g2o.VertexCustomXYZ() # <-- xyz, 
+        t.set_id(point_id * 2 + 1) 
+        t.set_marginalized(marginalized)
+        t.set_estimate(point)
+        t.set_fixed(fixed)
+
         v_p.set_id(point_id * 2 + 1)
         v_p.set_marginalized(marginalized)
         v_p.set_estimate(point)
@@ -213,7 +220,7 @@ class PoseGraphOptimization(g2o.SparseOptimizer):
             pose = g2o.Isometry3d(
                 kf.orientation,
                 kf.position)
-            
+
             fixed = i == 0
             if anchor is not None:
                 fixed = kf <= anchor
@@ -229,7 +236,7 @@ class PoseGraphOptimization(g2o.SparseOptimizer):
                 self.add_edge(
                     vertices=(kf.reference_keyframe.id, kf.id),
                     measurement=kf.reference_constraint)
- 
+
         for kf, kf2, meas in loops:
             self.add_edge((kf.id, kf2.id), measurement=meas)
 
