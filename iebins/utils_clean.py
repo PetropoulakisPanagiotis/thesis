@@ -216,7 +216,7 @@ def normalize_result(value, vmin=None, vmax=None):
     return np.expand_dims(value, 0)
 
 
-def compute_errors(gt, pred):
+def compute_errors(gt, pred, var=None):
     thresh = np.maximum((gt / pred), (pred / gt))
     d1 = (thresh < 1.25).mean()
     d2 = (thresh < 1.25 ** 2).mean()
@@ -236,6 +236,11 @@ def compute_errors(gt, pred):
 
     err = np.abs(np.log10(pred) - np.log10(gt))
     log10 = np.mean(err)
+
+    if var is not None:
+        cons_unc = (gt - pred) ** 2 / var 
+        cons_unc = np.mean(cons_unc)
+        return [silog, abs_rel, log10, rms, sq_rel, log_rms, d1, d2, d3, cons_unc]
 
     return [silog, abs_rel, log10, rms, sq_rel, log_rms, d1, d2, d3]
 

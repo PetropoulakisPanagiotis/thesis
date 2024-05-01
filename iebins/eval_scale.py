@@ -14,8 +14,8 @@ import random
 from tqdm import tqdm
 
 from dataloaders.dataloader_clean import DataLoaderCustom
-from networks.NewCRFDepth_clean import NewCRFDepth
-from parser_options import convert_arg_line_to_args, eval_parser
+from networks.NewCRFDepth_clean_scale import NewCRFDepth
+from parser_options_scale import convert_arg_line_to_args, eval_parser
 from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization
 from utils_clean import post_process_depth, flip_lr,  compute_errors
 
@@ -33,7 +33,7 @@ else:
 
 
 def eval_func(model, dataloader_eval, post_process=False):
-    eval_measures = torch.zeros(10).cuda()
+    eval_measures = torch.zeros(11).cuda()
 
     # Uncertainty #
     eval_measures_unc = torch.zeros(1).cuda()
@@ -148,6 +148,15 @@ def eval_func(model, dataloader_eval, post_process=False):
 
                 pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
 
+                if args.evaluate_uncertainty:
+                    sigma_c = torch.sum((segmentation_map * (result["uncertainty_maps_list"][-1] **2)), dim=1)
+                    c = torch.sum((segmentation_map * result["pred_depths_rc_list"][-1]), dim=1)
+                    
+                    sigma_s = torch.sum((segmentation_map * (result["uncertainty_maps_scale_list"][-1] ** 2)), dim=1)
+                    s = torch.sum((segmentation_map * result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)), dim=1)
+                    sigma_m = s**2 * sigma_c + c**2 * sigma_s 
+                    sigma_m = sigma_m.cpu().numpy().squeeze()
+                
                 # Fair comparison segmentation - instances: use eval_per_class.sh script   
                 if False:
                     if args.pick_class != 0:    
@@ -155,6 +164,7 @@ def eval_func(model, dataloader_eval, post_process=False):
                         if non_class.shape[0] == 63:
                             continue
                         instances[0, non_class] = torch.zeros_like(instances[0, non_class])
+                    
                     
                     if False:
                         tmp = instances_mask.permute(1,2,0)
@@ -215,8 +225,13 @@ def eval_func(model, dataloader_eval, post_process=False):
         else:
             unc_error = None
 
-        measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
-        eval_measures[:9] += torch.tensor(measures).cuda()
+        if args.evaluate_uncertainty:
+            measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
+            eval_measures[10] += torch.tensor(measures[-1]).cuda()
+        else:
+            measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
+
+        eval_measures[:9] += torch.tensor(measures[:9]).cuda()
         eval_measures[9] += 1
 
     scales = np.array(scales)
@@ -235,6 +250,9 @@ def eval_func(model, dataloader_eval, post_process=False):
         print('{:7.4f}, '.format(eval_measures_cpu[i]), end='')
     print('{:7.4f}'.format(eval_measures_cpu[8]))
 
+    if args.evaluate_uncertainty:
+        print("Eval uncertainty bins : ", eval_measures[10] / cnt)
+    
     if args.predict_unc:
         print("Eval uncertainty decoder:", unc_error)
 
@@ -246,13 +264,13 @@ def main_worker(args):
     dataloader_eval = DataLoaderCustom(args, 'online_eval')
     num_semantic_classes = dataloader_eval.num_semantic_classes
     num_instances = dataloader_eval.num_instances
-    
     # Depth model
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
                         predict_unc=args.predict_unc, num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, \
                         padding_instances=args.padding_instances, \
-                        segmentation_active=args.segmentation,  instances_active=args.instances)
+                        segmentation_active=args.segmentation,  instances_active=args.instances,\
+                        bins_scale=args.bins_scale)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])

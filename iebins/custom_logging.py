@@ -216,7 +216,7 @@ def debug_result(result, gt_depth):
         print(torch.mean(result['unc_decoder'][0, :, :, :]))
         print(torch.std(result['unc_decoder'][0, :, :, :]))
 
-    if True:
+    if False:
         print("Instances scale:")
         print(torch.max(result['pred_scale_instances_list'][-1][:, :]))
         print(torch.min(result['pred_scale_instances_list'][-1][:, :]))

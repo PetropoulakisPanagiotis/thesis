@@ -39,6 +39,7 @@ train_parser.add_argument('--segmentation',              dest='segmentation', he
 train_parser.add_argument('--instances',                 dest='instances',    help='instances variation', action='store_true')
 train_parser.add_argument('--roi_align',                 type=int,   help='use roi align', default='0')
 train_parser.add_argument('--roi_align_size',            type=int,   help='size of roi align', default='32')
+train_parser.add_argument('--bins_scale',                type=int,   help='Bins for scale', default='100')
 
 # Log and save
 train_parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
@@ -135,3 +136,6 @@ eval_parser.add_argument('--max_depth_eval',            type=float, help='maximu
 eval_parser.add_argument('--eigen_crop',                            help='if set, crops according to Eigen NIPS14', action='store_true')
 eval_parser.add_argument('--garg_crop',                             help='if set, crops according to Garg  ECCV16', action='store_true')
 eval_parser.add_argument('--pick_class',                type=int,   help='evaluate single class for debug', default=0)
+
+eval_parser.add_argument('--bins_scale',                type=int,   help='Bins for scale', default='100')
+eval_parser.add_argument('--evaluate_uncertainty',              dest='evaluate_uncertainty', help='evaluate uncertainty', action='store_true')
