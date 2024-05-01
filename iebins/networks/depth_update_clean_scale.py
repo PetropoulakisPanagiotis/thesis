@@ -546,7 +546,7 @@ Instances variations
 
 class UniformInstancesSharedCanonical(nn.Module):
     def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, \
-                 num_instances=63,var=0, padding_instances=0, roi_align=0, roi_align_size=32):
+                 num_instances=63,var=0, padding_instances=0, roi_align=0, roi_align_size=32, bins_scale=150):
         super(UniformInstancesSharedCanonical, self).__init__()
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim

@@ -105,7 +105,6 @@ class ROISelectScale(nn.Module):
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
         self.pool = nn.AdaptiveAvgPool2d(70)
         self.fc1 = nn.Linear((70*70) + 4, 2*num_semantic_classes) # Scale and shift 
-        self.d = nn.Dropout(p=0.2)
  
     def forward(self, x, boxes, labels):
 
@@ -114,7 +113,6 @@ class ROISelectScale(nn.Module):
         out = self.pool(F.relu(self.conv1(x)))
 
         out = torch.flatten(out, 1)
-        out = self.d(out)
         out = torch.cat((out, boxes_valid_normalized_projected), dim=1) # Concat boxes
 
         out = self.fc1(out)

@@ -18,7 +18,7 @@ from networks.NewCRFDepth_clean_scale import NewCRFDepth
 from parser_options_scale import convert_arg_line_to_args, eval_parser
 from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization
 from utils_clean import post_process_depth, flip_lr,  compute_errors
-
+from aucs import compute_aucs,  SCC
 
 # Parse config file #
 if sys.argv.__len__() == 2:
@@ -32,10 +32,15 @@ else:
     args = eval_parser.parse_args()
 
 
+
 def eval_func(model, dataloader_eval, post_process=False):
     eval_measures = torch.zeros(11).cuda()
 
-    # Uncertainty #
+    uncertainty_metrics = ["abs_rel", "rmse", "a1"]
+    aucs = {"abs_rel": [], "rmse": [], "a1": []}
+    scc_total = 0 # Spearman correlation coefficient in l1
+
+    # Uncertainty for metric depth from the decoder #
     eval_measures_unc = torch.zeros(1).cuda()
 
     num_semantic_classes = dataloader_eval.num_semantic_classes
@@ -230,6 +235,12 @@ def eval_func(model, dataloader_eval, post_process=False):
         if args.evaluate_uncertainty:
             measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
             eval_measures[10] += torch.tensor(measures[-1]).cuda()
+
+            scores = compute_aucs(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
+            [aucs[m].append(scores[m]) for m in uncertainty_metrics]
+     
+            scc_total += SCC(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
+
         else:
             measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
 
@@ -252,11 +263,18 @@ def eval_func(model, dataloader_eval, post_process=False):
         print('{:7.4f}, '.format(eval_measures_cpu[i]), end='')
     print('{:7.4f}'.format(eval_measures_cpu[8]))
 
+    for m in uncertainty_metrics:
+        aucs[m] = np.array(aucs[m]).mean(0)
+        print("\n  " + ("{:>8} | " * 6).format("abs_rel", "", "rmse", "", "a1", ""))
+    print("  " + ("{:>8} | " * 6).format("AUSE", "AURG", "AUSE", "AURG", "AUSE", "AURG"))
+    print(("&{:8.3f}  " * 6).format(*aucs["abs_rel"].tolist()+aucs["rmse"].tolist()+aucs["a1"].tolist()) + "\\\\")
+
     if args.evaluate_uncertainty:
-        print("Eval uncertainty bins : ", eval_measures[10] / cnt)
+        print("Eval uncertainty bins e^2/variance: ", eval_measures[10] / cnt)
     
     if args.predict_unc:
         print("Eval uncertainty decoder:", unc_error)
+        print("SCC:", scc_total / cnt)
 
     return eval_measures_cpu, unc_error
 

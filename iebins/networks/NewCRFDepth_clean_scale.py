@@ -121,7 +121,7 @@ class NewCRFDepth(nn.Module):
             self.update = UniformInstancesSharedCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
                                                           loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                                           num_instances=self.num_instances, var=var, padding_instances=self.padding_instances, \
-                                                          roi_align=roi_align, roi_align_size=roi_align_size)        
+                                                          roi_align=roi_align, roi_align_size=roi_align_size, bins_scale=bins_scale)        
             print("[VARIATION UniformInstancesSharedCanonical]\n")
         
         elif self.update_block == 20: 
