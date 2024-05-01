@@ -165,16 +165,18 @@ def eval_func(model, dataloader_eval, post_process=False):
                             continue
                         instances[0, non_class] = torch.zeros_like(instances[0, non_class])
                     
-                    
                     if False:
                         tmp = instances_mask.permute(1,2,0)
                         cv2.imshow("instances_mapped_image", (tmp.cpu().numpy() * 255).astype('uint8'))
                         cv2.waitKey(0)
                         cv2.destroyAllWindows()
 
-                    pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
+                    pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
                     
-                    mask = torch.sum(instances, dim=1).unsqueeze(0).to(torch.bool).cpu()
+                    mask = torch.sum(instances, dim=1).unsqueeze(0)
+                    pred_depth = pred_depth * mask
+
+                    mask = mask.to(torch.bool).cpu()
                     gt_depth = (gt_depth * mask)
             else:
                 pred_depth = pred_depths_r_list[-1]

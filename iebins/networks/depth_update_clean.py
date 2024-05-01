@@ -228,8 +228,7 @@ class UniformSingleScale(nn.Module):
 
         # Metric
         if self.loss_type == 0:
-            depth_r = (self.relu(depth_rc * pred_scale_shift[:, 0:1].unsqueeze(1).unsqueeze(1))).clamp(min=1e-3)
-            #.unsqueeze(1))).clamp(min=1e-3) #+ pred_scale_shift[:, 1:2].unsqueeze(1).unsqueeze(1))).clamp(min=1e-3)
+            depth_r = (self.relu(depth_rc * pred_scale_shift[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale_shift[:, 1:2].unsqueeze(1).unsqueeze(1))).clamp(min=1e-3)
         else:
             depth_r = depth_rc * pred_scale_shift[:, 0:1].unsqueeze(1).unsqueeze(1) + pred_scale_shift[:, 1:2].unsqueeze(1).unsqueeze(1)
 
@@ -319,9 +318,9 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
           
         # Metric
         if self.loss_type == 0:
-            depth_r = (self.relu(depth_rc * pred_scale_shift[:, ::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3) #+ pred_scale_shift[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+            depth_r = (self.relu(depth_rc * pred_scale_shift[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale_shift[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
         else:
-            depth_r = depth_rc * pred_scale_shift[:, ::2].unsqueeze(-1).unsqueeze(-1) #+ pred_scale_shift[:, 1::2].unsqueeze(-1).unsqueeze(-1)
+            depth_r = depth_rc * pred_scale_shift[:, ::2].unsqueeze(-1).unsqueeze(-1) + pred_scale_shift[:, 1::2].unsqueeze(-1).unsqueeze(-1)
         
         pred_depths_r_list.append(depth_r)
         
@@ -612,9 +611,9 @@ class UniformInstancesSharedCanonical(nn.Module):
    
         # Metric
         if self.loss_type == 0:
-            depth_instances_r = (self.relu(depth_instances_rc * instances_scale.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3) #+ instances_shift.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+            depth_instances_r = (self.relu(depth_instances_rc * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
         else:
-            depth_instances_r = depth_instances_rc * instances_scale.unsqueeze(-1).unsqueeze(-1) #+ instances_shift.unsqueeze(-1).unsqueeze(-1)
+            depth_instances_r = depth_instances_rc * instances_scale.unsqueeze(-1).unsqueeze(-1) + instances_shift.unsqueeze(-1).unsqueeze(-1)
        
         # depth_r: b, c, h, w
         pred_depths_instances_r_list.append(depth_instances_r)
