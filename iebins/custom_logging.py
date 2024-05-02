@@ -164,8 +164,6 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
 
 def tb_visualization_d3vo(writer, global_step, args, current_loss_d3vo, current_lr, var_sum, var_cnt, num_images, sigma_metric):
 
-    depth_gt = torch.where(depth_gt < 1e-3, depth_gt * 0 + 1e-3, depth_gt)
-    
     writer.add_scalar('d3vo_loss', current_loss_d3vo, global_step)
 
     if current_lr is not None:

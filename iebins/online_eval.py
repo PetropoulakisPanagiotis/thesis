@@ -6,8 +6,7 @@ import torch
 import torch.distributed as dist
 
 from networks.NewCRFDepth_clean import NewCRFDepth
-from utils_clean import flip_lr, compute_errors, compute_error_uncertainty
-
+from utils_clean import flip_lr, compute_errors
 
 def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_process=False):
     with torch.no_grad():
@@ -15,9 +14,6 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
         measures_size = 10
         eval_measures = torch.zeros(measures_size).cuda(device=gpu)
         
-        # Uncertainty #
-        eval_measures_unc = torch.zeros(1).cuda(device=gpu)
-
         for _, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda(gpu, non_blocking=True))
             
@@ -48,10 +44,6 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
             else:
                 pred_depths_r_list = result["pred_depths_r_list"]
             
-            # Uncertainty from decoder #
-            if args.predict_unc:
-                unc_decoder = result["unc_decoder"].cpu().numpy().squeeze()
-
             # Mask predictions #
             if args.instances:
                 #instances[:, 6:, :, :] = 0
@@ -63,24 +55,6 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
 
             pred_depth = pred_depth.cpu().numpy().squeeze()
             
-            """
-            #  Predict depth of flipped image and fuse
-            if post_process:
-                image_flipped = flip_lr(image)
-                segmentation_map_flipped = flip_lr(segmentation_map)
-                if args.update_block >= 9:
-                    result = model(image_flipped, masks = segmentation_map_flipped)
-                else:
-                    result = model(image_flipped)
-                pred_depths_r_list_flipped = result["pred_depths_r_list"]
-
-                if args.segmentation:
-                    pred_depth = post_process_depth(torch.sum((pred_depths_r_list[-1] * segmentation_map_flipped), dim=1).unsqueeze(0), torch.sum((pred_depths_r_list_flipped[-1] * segmentation_map), dim=1).unsqueeze(0))
-                else:
-                    pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
-
-                pred_depth = pred_depth.cpu().numpy().squeeze()
-            """
 
             # Mask gt_depth #
             if args.instances:
@@ -130,19 +104,10 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
             eval_measures[:measures_size - 1] += torch.tensor(measures).cuda(device=gpu)
             eval_measures[measures_size - 1] += 1
 
-            # For uncertainty #
-            if args.predict_unc:
-                unc_error = compute_error_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], unc_decoder[valid_mask])
-                eval_measures_unc[0] += torch.tensor(unc_error).cuda(device=gpu)
-            else:
-                unc_error = None
-
         # Gather measures from other nodes/gpus #
         if args.multiprocessing_distributed:
             # group = dist.new_group([i for i in range(ngpus)])
             dist.all_reduce(tensor=eval_measures, op=dist.ReduceOp.SUM, group=group)
-            if args.predict_unc:
-                dist.all_reduce(tensor=eval_measures_unc, op=dist.ReduceOp.SUM, group=group)
 
         # Devide by sum for multiprocessing #
         if not args.multiprocessing_distributed or gpu == 0:
@@ -159,9 +124,6 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
 
             print('{:7.4f}'.format(eval_measures_cpu[measures_size - 2]))
 
-            if args.predict_unc:
-                print("Eval uncertainty decoder:", unc_error)
-            
-            return eval_measures_cpu, unc_error
+            return eval_measures_cpu, None
 
         return None

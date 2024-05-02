@@ -247,6 +247,16 @@ class NewCRFDepth(nn.Module):
             for param in self.update.parameters():
                 param.requires_grad = False
 
+    def set_to_eval_d3vo(self):
+	    # Freeze some layers
+       self.backbone.eval()
+       self.psp_module.eval()
+       self.crf3.eval()
+       self.crf2.eval()
+       self.crf1.eval()
+       self.project.eval()
+       self.update.eval()
+
     def init_weights(self, pretrained=None):
         """
         Initialize the weights in backbone and heads.

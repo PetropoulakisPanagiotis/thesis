@@ -21,7 +21,7 @@ from networks.NewCRFDepth_clean_scale import NewCRFDepth
 from parser_options_scale import train_parser
 from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
 from online_eval import online_eval
-from utils_clean import post_process_depth, flip_lr, silog_loss, l1_loss, d3vo_loss, compute_errors, compute_error_uncertainty, \
+from utils_clean import post_process_depth, flip_lr, silog_loss, l1_loss, d3vo_loss, compute_errors, \
                     eval_metrics, entropy_loss, block_print, enable_print, load_checkpoint_custom, load_checkpoint_custom_full_model, \
                     set_hparams_dict, sigma_metric_d3vo 
 
@@ -67,6 +67,7 @@ def main_worker(gpu, ngpus_per_node, args):
                         roi_align=args.roi_align, roi_align_size=args.roi_align_size,
                         bins_scale=args.bins_scale, d3vo=args.d3vo)
     model.train()
+    model.set_to_eval_d3vo()
 
     # Print stats #
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -111,12 +112,6 @@ def main_worker(gpu, ngpus_per_node, args):
     print("== Initial variables' sum: {:.3f}, avg: {:.3f}".format(var_sum, var_sum/var_cnt))
 
     cudnn.benchmark = True
-
-    # Evaluation before training #
-    if False:
-        model.eval()
-        eval_measures = online_eval(args, model, dataloader_eval, gpu, ngpus_per_node, post_process=True)
-        model.train()
 
     # tb logging #
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
@@ -231,8 +226,9 @@ def main_worker(gpu, ngpus_per_node, args):
                     sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).unsqueeze(1)
                     pred_d = torch.sum((pred_depths_rc_list[-1] * segmentation_map), dim=1).unsqueeze(1)
 
-                loss = d3vo_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))
-                current_loss_d3vo
+                #loss = d3vo_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))
+                current_loss_d3vo = 0
+                loss = 0
             else:
                 # Depth loss #
                 for curr_tree_depth in range(args.max_tree_depth):
@@ -261,11 +257,11 @@ def main_worker(gpu, ngpus_per_node, args):
                 loss = current_loss_depth + (args.uncertainty_weight * current_loss_unc_decoder)
 
             # Optimize #
-            loss.backward()
+            #loss.backward()
             for param_group in optimizer.param_groups:
                 current_lr = (args.learning_rate - end_learning_rate) * (1 - global_step / num_total_steps) ** 0.9 + end_learning_rate
                 param_group['lr'] = current_lr
-            optimizer.step()
+            #optimizer.step()
 
             # Print stats #
             if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
@@ -382,6 +378,7 @@ def main_worker(gpu, ngpus_per_node, args):
                         print("Best eval for uncertainty decoder: " + str(best_unc))
                 
                 model.train()
+                model.module.set_to_eval_d3vo()
                 block_print()
                 enable_print()
 

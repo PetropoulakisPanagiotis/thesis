@@ -167,7 +167,7 @@ def load_checkpoint_custom_full_model(checkpoint_path, gpu, retrain, model, opti
                 loc = 'cuda:{}'.format(gpu)
                 checkpoint = torch.load(checkpoint_path, map_location=loc)
 
-            model.load_state_dict(checkpoint['model'], strict=False)
+            model.load_state_dict(checkpoint['model'], strict=True)
             print("== Loaded checkpoint '{}' (global_step {})".format(checkpoint_path, checkpoint['global_step']))
         
             del checkpoint
