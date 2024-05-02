@@ -162,6 +162,22 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
                         writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i), colormap(uncertainty_maps_list[ii][i, :, :, :].clamp(min=1e-3).data), global_step)
 
 
+def tb_visualization_d3vo(writer, global_step, args, current_loss_d3vo, current_lr, var_sum, var_cnt, num_images, sigma_metric):
+
+    depth_gt = torch.where(depth_gt < 1e-3, depth_gt * 0 + 1e-3, depth_gt)
+    
+    writer.add_scalar('d3vo_loss', current_loss_d3vo, global_step)
+
+    if current_lr is not None:
+        writer.add_scalar('learning_rate', current_lr, global_step)
+    
+    if var_sum is not None:
+        writer.add_scalar('var_average', var_sum/var_cnt, global_step)
+    
+    for i in range(num_images):
+        writer.add_image('d3vo_unc_est/image/{}'.format(i), colormap(sigma_metric[i, :, :, :].clamp(min=1e-3).data, name='viridis'), global_step)
+
+
 def debug_visualize_gt_instances(instances, mask, depth_gt):
     instances[:, 2:, :, :] = 0
     

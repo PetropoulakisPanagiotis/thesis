@@ -337,7 +337,7 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
             scale = (scale_shift_current * bins_map_scale.detach()).sum(1, keepdim=True)
             pred_scale_shift.append(scale)
             uncertainty_map_current_scale = torch.sqrt((scale_shift_current * ((bins_map_scale.detach() - scale)**2)).sum(1, keepdim=True))
-            uncertainty_map_scale[:, i, :, :] = uncertainty_map_current_scale.squeeze(1)
+            uncertainty_map_scale[:, i, :, :] = uncertainty_map_current_scale.unsqueeze(-1)#squeeze(1)
 
 
         pred_depths_c_list.append(depth_c)

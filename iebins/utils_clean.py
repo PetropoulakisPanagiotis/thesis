@@ -157,6 +157,22 @@ def load_checkpoint_custom(checkpoint_path, gpu, retrain, model, optimizer):
         else:
             print("== No checkpoint found at '{}'".format(checkpoint_path))
 
+def load_checkpoint_custom_full_model(checkpoint_path, gpu, retrain, model, optimizer):
+    if checkpoint_path != '':
+        if os.path.isfile(checkpoint_path):
+            print("== Loading checkpoint '{}'".format(checkpoint_path))
+            if gpu is None:
+                checkpoint = torch.load(checkpoint_path)
+            else:
+                loc = 'cuda:{}'.format(gpu)
+                checkpoint = torch.load(checkpoint_path, map_location=loc)
+
+            model.load_state_dict(checkpoint['model'], strict=False)
+            print("== Loaded checkpoint '{}' (global_step {})".format(checkpoint_path, checkpoint['global_step']))
+        
+            del checkpoint
+        else:
+            print("== No checkpoint found at '{}'".format(checkpoint_path))
 
 def set_hparams_dict(args, num_semantic_classes):
     hparams = {
@@ -271,6 +287,25 @@ class l1_loss(nn.Module):
         
         return torch.mean(torch.abs(depth_est[mask] - depth_gt[mask]))
 
+
+class d3vo_loss(nn.Module):
+    def __init__(self, beta=0.5):
+        super(d3vo_loss, self).__init__()
+        self.beta = beta
+
+    def forward(self, depth_est, depth_gt, unc, mask):
+        return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) + (math.log(2 * math.pi))) * (unc[mask].detach() ** self.beta))
+
+
+def sigma_metric_d3vo(depth_c, unc_c, scale, unc_scale, args):
+    
+    if args.segmentation:
+
+        # It is std, make it variance 
+        unc_c = unc_c ** 2
+
+        sigma_metric = depth_c ** 2 * unc_scale.unsqueeze(-1).unsqueeze(-1) + scale.unsqueeze(-1).unsqueeze(-1) ** 2 * depth_c
+    return sigma_metric
 
 def entropy_loss(preds, gt_label, mask):
     # preds: B, C, H, W

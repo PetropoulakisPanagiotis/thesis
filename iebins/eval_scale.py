@@ -271,10 +271,10 @@ def eval_func(model, dataloader_eval, post_process=False):
 
     if args.evaluate_uncertainty:
         print("Eval uncertainty bins e^2/variance: ", eval_measures[10] / cnt)
+        print("SCC: ", scc_total / cnt)
     
     if args.predict_unc:
         print("Eval uncertainty decoder:", unc_error)
-        print("SCC:", scc_total / cnt)
 
     return eval_measures_cpu, unc_error
 

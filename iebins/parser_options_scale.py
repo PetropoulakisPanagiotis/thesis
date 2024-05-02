@@ -35,6 +35,7 @@ train_parser.add_argument('--padding_instances',         type=int,   help='how m
 train_parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
 train_parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
 train_parser.add_argument('--predict_unc',               dest='predict_unc',  help='true to predict uncertainty from the decoder feature map', action='store_true')
+train_parser.add_argument('--d3vo',                      dest='d3vo',  help='predict uncertainty for scale d3vo', action='store_true')
 train_parser.add_argument('--segmentation',              dest='segmentation', help='segmentation variation', action='store_true')
 train_parser.add_argument('--instances',                 dest='instances',    help='instances variation', action='store_true')
 train_parser.add_argument('--roi_align',                 type=int,   help='use roi align', default='0')

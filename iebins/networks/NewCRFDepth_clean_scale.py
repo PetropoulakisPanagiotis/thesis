@@ -17,7 +17,7 @@ class NewCRFDepth(nn.Module):
                     bin_num=16, update_block=0, loss_type=0, train_decoder=0, predict_unc=False, \
                     num_semantic_classes=14, num_instances=63, var=0, padding_instances=0, \
                     segmentation_active= False, instances_active=False, roi_align=False, roi_align_size=32, \
-                    bins_scale=50, **kwargs):
+                    bins_scale=50, d3vo=False, **kwargs):
         super().__init__()
         self.freeze_backbone = True
         self.train_decoder = train_decoder # train the last layer of decoder 
@@ -39,6 +39,9 @@ class NewCRFDepth(nn.Module):
 
         # Uncertainty from decoder head
         self.predict_unc = predict_unc
+
+        # Uncertainty d3vo
+        self.d3vo = d3vo
 
         # 0 silog (use relu) or l1 
         self.update_block = update_block  
@@ -206,7 +209,18 @@ class NewCRFDepth(nn.Module):
         # Predict uncertainty from the decoder features
         if self.predict_unc: 
             self.uncer_head = UncertaintyHead(input_dim=crf_dims[0])
- 
+
+        # D3VO uncertainty  
+        if self.d3vo:
+            if self.instances_active:
+                num_classes = self.num_instances
+            elif self.segmentation_active:
+                num_classes = self.num_semantic_classes
+            else:
+                num_classes = 1
+
+            self.d3vo_head = D3VOHead(input_dim=crf_dims[0], num_classes=num_classes) 
+
         # Initialize layers
         self.init_weights(pretrained=pretrained)
 
@@ -220,12 +234,18 @@ class NewCRFDepth(nn.Module):
                 param.requires_grad = False
             for param in self.crf2.parameters():
                 param.requires_grad = False
-            if self.train_decoder == 0:
+            if self.train_decoder == 0 or self.d3vo:
                 for param in self.crf1.parameters():
                     param.requires_grad = False
             else:
                 print("[Train last layer of decoder (crf1)]")
+        
+        if self.d3vo:
+            for param in self.project.parameters():
+                param.requires_grad = False
 
+            for param in self.update.parameters():
+                param.requires_grad = False
 
     def init_weights(self, pretrained=None):
         """
@@ -265,6 +285,9 @@ class NewCRFDepth(nn.Module):
         # Uncertainty prediction from the decoder
         if self.predict_unc:
             unc_decoder = self.uncer_head(e0)
+
+        if self.d3vo:
+            unc_d3vo = self.d3vo_head(e0)
 
         b, c, h, w = e1.shape
 
@@ -327,6 +350,9 @@ class NewCRFDepth(nn.Module):
                 unc_decoder = upsample(unc_decoder, scale_factor=4)
                 result["unc_decoder"] = unc_decoder
 
+            if self.d3vo:
+                result["unc_d3vo"] = unc_d3vo
+
         return result
 
 
@@ -341,4 +367,23 @@ class UncertaintyHead(nn.Module):
 
     def forward(self, x):
         x = self.sigmoid(self.conv1(x))
+        return x 
+
+
+"""
+D3VO unc
+"""
+class D3VOHead(nn.Module):
+    def __init__(self, input_dim=128, num_classes=1):
+        super(D3VOHead, self).__init__()
+        self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
+
+        self.pool = nn.AdaptiveAvgPool2d(88)
+        self.fc1 = nn.Linear(88 * 88, num_classes)
+
+    def forward(self, x):
+        x = F.relu(self.pool(self.conv1(x)))
+        x = torch.flatten(x, 1)
+        x = self.fc1(x)
+        print(x.shape)
         return x 

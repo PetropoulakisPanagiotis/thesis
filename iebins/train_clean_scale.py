@@ -19,10 +19,11 @@ import cv2
 from dataloaders.dataloader_clean import DataLoaderCustom
 from networks.NewCRFDepth_clean_scale import NewCRFDepth
 from parser_options_scale import train_parser
-from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization
+from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
 from online_eval import online_eval
-from utils_clean import post_process_depth, flip_lr, silog_loss, l1_loss, compute_errors, compute_error_uncertainty, \
-                    eval_metrics, entropy_loss, block_print, enable_print, load_checkpoint_custom, set_hparams_dict
+from utils_clean import post_process_depth, flip_lr, silog_loss, l1_loss, d3vo_loss, compute_errors, compute_error_uncertainty, \
+                    eval_metrics, entropy_loss, block_print, enable_print, load_checkpoint_custom, load_checkpoint_custom_full_model, \
+                    set_hparams_dict, sigma_metric_d3vo 
 
 
 # Parse config file #
@@ -55,7 +56,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # Only in IEBINS GRU is used #
     if args.update_block != 0:
         args.max_tree_depth = 1
-    
+
     # Model #
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
@@ -64,7 +65,7 @@ def main_worker(gpu, ngpus_per_node, args):
                         padding_instances=args.padding_instances, \
                         segmentation_active=args.segmentation,  instances_active=args.instances, \
                         roi_align=args.roi_align, roi_align_size=args.roi_align_size,
-                        bins_scale=args.bins_scale)
+                        bins_scale=args.bins_scale, d3vo=args.d3vo)
     model.train()
 
     # Print stats #
@@ -99,7 +100,11 @@ def main_worker(gpu, ngpus_per_node, args):
                                 lr=args.learning_rate)
 
     # Load checkpoint and print stats #
-    load_checkpoint_custom(args.checkpoint_path, args.gpu, args.retrain, model, optimizer)
+    if args.d3vo:
+        load_checkpoint_custom_full_model(args.checkpoint_path, args.gpu, args.retrain, model, optimizer)
+    else:    
+        load_checkpoint_custom(args.checkpoint_path, args.gpu, args.retrain, model, optimizer)
+
     var_sum = [var.sum().item() for var in model.parameters() if var.requires_grad]
     var_cnt = len(var_sum)
     var_sum = np.sum(var_sum)
@@ -133,6 +138,8 @@ def main_worker(gpu, ngpus_per_node, args):
     # Loss #
     silog_criterion = silog_loss(variance_focus=args.variance_focus)
     l1_criterion = l1_loss()
+    d3vo_criterion = d3vo_loss()
+
     end_learning_rate = args.end_learning_rate if args.end_learning_rate != -1 else 0.1 * args.learning_rate
     
     start_time = time.time()
@@ -159,6 +166,7 @@ def main_worker(gpu, ngpus_per_node, args):
             before_op_time = time.time()
             current_loss_depth = 0
             current_loss_unc_decoder = 0
+            current_loss_d3vo = 0
 
             image = torch.autograd.Variable(sample_batched['image'].cuda(args.gpu, non_blocking=True))
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
@@ -196,7 +204,8 @@ def main_worker(gpu, ngpus_per_node, args):
                 # Canonical segmentation/single scale #
                 if args.update_block != 0 and args.update_block != 4 and args.update_block != 3:    
                     pred_depths_rc_list = result["pred_depths_rc_list"]
-           
+                    pred_scale_list = result["pred_scale_list"]
+
             # Uncertainty bins #
             if args.update_block == 0 or args.update_block == 3 or args.update_block == 18 \
                or args.update_block == 1 or args.update_block == 2:
@@ -215,23 +224,33 @@ def main_worker(gpu, ngpus_per_node, args):
 
             #debug_visualize_gt_instances(instances, mask, depth_gt)
 
-            # Depth loss #
-            for curr_tree_depth in range(args.max_tree_depth):
-                if args.instances:
-                    pred_d = torch.sum((pred_depths_instances_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
-                    instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
-                    mask = mask * instances_gt_mask 
-                elif args.segmentation:
-                    pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * segmentation_map), dim=1).unsqueeze(1)
-                else:
-                    pred_d = pred_depths_r_list[curr_tree_depth]
-                
-                if args.loss_type == 0:
-                    current_loss_depth += silog_criterion.forward(pred_d, depth_gt, mask.to(torch.bool))
-                elif args.loss_type == 1:
-                    current_loss_depth += l1_criterion.forward(pred_d, depth_gt, mask.to(torch.bool))
+            if args.d3vo:
 
-            loss = current_loss_depth           
+                if args.segmentation:
+                    sigma_metric = sigma_metric_d3vo(pred_depths_rc_list[-1], uncertainty_maps_list[-1], pred_scale_list[-1], result["unc_d3vo"], args)
+                    sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).unsqueeze(1)
+                    pred_d = torch.sum((pred_depths_rc_list[-1] * segmentation_map), dim=1).unsqueeze(1)
+
+                loss = d3vo_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))
+                current_loss_d3vo
+            else:
+                # Depth loss #
+                for curr_tree_depth in range(args.max_tree_depth):
+                    if args.instances:
+                        pred_d = torch.sum((pred_depths_instances_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
+                        instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
+                        mask = mask * instances_gt_mask 
+                    elif args.segmentation:
+                        pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * segmentation_map), dim=1).unsqueeze(1)
+                    else:
+                        pred_d = pred_depths_r_list[curr_tree_depth]
+                    
+                    if args.loss_type == 0:
+                        current_loss_depth += silog_criterion.forward(pred_d, depth_gt, mask.to(torch.bool))
+                    elif args.loss_type == 1:
+                        current_loss_depth += l1_criterion.forward(pred_d, depth_gt, mask.to(torch.bool))
+
+                loss = current_loss_depth           
  
             # Uncertainty loss decoder #
             if args.predict_unc: 
@@ -253,6 +272,9 @@ def main_worker(gpu, ngpus_per_node, args):
                 if args.predict_unc:
                     print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}, depth_loss: {:.12f}, u_loss: {:.12f}'.format(epoch, \
                            step, steps_per_epoch, global_step, current_lr, loss, current_loss_depth, current_loss_unc_decoder))
+                elif args.d3vo:
+                    print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, d3vo_loss: {:.12f}'.format(epoch, \
+                           step, steps_per_epoch, global_step, current_lr, loss))
                 else:
                     print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}'.format(epoch, \
                            step, steps_per_epoch, global_step, current_lr, loss))
@@ -279,7 +301,13 @@ def main_worker(gpu, ngpus_per_node, args):
 
                 # Tensorboard viz #
                 if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
-                    tb_visualization(writer, global_step, args, current_loss_depth, current_lr, current_loss_unc_decoder, var_sum, var_cnt,\
+
+
+                    if args.d3vo:
+                        tb_visualization_d3vo(writer, global_step, args, current_loss_d3vo, current_lr, var_sum, var_cnt, \
+                                              num_images, sigma_metric)
+                    else:
+                        tb_visualization(writer, global_step, args, current_loss_depth, current_lr, current_loss_unc_decoder, var_sum, var_cnt,\
                                      num_images, depth_gt, image, args.max_tree_depth, pred_depths_r_list, \
                                      pred_depths_rc_list, pred_depths_instances_r_list, pred_depths_instances_rc_list, num_semantic_classes, \
                                      instances, segmentation_map, labels, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list, unc_decoder)
