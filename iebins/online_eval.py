@@ -6,14 +6,16 @@ import torch
 import torch.distributed as dist
 
 from networks.NewCRFDepth_clean import NewCRFDepth
-from utils_clean import flip_lr, compute_errors
+from utils_clean import flip_lr, compute_errors, compute_error_uncertainty, sigma_metric_d3vo
+
 
 def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_process=False):
     with torch.no_grad():
         # Save results #
         measures_size = 10
         eval_measures = torch.zeros(measures_size).cuda(device=gpu)
-        
+        eval_d3vo = torch.zeros(1).cuda(device=gpu)
+ 
         for _, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda(gpu, non_blocking=True))
             
@@ -55,6 +57,13 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
 
             pred_depth = pred_depth.cpu().numpy().squeeze()
             
+            if args.d3vo:
+                if args.d3vo_c:
+                    sigma_metric = sigma_metric_d3vo(result["pred_depths_rc_list"][-1], result["unc_d3vo_c"], result["pred_scale_list"][-1], result["unc_d3vo"], args)
+                else:
+                    sigma_metric = sigma_metric_d3vo(result["pred_depths_rc_list"][-1], result["uncertainty_maps_list"][-1], result["pred_scale_list"][-1], result["unc_d3vo"], args)
+
+                sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).squeeze(0).cpu().numpy()
 
             # Mask gt_depth #
             if args.instances:
@@ -104,10 +113,16 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
             eval_measures[:measures_size - 1] += torch.tensor(measures).cuda(device=gpu)
             eval_measures[measures_size - 1] += 1
 
+            if args.d3vo:
+                eval_d3vo_numpy = compute_error_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], sigma_metric[valid_mask]) 
+                eval_d3vo += torch.tensor(eval_d3vo_numpy).cuda(device=gpu)
+
         # Gather measures from other nodes/gpus #
         if args.multiprocessing_distributed:
             # group = dist.new_group([i for i in range(ngpus)])
             dist.all_reduce(tensor=eval_measures, op=dist.ReduceOp.SUM, group=group)
+            if args.d3vo:
+                dist.all_reduce(tensor=eval_d3vo, op=dist.ReduceOp.SUM, group=group)
 
         # Devide by sum for multiprocessing #
         if not args.multiprocessing_distributed or gpu == 0:
@@ -123,6 +138,12 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
                 print('{:7.4f}, '.format(eval_measures_cpu[i]), end='')
 
             print('{:7.4f}'.format(eval_measures_cpu[measures_size - 2]))
+
+            if args.d3vo:
+                eval_d3vo = eval_d3vo.cpu()
+                eval_d3vo /= cnt
+                print('d3vo {:7.4f}'.format(eval_d3vo[0]))
+                return eval_measures_cpu, eval_d3vo[0]
 
             return eval_measures_cpu, None
 

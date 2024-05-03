@@ -220,6 +220,7 @@ class NewCRFDepth(nn.Module):
                 num_classes = 1
 
             self.d3vo_head = D3VOHead(input_dim=crf_dims[0], num_classes=num_classes) 
+            self.d3vo_head_c = UncertaintyHead(input_dim=crf_dims[0])
 
         # Initialize layers
         self.init_weights(pretrained=pretrained)
@@ -298,6 +299,7 @@ class NewCRFDepth(nn.Module):
 
         if self.d3vo:
             unc_d3vo = self.d3vo_head(e0)
+            unc_d3vo_c = self.d3vo_head_c(e0)
 
         b, c, h, w = e1.shape
 
@@ -362,22 +364,8 @@ class NewCRFDepth(nn.Module):
 
             if self.d3vo:
                 result["unc_d3vo"] = unc_d3vo
-
+                result["unc_d3vo_c"] = upsample(unc_d3vo_c, scale_factor=4)
         return result
-
-
-"""
-UncertaintyHead [0, 1]
-"""
-class UncertaintyHead(nn.Module):
-    def __init__(self, input_dim=128):
-        super(UncertaintyHead, self).__init__()
-        self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        x = self.sigmoid(self.conv1(x))
-        return x 
 
 
 """
@@ -394,6 +382,19 @@ class D3VOHead(nn.Module):
     def forward(self, x):
         x = F.relu(self.pool(self.conv1(x)))
         x = torch.flatten(x, 1)
-        x = self.fc1(x)
-        print(x.shape)
+        x = F.relu(self.fc1(x))
+
+        return x 
+
+
+"""
+Uncertainty Head
+"""
+class UncertaintyHead(nn.Module):
+    def __init__(self, input_dim=128):
+        super(UncertaintyHead, self).__init__()
+        self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
+        
+    def forward(self, x):
+        x = F.relu(F.relu(self.conv1(x)))
         return x 

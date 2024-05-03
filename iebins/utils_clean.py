@@ -156,6 +156,7 @@ def load_checkpoint_custom(checkpoint_path, gpu, retrain, model, optimizer):
             del checkpoint
         else:
             print("== No checkpoint found at '{}'".format(checkpoint_path))
+            exit()
 
 def load_checkpoint_custom_full_model(checkpoint_path, gpu, retrain, model, optimizer):
     if checkpoint_path != '':
@@ -167,12 +168,13 @@ def load_checkpoint_custom_full_model(checkpoint_path, gpu, retrain, model, opti
                 loc = 'cuda:{}'.format(gpu)
                 checkpoint = torch.load(checkpoint_path, map_location=loc)
 
-            model.load_state_dict(checkpoint['model'], strict=True)
+            model.load_state_dict(checkpoint['model'], strict=False)
             print("== Loaded checkpoint '{}' (global_step {})".format(checkpoint_path, checkpoint['global_step']))
         
             del checkpoint
         else:
             print("== No checkpoint found at '{}'".format(checkpoint_path))
+            exit()
 
 def set_hparams_dict(args, num_semantic_classes):
     hparams = {
@@ -261,10 +263,9 @@ def compute_errors(gt, pred, var=None):
     return [silog, abs_rel, log10, rms, sq_rel, log_rms, d1, d2, d3]
 
 
-def compute_error_uncertainty(gt, pred, unc):
-    u_gt = np.exp(-5 * np.abs(gt - pred) / (gt + pred + 1e-7))
-    unc_error = np.abs(unc - u_gt).mean()
-    
+def compute_error_uncertainty(depth_est, depth_gt, unc, beta=0.5):
+    unc_error = np.mean((((np.abs(depth_est - depth_gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))) * (unc ** beta))
+
     return unc_error
 
 
@@ -304,7 +305,8 @@ def sigma_metric_d3vo(depth_c, unc_c, scale, unc_scale, args):
         # It is std, make it variance 
         unc_c = unc_c ** 2
 
-        sigma_metric = depth_c ** 2 * unc_scale.unsqueeze(-1).unsqueeze(-1) + scale.unsqueeze(-1).unsqueeze(-1) ** 2 * depth_c
+        sigma_metric = F.relu(depth_c ** 2 * unc_scale.unsqueeze(-1).unsqueeze(-1) + scale.unsqueeze(-1).unsqueeze(-1) ** 2 * unc_c).clamp(min=1e-4)
+
     return sigma_metric
 
 def entropy_loss(preds, gt_label, mask):

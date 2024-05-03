@@ -220,15 +220,17 @@ def main_worker(gpu, ngpus_per_node, args):
             #debug_visualize_gt_instances(instances, mask, depth_gt)
 
             if args.d3vo:
-
                 if args.segmentation:
-                    sigma_metric = sigma_metric_d3vo(pred_depths_rc_list[-1], uncertainty_maps_list[-1], pred_scale_list[-1], result["unc_d3vo"], args)
+                    if args.d3vo_c:
+                        sigma_metric = sigma_metric_d3vo(pred_depths_rc_list[-1], result["unc_d3vo_c"], pred_scale_list[-1], result["unc_d3vo"], args)
+                    else:
+                        sigma_metric = sigma_metric_d3vo(pred_depths_rc_list[-1], uncertainty_maps_list[-1], pred_scale_list[-1], result["unc_d3vo"], args)
+
                     sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).unsqueeze(1)
                     pred_d = torch.sum((pred_depths_rc_list[-1] * segmentation_map), dim=1).unsqueeze(1)
 
-                #loss = d3vo_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))
-                current_loss_d3vo = 0
-                loss = 0
+                loss = d3vo_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))
+                current_loss_d3vo = loss
             else:
                 # Depth loss #
                 for curr_tree_depth in range(args.max_tree_depth):
@@ -257,11 +259,11 @@ def main_worker(gpu, ngpus_per_node, args):
                 loss = current_loss_depth + (args.uncertainty_weight * current_loss_unc_decoder)
 
             # Optimize #
-            #loss.backward()
+            loss.backward()
             for param_group in optimizer.param_groups:
                 current_lr = (args.learning_rate - end_learning_rate) * (1 - global_step / num_total_steps) ** 0.9 + end_learning_rate
                 param_group['lr'] = current_lr
-            #optimizer.step()
+            optimizer.step()
 
             # Print stats #
             if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
@@ -317,9 +319,22 @@ def main_worker(gpu, ngpus_per_node, args):
                 eval_measures, unc_error = online_eval(args, model, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=False)
 
                 if eval_measures is not None:
-                    if args.predict_unc:
+                    if args.d3vo:
                         if best_unc > unc_error:
                             best_unc = unc_error
+
+                            model_save_name = '/model-{}-best_{}_{:.5f}'.format(global_step, "unc_d3vo", best_unc)
+
+                            print('New best for {}. Saving model: {}'.format("unc_d3vo", model_save_name))
+                            checkpoint = {'global_step': global_step,
+                                          'model': model.state_dict(),
+                                          'optimizer': optimizer.state_dict(),
+                                          'best_eval_measures_higher_better': best_eval_measures_higher_better,
+                                          'best_eval_measures_lower_better': best_eval_measures_lower_better,
+                                          'best_eval_steps': best_eval_steps
+                                          }
+                   
+                            torch.save(checkpoint, args.log_directory + '/' + args.model_name + model_save_name)
 
                     exp_name = args.exp_name
                     log_txt = os.path.join(args.log_directory + '/' + args.model_name, exp_name+'_logs.txt')
