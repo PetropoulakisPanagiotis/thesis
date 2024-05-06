@@ -164,7 +164,8 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
 
 def tb_visualization_d3vo(writer, global_step, args, current_loss_d3vo, current_lr, var_sum, var_cnt, num_images, sigma_metric):
 
-    writer.add_scalar('d3vo_loss', current_loss_d3vo, global_step)
+    if current_loss_d3vo is not None:
+        writer.add_scalar('d3vo_loss', current_loss_d3vo, global_step)
 
     if current_lr is not None:
         writer.add_scalar('learning_rate', current_lr, global_step)

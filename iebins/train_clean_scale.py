@@ -133,7 +133,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # Loss #
     silog_criterion = silog_loss(variance_focus=args.variance_focus)
     l1_criterion = l1_loss()
-    d3vo_criterion = d3vo_loss()
+    d3vo_criterion = d3vo_loss(original=args.d3vo_original)
 
     end_learning_rate = args.end_learning_rate if args.end_learning_rate != -1 else 0.1 * args.learning_rate
     
@@ -316,7 +316,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 time.sleep(0.1)
                 model.eval()
                 
-                eval_measures, unc_error = online_eval(args, model, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=False)
+                eval_measures, unc_error = online_eval(args, model, dataloader_eval, gpu, epoch, ngpus_per_node, group, post_process=False, original_d3vo=args.d3vo_original)
 
                 if eval_measures is not None:
                     if args.d3vo:

@@ -9,7 +9,7 @@ from networks.NewCRFDepth_clean import NewCRFDepth
 from utils_clean import flip_lr, compute_errors, compute_error_uncertainty, sigma_metric_d3vo
 
 
-def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_process=False):
+def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_process=False, original_d3vo=False):
     with torch.no_grad():
         # Save results #
         measures_size = 10
@@ -114,7 +114,7 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
             eval_measures[measures_size - 1] += 1
 
             if args.d3vo:
-                eval_d3vo_numpy = compute_error_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], sigma_metric[valid_mask]) 
+                eval_d3vo_numpy = compute_error_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask], sigma_metric[valid_mask], original_d3vo) 
                 eval_d3vo += torch.tensor(eval_d3vo_numpy).cuda(device=gpu)
 
         # Gather measures from other nodes/gpus #

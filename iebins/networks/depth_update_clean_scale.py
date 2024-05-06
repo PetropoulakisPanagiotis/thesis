@@ -282,14 +282,17 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
         self.context_dim = context_dim
         self.loss_type = loss_type
         self.bins_scale = bins_scale
-
+        self.uniform_scale = True#False
         self.relu = nn.ReLU(inplace=True)
 
         self.p_heads = nn.ModuleList()
         self.s_heads = nn.ModuleList()
         for i in range(num_semantic_classes):       
             self.p_heads.append(PHead(128 + 1, 128, bin_num=bin_num+1))
-            self.s_heads.append(SHead(128 + 1, num_classes=self.bins_scale+1))                
+            if self.uniform_scale:
+                self.s_heads.append(SHead(128 + 1, num_classes=self.bins_scale+1))                
+            else:
+                self.s_heads.append(SSHead(128 + 1, num_classes=1))                
 
     def forward(self, depth, context, input_feature_map, bin_num, min_depth, max_depth, masks):
         pred_depths_r_list = []    # Metric 
@@ -332,12 +335,16 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
             depth_c[:, i, :, : ]  = (torch.gather(bins_map.detach(), 1, pred_label.detach())).squeeze(1)
             
             # Scale/shift
-            scale_shift_current = self.s_heads[i](input_feature_map_current)
 
-            scale = (scale_shift_current * bins_map_scale.detach()).sum(1, keepdim=True)
-            pred_scale_shift.append(scale)
-            uncertainty_map_current_scale = torch.sqrt((scale_shift_current * ((bins_map_scale.detach() - scale)**2)).sum(1, keepdim=True))
-            uncertainty_map_scale[:, i, :, :] = uncertainty_map_current_scale.unsqueeze(-1)#squeeze(1)
+            scale_shift_current = self.s_heads[i](input_feature_map_current)
+            if self.uniform_scale:
+                scale = (scale_shift_current * bins_map_scale.detach()).sum(1, keepdim=True)
+                pred_scale_shift.append(scale)
+                uncertainty_map_current_scale = torch.sqrt((scale_shift_current * ((bins_map_scale.detach() - scale)**2)).sum(1, keepdim=True))
+                uncertainty_map_scale[:, i, :, :] = uncertainty_map_current_scale.unsqueeze(-1)
+            else:
+                pred_scale_shift.append(scale_shift_current)
+            
 
 
         pred_depths_c_list.append(depth_c)
@@ -348,8 +355,12 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
         pred_depths_rc_list.append(depth_rc)
         
         pred_scale_shift = torch.cat(pred_scale_shift, dim=1) 
-        #pred_scale_list.append(pred_scale_shift[:, ::2])  # b, c
-        #pred_shift_list.append(pred_scale_shift[:, 1::2]) # b, c
+        if self.uniform_scale:
+            pred_scale_list.append(pred_scale_shift)
+            pred_shift_list.append(0)
+        else:
+            pred_scale_list.append(pred_scale_shift[:, ::2])  # b, c
+            pred_shift_list.append(pred_scale_shift[:, 1::2]) # b, c
           
         # Metric
         if self.loss_type == 0:
@@ -357,7 +368,10 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
             depth_r = (self.relu(depth_rc * pred_scale_shift.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
         else:
             #depth_r = depth_rc * pred_scale_shift[:, ::2].unsqueeze(-1).unsqueeze(-1) #+ pred_scale_shift[:, 1::2].unsqueeze(-1).unsqueeze(-1)
-            depth_r = depth_rc * pred_scale_shift.unsqueeze(-1).unsqueeze(-1) 
+            if self.uniform_scale:
+                depth_r = depth_rc * pred_scale_shift.unsqueeze(-1).unsqueeze(-1) 
+            else:
+                depth_r = depth_rc * pred_scale_shift[:, ::2].unsqueeze(-1).unsqueeze(-1) 
         
         pred_depths_r_list.append(depth_r)
         
@@ -367,8 +381,8 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
         result["uncertainty_maps_scale_list"] = uncertainty_maps_scale_list
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
-        result["pred_scale_list"] = [pred_scale_shift]
-        result["pred_shift_list"] = [pred_scale_shift]
+        result["pred_scale_list"] = pred_scale_list
+        result["pred_shift_list"] = pred_shift_list
 
         return result
 
@@ -615,10 +629,14 @@ class UniformInstancesSharedCanonical(nn.Module):
             input_feature_map_instances_roi = self.roiAlign(input_feature_map, boxes_roi) 
 
         # Scale/Shift #
-        instances_scale_shift = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
-        instances_scale, instances_shift = pick_predictions_instances_scale_shift(instances_scale_shift, labels)
+        #instances_scale_shift = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
+        #instances_scale, instances_shift = pick_predictions_instances_scale_shift(instances_scale_shift, labels)
+        #pred_scale_instances_list.append(instances_scale)
+        #pred_shift_instances_list.append(instances_shift)
+        
+        instances_scale_unc = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
+        instances_scale, instances_scale_unc = pick_predictions_instances_scale_shift(instances_scale_unc, labels)
         pred_scale_instances_list.append(instances_scale)
-        pred_shift_instances_list.append(instances_shift)
         
         # Canonical instances valid #
         instances_canonical_prob = self.instances_canonical(input_feature_map, boxes, labels)
@@ -655,10 +673,10 @@ class UniformInstancesSharedCanonical(nn.Module):
        
         # depth_r: b, c, h, w
         pred_depths_instances_r_list.append(depth_instances_r)
-        
         result = {}
         result["pred_depths_c_list"] = pred_depths_c_list
         result["uncertainty_maps_list"] = uncertainty_maps_list
+        result["uncertainty_maps_scale_list"] = [instances_scale_unc]
 
         result["pred_depths_instances_r_list"] = pred_depths_instances_r_list
         result["pred_depths_instances_rc_list"] = pred_depths_instances_rc_list

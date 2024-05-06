@@ -16,8 +16,8 @@ from tqdm import tqdm
 from dataloaders.dataloader_clean import DataLoaderCustom
 from networks.NewCRFDepth_clean_scale import NewCRFDepth
 from parser_options_scale import convert_arg_line_to_args, eval_parser
-from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization
-from utils_clean import post_process_depth, flip_lr,  compute_errors
+from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
+from utils_clean import post_process_depth, flip_lr,  compute_errors, sigma_metric_d3vo
 from aucs import compute_aucs,  SCC
 
 # Parse config file #
@@ -108,18 +108,7 @@ def eval_func(model, dataloader_eval, post_process=False):
                 pred_depths_c_list = result["pred_depths_c_list"]
                 uncertainty_maps_list = result["uncertainty_maps_list"]
 
-            # Decoder uncertainty #
-            if args.predict_unc:
-                unc_decoder = result["unc_decoder"]
 
-            # Tensorboard            
-            tb_visualization(writer=writer, global_step=step, args=args, current_loss_depth=None, current_lr=None, current_loss_unc_decoder=None, \
-                             var_sum=None, var_cnt=None, num_images=1, depth_gt=gt_depth, image=image, max_tree_depth=args.max_tree_depth, \
-                             pred_depths_r_list=pred_depths_r_list, pred_depths_rc_list=pred_depths_rc_list, \
-                             pred_depths_instances_r_list=pred_depths_instances_r_list, pred_depths_instances_rc_list=pred_depths_instances_rc_list, \
-                             num_semantic_classes=num_semantic_classes, instances=instances, segmentation_map=segmentation_map, \
-                             labels=labels, pred_depths_c_list=pred_depths_c_list, uncertainty_maps_list=uncertainty_maps_list, \
-                             pred_depths_u_list=pred_depths_u_list, unc_decoder=unc_decoder, expensive_viz=True)
            
             """ 
             if post_process and False:
@@ -157,13 +146,22 @@ def eval_func(model, dataloader_eval, post_process=False):
                     sigma_c = torch.sum((segmentation_map * (result["uncertainty_maps_list"][-1] **2)), dim=1)
                     c = torch.sum((segmentation_map * result["pred_depths_rc_list"][-1]), dim=1)
                     
-                    sigma_s = torch.sum((segmentation_map * (result["uncertainty_maps_scale_list"][-1] ** 2)), dim=1)
+                    if args.d3vo_c:
+                        sigma_s = sigma_metric_d3vo(result['pred_depths_rc_list'][-1], result["unc_d3vo_c"], result['pred_scale_list'][-1], result["unc_d3vo"], args)
+                        sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
+                    elif args.d3vo:
+                        sigma_s = sigma_metric_d3vo(result['pred_depths_rc_list'][-1], result['uncertainty_maps_list'][-1], result['pred_scale_list'][-1], result["unc_d3vo"], args)
+                        sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
+                    else:
+                        sigma_s = torch.sum((segmentation_map * (result["uncertainty_maps_scale_list"][-1] ** 2)), dim=1)
+                    
+
                     s = torch.sum((segmentation_map * result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)), dim=1)
                     sigma_m = s**2 * sigma_c + c**2 * sigma_s 
                     sigma_m = sigma_m.cpu().numpy().squeeze()
                 
                 # Fair comparison segmentation - instances: use eval_per_class.sh script   
-                if False:
+                if True:
                     if args.pick_class != 0:    
                         non_class = torch.nonzero(labels[0] != args.pick_class)
                         if non_class.shape[0] == 63:
@@ -186,8 +184,21 @@ def eval_func(model, dataloader_eval, post_process=False):
             else:
                 pred_depth = pred_depths_r_list[-1]
                 
+            # Tensorboard            
+            if args.evaluate_uncertainty:
+                tb_visualization_d3vo(writer, global_step=step, args=args, current_loss_d3vo=None, current_lr=None, var_sum=None, var_cnt=None, \
+                                              num_images=1, sigma_metric=sigma_m)
+            else:
+                tb_visualization(writer=writer, global_step=step, args=args, current_loss_depth=None, current_lr=None, current_loss_unc_decoder=None, \
+                             var_sum=None, var_cnt=None, num_images=1, depth_gt=gt_depth, image=image, max_tree_depth=args.max_tree_depth, \
+                             pred_depths_r_list=pred_depths_r_list, pred_depths_rc_list=pred_depths_rc_list, \
+                             pred_depths_instances_r_list=pred_depths_instances_r_list, pred_depths_instances_rc_list=pred_depths_instances_rc_list, \
+                             num_semantic_classes=num_semantic_classes, instances=instances, segmentation_map=segmentation_map, \
+                             labels=labels, pred_depths_c_list=pred_depths_c_list, uncertainty_maps_list=uncertainty_maps_list, \
+                             pred_depths_u_list=pred_depths_u_list, unc_decoder=None, expensive_viz=True)
             pred_depth = pred_depth.cpu().numpy().squeeze()
             gt_depth = gt_depth.cpu().numpy().squeeze()     
+
         
         if args.do_kb_crop:
             height, width = gt_depth.shape
@@ -225,12 +236,7 @@ def eval_func(model, dataloader_eval, post_process=False):
                 continue
         
         # For uncertainty #
-        if args.predict_unc:
-            unc_decoder = result["unc_decoder"].cpu().numpy().squeeze()
-            unc_error = compute_error_uncertainty(gt_depth[eval_mask], pred_depth[eval_mask], unc_decoder[eval_mask])
-            eval_measures_unc[0] += torch.tensor(unc_error).cuda()
-        else:
-            unc_error = None
+        unc_error = None
 
         if args.evaluate_uncertainty:
             measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
@@ -263,19 +269,18 @@ def eval_func(model, dataloader_eval, post_process=False):
         print('{:7.4f}, '.format(eval_measures_cpu[i]), end='')
     print('{:7.4f}'.format(eval_measures_cpu[8]))
 
-    for m in uncertainty_metrics:
-        aucs[m] = np.array(aucs[m]).mean(0)
-        print("\n  " + ("{:>8} | " * 6).format("abs_rel", "", "rmse", "", "a1", ""))
-    print("  " + ("{:>8} | " * 6).format("AUSE", "AURG", "AUSE", "AURG", "AUSE", "AURG"))
-    print(("&{:8.3f}  " * 6).format(*aucs["abs_rel"].tolist()+aucs["rmse"].tolist()+aucs["a1"].tolist()) + "\\\\")
-
     if args.evaluate_uncertainty:
+
+        for m in uncertainty_metrics:
+            aucs[m] = np.array(aucs[m]).mean(0)
+        
+        print("\n  " + ("{:>8} | " * 6).format("abs_rel", "", "rmse", "", "a1", ""))
+        print("  " + ("{:>8} | " * 6).format("AUSE", "AURG", "AUSE", "AURG", "AUSE", "AURG"))
+        print(("&{:8.3f}  " * 6).format(*aucs["abs_rel"].tolist()+aucs["rmse"].tolist()+aucs["a1"].tolist()) + "\\\\")
+        
         print("Eval uncertainty bins e^2/variance: ", eval_measures[10] / cnt)
         print("SCC: ", scc_total / cnt)
     
-    if args.predict_unc:
-        print("Eval uncertainty decoder:", unc_error)
-
     return eval_measures_cpu, unc_error
 
 
@@ -290,7 +295,7 @@ def main_worker(args):
                         predict_unc=args.predict_unc, num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, \
                         padding_instances=args.padding_instances, \
                         segmentation_active=args.segmentation,  instances_active=args.instances,\
-                        bins_scale=args.bins_scale)
+                        bins_scale=args.bins_scale, d3vo=args.d3vo)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])

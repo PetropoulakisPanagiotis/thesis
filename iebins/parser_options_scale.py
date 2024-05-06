@@ -37,6 +37,7 @@ train_parser.add_argument('--bin_num',                   type=int,   help='numbe
 train_parser.add_argument('--predict_unc',               dest='predict_unc',  help='true to predict uncertainty from the decoder feature map', action='store_true')
 train_parser.add_argument('--d3vo',                      dest='d3vo',  help='predict uncertainty for scale d3vo', action='store_true')
 train_parser.add_argument('--d3vo_c',                    dest='d3vo_c',  help='predict uncertainty for canonical d3vo', action='store_true')
+train_parser.add_argument('--d3vo_original',             dest='d3vo_original',  help='use original d3vo loss', action='store_true')
 train_parser.add_argument('--segmentation',              dest='segmentation', help='segmentation variation', action='store_true')
 train_parser.add_argument('--instances',                 dest='instances',    help='instances variation', action='store_true')
 train_parser.add_argument('--roi_align',                 type=int,   help='use roi align', default='0')
@@ -119,6 +120,8 @@ eval_parser.add_argument('--predict_unc',               dest='predict_unc',  hel
 eval_parser.add_argument('--segmentation',              dest='segmentation', help='segmentation variation', action='store_true')
 eval_parser.add_argument('--instances',                 dest='instances',    help='instances variation', action='store_true')
 eval_parser.add_argument('--padding_instances',         type=int,            help='how many pixels to padd for bbox', default='0')
+eval_parser.add_argument('--d3vo',                      help='d3vo uncertainty variation', action='store_true')
+eval_parser.add_argument('--d3vo_c',                    help='d3vo uncertainty variation canonical', action='store_true')
 
 # Preprocessing
 eval_parser.add_argument('--do_random_rotate',                      help='if set, will perform random rotation for augmentation', action='store_true')

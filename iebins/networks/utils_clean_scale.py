@@ -405,6 +405,33 @@ def pick_predictions_instances_scale_shift(prediction_scale_shift, labels):
     return pred_scale_full, pred_shift_full
     
 
+"""
+Only scale
+"""
+def pick_predictions_instances_scale(pred_scale, labels):
+
+    batch_size, labels_max_size = labels.shape[0:2]
+
+    # Prediction --> num_classes - 1 does not include null #
+    with torch.no_grad():
+        labels_reshaped = labels.view(batch_size*labels_max_size)
+        labels_valid_idx = torch.nonzero(labels_reshaped != 0)
+        labels_valid_num = labels_valid_idx.shape[0]
+
+        labels_valid = labels_reshaped[labels_valid_idx[:,0]]
+        labels_valid -= 1 
+
+    # Pick scale/shift that corresponds to the correct class #
+    pred_scale = pred_scale[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)
+
+    pred_scale_full = torch.zeros((batch_size*labels_max_size, 1)).to(pred_scale.device)
+
+    pred_scale_full[labels_valid_idx[:,0]] = pred_scale
+
+    pred_scale_full = pred_scale_full.view(batch_size, labels_max_size)
+
+    return pred_scale_full
+
 def pick_predictions_instances_canonical(prediction, labels): 
     batch_size, labels_max_size = labels.shape[0:2]
     h, w = prediction.shape[2:]

@@ -263,8 +263,12 @@ def compute_errors(gt, pred, var=None):
     return [silog, abs_rel, log10, rms, sq_rel, log_rms, d1, d2, d3]
 
 
-def compute_error_uncertainty(depth_est, depth_gt, unc, beta=0.5):
-    unc_error = np.mean((((np.abs(depth_est - depth_gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))) * (unc ** beta))
+def compute_error_uncertainty(depth_est, depth_gt, unc, beta=0.5, original=False):
+
+    if original:
+        unc_error = np.mean((((np.abs(depth_est - depth_gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))))
+    else:
+        unc_error = np.mean((((np.abs(depth_est - depth_gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))))
 
     return unc_error
 
@@ -290,12 +294,16 @@ class l1_loss(nn.Module):
 
 
 class d3vo_loss(nn.Module):
-    def __init__(self, beta=0.5):
+    def __init__(self, beta=0.5, original=False):
         super(d3vo_loss, self).__init__()
         self.beta = beta
+        self.original = original
 
     def forward(self, depth_est, depth_gt, unc, mask):
-        return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) + (math.log(2 * math.pi))) * (unc[mask].detach() ** self.beta))
+        if self.original:
+            return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) + (math.log(2 * math.pi))))
+        else:
+            return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) + (math.log(2 * math.pi))) * (unc[mask].detach() ** self.beta))
 
 
 def sigma_metric_d3vo(depth_c, unc_c, scale, unc_scale, args):
