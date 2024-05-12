@@ -277,7 +277,13 @@ if __name__ == '__main__':
         default='path/to/your/ICL-NUIM_RGBD/living_room_traj3_frei_png')
 
     parser.add_argument('--scene', type=str,
-        default='scene0568_00')
+       #default='scene0084_02') # hm...
+       default='scene0655_01') # nice
+       #default='scene0608_00') # nice
+       #default='scene0164_00') # nice
+       #default='scene0025_02') # nice
+       #default='scene0412_00')
+      # default='scene0095_00')
 
     parser.add_argument('--split', type=str,
         default='valid')

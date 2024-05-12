@@ -137,7 +137,7 @@ class LoopClosing(object):
 
             # Propagate initial estimate through 10% of total keyframes 
             # (or at least 20 keyframes)
-            d = max(200, len(considered_keyframes) * 0.1)
+            d = max(20, len(considered_keyframes) * 0.1)
             #d = len(considered_keyframes)
             propagator = SmoothEstimatePropagator(self.optimizer, d)
             propagator.propagate(self.optimizer.vertex(match_keyframe.id))

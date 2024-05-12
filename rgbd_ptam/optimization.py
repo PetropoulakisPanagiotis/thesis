@@ -31,25 +31,42 @@ class BundleAdjustment(g2o.SparseOptimizer):
             self.aborted = False
 
     def add_pose(self, pose_id, pose, cam, fixed=False):
-        sbacam = g2o.SBACam(
+        #sbacam = g2o.SBACam(
+        #    pose.orientation(), pose.position())
+        #sbacam.set_cam(
+        #    cam.fx, cam.fy, cam.cx, cam.cy, cam.baseline)
+
+        c = g2o.VertexCanonical()
+        c.set_id(pose_id * 2)
+        c.set_estimate(5)
+        c.set_fixed(fixed)
+
+        s = g2o.VertexScale()
+        s.set_id(pose_id * 2)
+        s.set_estimate(5)
+        s.set_fixed(fixed)
+
+
+        sbacam = g2o.CustomCam(
             pose.orientation(), pose.position())
         sbacam.set_cam(
             cam.fx, cam.fy, cam.cx, cam.cy, cam.baseline)
 
-        v_se3 = g2o.VertexCam()
+        #v_se3 = g2o.VertexCam()
+        #v_se3.set_id(pose_id * 2)
+        #v_se3.set_estimate(sbacam)
+        #v_se3.set_fixed(fixed)
+
+        v_se3 = g2o.VertexCustomCam()
         v_se3.set_id(pose_id * 2)
         v_se3.set_estimate(sbacam)
         v_se3.set_fixed(fixed)
-        super().add_vertex(v_se3) 
+
+        super().add_vertex(v_se3)
 
     def add_point(self, point_id, point, fixed=False, marginalized=True):
-        v_p = g2o.VertexSBAPointXYZ() # <--- 
-
-        t = g2o.VertexCustomXYZ() # <-- xyz, 
-        t.set_id(point_id * 2 + 1) 
-        t.set_marginalized(marginalized)
-        t.set_estimate(point)
-        t.set_fixed(fixed)
+        #v_p = g2o.VertexSBAPointXYZ()
+        v_p = g2o.VertexCustomXYZ()
 
         v_p.set_id(point_id * 2 + 1)
         v_p.set_marginalized(marginalized)
@@ -72,8 +89,60 @@ class BundleAdjustment(g2o.SparseOptimizer):
         edge.set_robust_kernel(kernel)
         super().add_edge(edge)
 
+    def add_edge_depth_consistency(self, pose, cam, point):
+        id = 5000000
+        sbacam = g2o.CustomCam(
+            pose.orientation(), pose.position())
+        sbacam.set_cam(
+            cam.fx, cam.fy, cam.cx, cam.cy, cam.baseline)
+
+        v_se3 = g2o.VertexCustomCam()
+        v_se3.set_id(id)
+        v_se3.set_estimate(sbacam)
+        v_se3.set_fixed(False)
+        super().add_vertex(v_se3)
+
+        v_p = g2o.VertexCustomXYZ()
+
+        v_p.set_id(id+1)
+        v_p.set_marginalized(True)
+        v_p.set_estimate(point)
+        v_p.set_fixed(False)
+        super().add_vertex(v_p)
+
+        c = g2o.VertexCanonical()
+        c.set_id(id+2)
+        c.set_estimate(5)
+        c.set_fixed(False)
+        super().add_vertex(c)
+
+        s = g2o.VertexScale()
+        s.set_id(id+3)
+        s.set_estimate(5)
+        s.set_fixed(False)
+        super().add_vertex(s)
+
+        e = g2o.EdgeDepthConsistencyScale()
+        e.set_id(id+4)
+        e.set_measurement(5)
+        e.set_information(np.identity(1))
+
+        # 0 cam: Pose + t
+        # 1 3D point: XYZ 
+        # 2 canonical: C
+        # 3 scale: S
+        e.set_vertex(0, self.vertex(id))
+        e.set_vertex(1, self.vertex(id+2))
+        e.set_vertex(2, self.vertex(id+3))
+        kernel = g2o.RobustKernelHuber(self.delta)
+        e.set_robust_kernel(kernel)
+
     def stereo_edge(self, projection, information=np.identity(3)):
-        e = g2o.EdgeProjectP2SC()
+        #e = g2o.EdgeProjectP2SC()
+        #e.set_measurement(projection)
+        #e.set_information(information)
+
+        e = g2o.EdgeStereo()
         e.set_measurement(projection)
         e.set_information(information)
         return e
@@ -109,7 +178,7 @@ class LocalBA(object):
         self.measurements = []
         self.keyframes = []
         self.mappoints = set()
-
+        self.local_counter = 0
         # threshold for confidence interval of 95%
         self.huber_threshold = 5.991
 
@@ -127,6 +196,11 @@ class LocalBA(object):
 
                 edge_id = len(self.measurements)
                 self.optimizer.add_edge(edge_id, pt.id, kf.id, m)
+
+                if self.local_counter == 0:
+                    self.optimizer.add_edge_depth_consistency(kf.pose, kf.cam, pt.position)
+                    self.local_counter = 1
+
                 self.measurements.append(m)
 
         for kf in fixed_keyframes:

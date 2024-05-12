@@ -55,7 +55,13 @@ def convet_scannet_to_tum(path, output_file):
 # Directory containing JSON files
 directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/train/extrinsics/scene0191_00/'
 directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0568_00/'
-#directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0568_01/'
+directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0568_01/'
+directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0412_00/'
+directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0025_02/'
+directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0164_00/'
+directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0608_00/'
+directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0655_01/'
+#directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0084_02/'
 
 # Output text file
 output_file = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/slam_gt_train.txt'
