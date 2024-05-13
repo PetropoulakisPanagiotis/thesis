@@ -190,7 +190,7 @@ class UniformSingleScale(nn.Module):
         super(UniformSingleScale, self).__init__()
         self.loss_type = loss_type
         self.bins_scale = bins_scale
-        sellf.virtual_depth_variation = virtual_depth_variation
+        self.virtual_depth_variation = virtual_depth_variation
         self.p_head = PHead(hidden_dim, hidden_dim, bin_num + 1)  # Propabilities canonical
 
         # Global scale and shift regression
@@ -211,7 +211,6 @@ class UniformSingleScale(nn.Module):
 
         bins_map = get_uniform_bins(depth, min_depth, max_depth, bin_num)
       
-        self.virtual_depth_variation = virtual_depth_variation 
         bins_map_scale = get_uniform_bins(torch.zeros(depth.shape[0], 1, 1, 1).to(depth.device), 0, 15, self.bins_scale).squeeze(-1).squeeze(-1)
        
         if self.virtual_depth_variation == 2: 
@@ -257,7 +256,7 @@ class UniformSingleScale(nn.Module):
         # Label
         pred_label = get_label(torch.squeeze(depth_rc, 1), bins_map, bin_num).unsqueeze(1)
         depth_c = torch.gather(bins_map.detach(), 1, pred_label.detach())
-        pred_depths_c_list.append(depth_c.unsqueeze(-1))
+        pred_depths_c_list.append(depth_c)
 
         # Metric
         if self.loss_type == 0:
@@ -277,7 +276,7 @@ class UniformSingleScale(nn.Module):
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_depths_c_list"] = pred_depths_c_list
-        result["pred_depths_c_list"] = pred_depths_scale_c_list
+        result["pred_depths_scale_c_list"] = pred_depths_scale_c_list
         result["uncertainty_maps_list"] = uncertainty_maps_list
         result["uncertainty_maps_scale_list"] = uncertainty_maps_scale_list
         result["pred_scale_list"] = pred_scale_list
@@ -378,8 +377,8 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
                 c_map_scale[:, i, :, :]  = depth_scale_c.unsqueeze(1)     
 
         pred_depths_c_list.append(depth_c)
+        
         uncertainty_maps_list.append(uncertainty_map)
-
         depth_rc = torch.cat(depth_rc, dim=1) 
         pred_depths_rc_list.append(depth_rc)
         pred_scale_shift = torch.cat(pred_scale_shift, dim=1) 
@@ -411,7 +410,7 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
         
         result = {}
         result["pred_depths_c_list"] = pred_depths_c_list
-        result["pred_depths_c_list"] = pred_depths_scale_c_list
+        result["pred_depths_scale_c_list"] = pred_depths_scale_c_list
         result["uncertainty_maps_list"] = uncertainty_maps_list
         result["uncertainty_maps_scale_list"] = uncertainty_maps_scale_list
         result["pred_depths_r_list"] = pred_depths_r_list
@@ -667,6 +666,7 @@ class UniformInstancesSharedCanonical(nn.Module):
         pred_shift_instances_list = []
 
         uncertainty_maps_list = []
+        uncertainty_maps_scale_list = []
         pred_depths_c_list = [] 
 
         batch_size, _, h, w = depth.shape
@@ -700,7 +700,8 @@ class UniformInstancesSharedCanonical(nn.Module):
             instances_scale_unc = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
             instances_scale, instances_scale_unc = pick_predictions_instances_scale_shift(instances_scale_unc, labels)
             pred_scale_instances_list.append(instances_scale)
-        
+            uncertainty_maps_scale_list.append(instances_scale_unc)
+ 
         # Canonical instances valid #
         instances_canonical_prob = self.instances_canonical(input_feature_map, boxes, labels)
        
@@ -745,7 +746,7 @@ class UniformInstancesSharedCanonical(nn.Module):
         result = {}
         result["pred_depths_c_list"] = pred_depths_c_list
         result["uncertainty_maps_list"] = uncertainty_maps_list
-        result["uncertainty_maps_scale_list"] = [instances_scale_unc]
+        result["uncertainty_maps_scale_list"] = uncertainty_maps_scale_list
 
         result["pred_depths_instances_r_list"] = pred_depths_instances_r_list
         result["pred_depths_instances_rc_list"] = pred_depths_instances_rc_list

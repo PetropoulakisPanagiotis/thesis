@@ -21,7 +21,7 @@
 --input_height 480
 --input_width 640
 
---batch_size 8
+--batch_size 1
 --num_epochs 350
 --learning_rate 2e-4
 --weight_decay 1e-2
@@ -38,6 +38,7 @@
 --segmentation
 --instances
 --bins_scale 50
+--virtual_depth_variation 2
 --var 1
 
 --loss_type 0

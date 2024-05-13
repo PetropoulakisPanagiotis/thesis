@@ -64,7 +64,7 @@ def main_worker(gpu, ngpus_per_node, args):
                         num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, \
                         padding_instances=args.padding_instances, \
                         segmentation_active=args.segmentation,  instances_active=args.instances, \
-                        roi_align=args.roi_align, roi_align_size=args.roi_align_size,
+                        roi_align=args.roi_align, roi_align_size=args.roi_align_size, \
                         bins_scale=args.bins_scale, d3vo=args.d3vo, d3vo_c=args.d3vo_c, virtual_depth_variation=args.virtual_depth_variation)
     model.train()
     if args.d3vo: # Set some layers to eval to train the uncertainty decoder

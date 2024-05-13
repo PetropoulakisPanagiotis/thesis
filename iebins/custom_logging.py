@@ -18,10 +18,6 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
     elif current_loss_depth is not None:
         writer.add_scalar('l1_loss', current_loss_depth, global_step)
 
-    # Decoder loss #
-    if args.predict_unc and current_loss_unc_decoder is not None:
-        writer.add_scalar('unc_decoder_loss', current_loss_unc_decoder, global_step)
-
     if current_lr is not None:
         writer.add_scalar('learning_rate', current_lr, global_step)
     
@@ -46,10 +42,6 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
                                   colormap(torch.log10(torch.sum(pred_depths_instances_rc_list[ii][i, :, :, :] * instances[i, :, :, :], dim=0).clamp(min=1e-3).unsqueeze(0).data), \
                                   name='magma'), global_step)
             
-            # Uncertainty decoder 
-            if args.predict_unc:
-                writer.add_image('uncer_decoder_est/image/{}'.format(i), colormap(unc_decoder[i, :, :, :].data, name='viridis'), global_step)
-
             # Bins 
             if args.update_block == 2:
                 for ii in range(max_tree_depth):
@@ -101,10 +93,6 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
                                   colormap(torch.log10(torch.sum(pred_depths_rc_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), \
                                   name='magma'), global_step)
             
-            # Uncertainty decoder 
-            if args.predict_unc:
-                writer.add_image('uncer_decoder_est/image/{}'.format(i), colormap(unc_decoder[i, :, :, :].data, name='viridis'), global_step)
-
             # Bins 
             if args.update_block == 1:
                 for ii in range(max_tree_depth):
@@ -147,10 +135,6 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
                 for ii in range(max_tree_depth):
                     writer.add_image('depth_canonical_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].clamp(min=1e-3).data), \
                                      name='magma'), global_step)
-
-            # Uncertainty decoder 
-            if args.predict_unc:
-                writer.add_image('uncer_decoder_est/image/{}'.format(i), colormap(unc_decoder[i, :, :, :].clamp(min=1e-3).data, name='viridis'), global_step)
 
             # Bins
             else:

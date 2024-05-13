@@ -13,11 +13,11 @@ import numpy as np
 import random
 from tqdm import tqdm
 
-from dataloaders.dataloader_clean import DataLoaderCustom
-from networks.NewCRFDepth_clean_scale import NewCRFDepth
-from parser_options_scale import convert_arg_line_to_args, eval_parser
+from dataloaders.dataloader import DataLoaderCustom
+from networks.NewCRFDepth import NewCRFDepth
+from parser_options import convert_arg_line_to_args, eval_parser
 from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
-from utils_clean import post_process_depth, flip_lr,  compute_errors, sigma_metric_d3vo
+from utils import compute_errors, sigma_metric_from_canonical_and_scale
 from aucs import compute_aucs,  SCC
 
 # Parse config file #
@@ -32,8 +32,7 @@ else:
     args = eval_parser.parse_args()
 
 
-
-def eval_func(model, dataloader_eval, post_process=False):
+def eval_func(model, dataloader_eval):
     eval_measures = torch.zeros(11).cuda()
 
     uncertainty_metrics = ["abs_rel", "rmse", "a1"]
@@ -107,22 +106,7 @@ def eval_func(model, dataloader_eval, post_process=False):
                or args.update_block == 1 or args.update_block == 2:
                 pred_depths_c_list = result["pred_depths_c_list"]
                 uncertainty_maps_list = result["uncertainty_maps_list"]
-
-
            
-            """ 
-            if post_process and False:
-                image_flipped = flip_lr(image)
-                if args.update_block == 9:
-                    result = model(image_flipped, masks = segmentation_map)
-                else:
-                    result = model(image_flipped)
-                pred_depths_r_list_flipped = result["pred_depths_r_list"]
-
-                pred_depths_r_list_flipped[-1] = torch.sum((pred_depths_r_list_flipped[-1] * segmentation_map), dim=1).unsqueeze(1)
-
-                pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
-            """ 
             if args.instances:
                 # Fair comparison segmentation - instances: use eval_per_class.sh script   
                 if args.pick_class != 0: 
@@ -142,24 +126,21 @@ def eval_func(model, dataloader_eval, post_process=False):
 
                 pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
 
-                if args.evaluate_uncertainty:
+                if args.d3vo:
                     sigma_c = torch.sum((segmentation_map * (result["uncertainty_maps_list"][-1] **2)), dim=1)
                     c = torch.sum((segmentation_map * result["pred_depths_rc_list"][-1]), dim=1)
                     
                     if args.d3vo_c:
-                        sigma_s = sigma_metric_d3vo(result['pred_depths_rc_list'][-1], result["unc_d3vo_c"], result['pred_scale_list'][-1], result["unc_d3vo"], args)
-                        sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
-                    elif args.d3vo:
-                        sigma_s = sigma_metric_d3vo(result['pred_depths_rc_list'][-1], result['uncertainty_maps_list'][-1], result['pred_scale_list'][-1], result["unc_d3vo"], args)
+                        sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1], result["unc_d3vo_c"], result['pred_scale_list'][-1], result["unc_d3vo"], args)
                         sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
                     else:
-                        sigma_s = torch.sum((segmentation_map * (result["uncertainty_maps_scale_list"][-1] ** 2)), dim=1)
-                    
+                        # uncertainty of canonical is std --> convert to variance
+                        sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1], result['uncertainty_maps_list'][-1] ** 2, result['pred_scale_list'][-1], result["unc_d3vo"], args)
+                        sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
 
                     s = torch.sum((segmentation_map * result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)), dim=1)
-                    sigma_m = s**2 * sigma_c + c**2 * sigma_s 
-                    sigma_m = sigma_m.cpu().numpy().squeeze()
-                
+                    sigma_m = s**2 * sigma_c + c**2 * sigma_s
+                    sigma_m = sigma_m.unsqueeze(0)
                 # Fair comparison segmentation - instances: use eval_per_class.sh script   
                 if True:
                     if args.pick_class != 0:    
@@ -183,10 +164,8 @@ def eval_func(model, dataloader_eval, post_process=False):
                     gt_depth = (gt_depth * mask)
             else:
                 pred_depth = pred_depths_r_list[-1]
-                
             # Tensorboard            
-            if args.evaluate_uncertainty:
-                print(sigma_m.shape)
+            if args.d3vo:
                 tb_visualization_d3vo(writer, global_step=step, args=args, current_loss_d3vo=None, current_lr=None, var_sum=None, var_cnt=None, \
                                               num_images=1, sigma_metric=sigma_m)
             else:
@@ -197,9 +176,11 @@ def eval_func(model, dataloader_eval, post_process=False):
                              num_semantic_classes=num_semantic_classes, instances=instances, segmentation_map=segmentation_map, \
                              labels=labels, pred_depths_c_list=pred_depths_c_list, uncertainty_maps_list=uncertainty_maps_list, \
                              pred_depths_u_list=pred_depths_u_list, unc_decoder=None, expensive_viz=True)
+
             pred_depth = pred_depth.cpu().numpy().squeeze()
             gt_depth = gt_depth.cpu().numpy().squeeze()     
-
+            if args.d3vo:
+                sigma_m = sigma_m.cpu().numpy().squeeze()
         
         if args.do_kb_crop:
             height, width = gt_depth.shape
@@ -214,8 +195,6 @@ def eval_func(model, dataloader_eval, post_process=False):
         pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
         pred_depth[np.isnan(pred_depth)] = args.min_depth_eval
         valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
-        #valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < 3.0)
-        #valid_mask = np.logical_and(gt_depth >= 5.0, gt_depth < args.max_depth_eval)
 
         if args.garg_crop or args.eigen_crop:
             gt_height, gt_width = gt_depth.shape
@@ -239,7 +218,7 @@ def eval_func(model, dataloader_eval, post_process=False):
         # For uncertainty #
         unc_error = None
 
-        if args.evaluate_uncertainty:
+        if args.d3vo:
             measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
             eval_measures[10] += torch.tensor(measures[-1]).cuda()
 
@@ -254,15 +233,17 @@ def eval_func(model, dataloader_eval, post_process=False):
         eval_measures[:9] += torch.tensor(measures[:9]).cuda()
         eval_measures[9] += 1
 
+    if False:
+        scales = np.array(scales)
+        print("Mean scale: ", scales.mean())
+        print("Std scale: ", scales.std())
+        print("Max scale: ", scales.max())
+        print("Min scale: ", scales.min())
     scales = np.array(scales)
-    print(scales.mean())
-    print(scales.max())
-    print(scales.min())
-    print(scales.std())
     eval_measures_cpu = eval_measures.cpu()
     cnt = eval_measures_cpu[9].item()
     eval_measures_cpu /= cnt
-    print('Computing errors for {} eval samples'.format(int(cnt)), ', post_process: ', post_process)
+    print('Computing errors for {} eval samples'.format(int(cnt)))
     print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format('silog', 'abs_rel', 'log10', 'rms',
                                                                                     'sq_rel', 'log_rms', 'd1', 'd2',
                                                                                     'd3'))
@@ -270,7 +251,7 @@ def eval_func(model, dataloader_eval, post_process=False):
         print('{:7.4f}, '.format(eval_measures_cpu[i]), end='')
     print('{:7.4f}'.format(eval_measures_cpu[8]))
 
-    if args.evaluate_uncertainty:
+    if args.d3vo:
 
         for m in uncertainty_metrics:
             aucs[m] = np.array(aucs[m]).mean(0)
@@ -293,10 +274,11 @@ def main_worker(args):
     # Depth model
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
-                        predict_unc=args.predict_unc, num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, \
+                        num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, \
                         padding_instances=args.padding_instances, \
                         segmentation_active=args.segmentation,  instances_active=args.instances,\
-                        bins_scale=args.bins_scale, d3vo=args.d3vo)
+                        roi_align=args.roi_align, roi_align_size=args.roi_align_size, \
+                        bins_scale=args.bins_scale, d3vo=args.d3vo, d3vo_c=args.d3vo_c, virtual_depth_variation=args.virtual_depth_variation)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -323,7 +305,7 @@ def main_worker(args):
     # Evaluate #
     model.eval()
     with torch.no_grad():
-        eval_measures, eval_measures_unc = eval_func(model, dataloader_eval, post_process=True)
+        eval_measures, eval_measures_unc = eval_func(model, dataloader_eval)
 
 
 def main():
@@ -343,7 +325,6 @@ def main():
         return -1
     
     main_worker(args)
-
 
 if __name__ == '__main__':
     main()

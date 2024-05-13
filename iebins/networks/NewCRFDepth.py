@@ -27,7 +27,7 @@ class NewCRFDepth(nn.Module):
         self.bin_num = bin_num
         self.min_depth = min_depth
         self.max_depth = max_depth
-        
+         
         # Instances 
         self.segmentation_active = segmentation_active
         self.instances_active = instances_active
@@ -355,7 +355,6 @@ class NewCRFDepth(nn.Module):
                self.update_block == 1 or self.update_block == 2:
                 result["pred_depths_c_list"][i] = upsample(result["pred_depths_c_list"][i], scale_factor=4) 
                 result["uncertainty_maps_list"][i] = upsample(result["uncertainty_maps_list"][i], scale_factor=4) 
-
             # Uncertainty from the decoder block #
             if self.d3vo:
                 result["unc_d3vo"] = unc_d3vo
