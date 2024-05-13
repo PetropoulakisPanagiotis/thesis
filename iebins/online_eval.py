@@ -6,10 +6,10 @@ import torch
 import torch.distributed as dist
 
 from networks.NewCRFDepth_clean import NewCRFDepth
-from utils_clean import flip_lr, compute_errors, compute_error_uncertainty, sigma_metric_d3vo
+from utils import compute_errors, compute_error_uncertainty, sigma_metric_from_canonical_and_scale
 
 
-def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_process=False, original_d3vo=False):
+def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original_d3vo=False):
     with torch.no_grad():
         # Save results #
         measures_size = 10
@@ -59,9 +59,10 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
             
             if args.d3vo:
                 if args.d3vo_c:
-                    sigma_metric = sigma_metric_d3vo(result["pred_depths_rc_list"][-1], result["unc_d3vo_c"], result["pred_scale_list"][-1], result["unc_d3vo"], args)
+                    sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1], result["unc_d3vo_c"], result["pred_scale_list"][-1], result["unc_d3vo"], args)
                 else:
-                    sigma_metric = sigma_metric_d3vo(result["pred_depths_rc_list"][-1], result["uncertainty_maps_list"][-1], result["pred_scale_list"][-1], result["unc_d3vo"], args)
+                    # uncertainty of canonical is std --> convert to variance
+                    sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1], result["uncertainty_maps_list"][-1] ** 2, result["pred_scale_list"][-1], result["unc_d3vo"], args)
 
                 sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).squeeze(0).cpu().numpy()
 
@@ -142,7 +143,6 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, post_pro
             if args.d3vo:
                 eval_d3vo = eval_d3vo.cpu()
                 eval_d3vo /= cnt
-                print('d3vo {:7.4f}'.format(eval_d3vo[0]))
                 return eval_measures_cpu, eval_d3vo[0]
 
             return eval_measures_cpu, None

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .depth_update_clean import padding_global
+from .depth_update import padding_global
 from .utils_clean import *
 
 
@@ -53,14 +53,14 @@ class RegressionHead(nn.Module):
 
 
 """
-SSHead: scale and shift head - single per image 
+SSHead: scale and shift regression head - single per image 
 """     
 class SSHead(nn.Module):
-    def __init__(self, input_dim=128, num_classes=1):
+    def __init__(self, input_dim=128, num_out=1):
         super(SSHead, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, 1, kernel_size=1)
         self.pool = nn.AdaptiveAvgPool2d(88)
-        self.fc1 = nn.Linear(88 * 88, num_classes * 2) 
+        self.fc1 = nn.Linear(88 * 88, num_out) 
     
     def forward(self, x):
         out = F.relu(self.pool(self.conv1(x)))
@@ -69,26 +69,42 @@ class SSHead(nn.Module):
        
         return out
 
+"""
+SHead: scale head bins - single per image 
+"""     
+class SHead(nn.Module):
+    def __init__(self, input_dim=128, num_bins=50):
+        super(SHead, self).__init__()
+        self.conv1 = nn.Conv2d(input_dim, 1, kernel_size=1)
+        self.pool = nn.AdaptiveAvgPool2d(88)
+        self.fc1 = nn.Linear(88 * 88, num_bins) 
+    
+    def forward(self, x):
+        out = F.relu(self.pool(self.conv1(x)))
+        out = torch.flatten(out, 1)
+        out = self.fc1(out)
+        out = torch.softmax(out, axis=1)
+       
+        return out
+
 
 """"
 ROISelectScale start
 """
 
-
 """
 Predict scale/shift for a ROI with bbox concat
 """
 class ROISelectScale(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, downsampling=4, num_out=14):
         super(ROISelectScale, self).__init__()
         self.downsampling = downsampling   
-        self.num_semantic_classes = num_semantic_classes
+        self.num_out = num_out
         self.input_dim = input_dim
 
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
         self.pool = nn.AdaptiveAvgPool2d(70)
-        self.fc1 = nn.Linear((70*70) + 4, 2*num_semantic_classes) # Scale and shift 
-        self.d = nn.Dropout(p=0.2)
+        self.fc1 = nn.Linear((70*70) + 4, num_out) # Scale and shift 
  
     def forward(self, x, boxes, labels):
 
@@ -97,11 +113,53 @@ class ROISelectScale(nn.Module):
         out = self.pool(F.relu(self.conv1(x)))
 
         out = torch.flatten(out, 1)
-        out = self.d(out)
         out = torch.cat((out, boxes_valid_normalized_projected), dim=1) # Concat boxes
 
         out = self.fc1(out)
-        out = out.view(num_valid_boxes, 2*self.num_semantic_classes)
+        out = out.view(num_valid_boxes, self.num_out)
+        
+        return out
+        
+
+"""
+Predict scale with bins for a ROI with bbox concat
+"""
+class ROISelectScaleBins(nn.Module):
+    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=13, num_bins=50):
+        super(ROISelectScaleBins, self).__init__()
+        self.downsampling = downsampling   
+        self.num_bins = num_bins
+        self.input_dim = input_dim
+        self.num_semantic_classes = num_semantic_classes
+
+        self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
+        self.pool = nn.AdaptiveAvgPool2d(70)
+ 
+        self.scale_nets = nn.ModuleList()
+        for i in range(num_semantic_classes):
+            self.scale_nets.append(nn.Linear((70*70) + 4, self.num_bins + 1))
+
+    def forward(self, x, boxes, labels):
+        bins_map_scale = get_uniform_bins(torch.zeros(x.shape[0], 1, 1, 1).to(x.device), 0, 15, self.num_bins).squeeze(-1).squeeze(-1)
+
+        boxes_valid_normalized_projected, num_valid_boxes = get_valid_normalized_projected_boxes(x, boxes, labels, self.downsampling)
+
+        out = self.pool(F.relu(self.conv1(x)))
+
+        out = torch.flatten(out, 1)
+        out = torch.cat((out, boxes_valid_normalized_projected), dim=1) # Concat boxes
+
+        out_list = []
+        for i in range(self.num_semantic_classes):
+
+            probs = torch.softmax(self.scale_nets[i](out), axis=1)
+            scale = (probs * bins_map_scale.detach()).sum(1, keepdim=True)
+       
+            uncertainty = torch.sqrt((probs * ((bins_map_scale.detach() - scale)**2)).sum(1, keepdim=True))
+            scale_unc = torch.cat([scale, uncertainty], dim=1)
+            out_list.append(scale_unc)     
+
+        out = torch.cat(out_list, dim=1)
         
         return out
 
@@ -131,17 +189,60 @@ class ROISelectScaleSmall(nn.Module):
         return out
 
 
+"""
+Predict scale with bins for a ROI with bbox concat
+"""
+class ROISelectScaleSmallBins(nn.Module):
+    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=13, num_bins=50):
+        super(ROISelectSmallBins, self).__init__()
+        self.downsampling = downsampling   
+        self.num_bins = num_bins
+        self.num_semantic_classes = num_semantic_classes
+        self.input_dim = input_dim
+
+        self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
+        self.pool = nn.AdaptiveAvgPool2d(45)
+ 
+        self.scale_nets = nn.ModuleList()
+        for i in range(num_semantic_classes):
+            self.scale_nets.append(nn.Linear((45*45) + 4, self.num_bins + 1))
+
+    def forward(self, x, boxes, labels):
+        bins_map_scale = get_uniform_bins(torch.zeros(x.shape[0], 1, 1, 1).to(x.device), 0, 15, self.num_bins).squeeze(-1).squeeze(-1)
+
+        boxes_valid_normalized_projected, num_valid_boxes = get_valid_normalized_projected_boxes(x, boxes, labels, self.downsampling)
+
+        out = self.pool(F.relu(self.conv1(x)))
+
+        out = torch.flatten(out, 1)
+        out = torch.cat((out, boxes_valid_normalized_projected), dim=1) # Concat boxes
+
+        out_list = []
+        for i in range(self.num_semantic_classes):
+
+            probs = torch.softmax(self.scale_nets[i](out), axis=1)
+            scale = (probs * bins_map_scale.detach()).sum(1, keepdim=True)
+       
+            uncertainty = torch.sqrt((probs * ((bins_map_scale.detach() - scale)**2)).sum(1, keepdim=True))
+            scale_unc = torch.cat([scale, uncertainty], dim=1)
+            out_list.append(scale_unc)     
+
+        out = torch.cat(out_list, dim=1)
+        
+        return out
+
+
 class ROISelectScaleBig(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, downsampling=4, num_out=14):
         super(ROISelectScaleBig, self).__init__()
         self.downsampling = downsampling   
-        self.num_semantic_classes = num_semantic_classes
+        self.num_out = num_out
         self.input_dim = input_dim
 
         self.conv1 = nn.Conv2d(input_dim, 96, 3, padding=1)  
         self.conv2 = nn.Conv2d(96, 1, 3, padding=1)  
         self.pool = nn.AdaptiveAvgPool2d(70) 
-        self.fc1 = nn.Linear((70*70) + 4, 2*num_semantic_classes) # Scale and shift 
+        self.fc1 = nn.Linear((70*70) + 4, num_out) # Scale and shift 
 
     def forward(self, x, boxes, labels):
         boxes_valid_normalized_projected, num_valid_boxes = get_valid_normalized_projected_boxes(x, boxes, labels, self.downsampling)
@@ -152,16 +253,62 @@ class ROISelectScaleBig(nn.Module):
         out = torch.flatten(out, 1)
         out = torch.cat((out, boxes_valid_normalized_projected), dim=1)
         out = self.fc1(out)
-        out = out.view(num_valid_boxes, 2*self.num_semantic_classes)
+        out = out.view(num_valid_boxes, self.num_out)
         
         return out
 
 
+"""
+Predict scale with bins for a ROI with bbox concat
+"""
+class ROISelectScaleBigBins(nn.Module):
+    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=13, num_bins=50):
+        super(ROISelectBigBins, self).__init__()
+        self.downsampling = downsampling   
+        self.num_bins = num_bins
+        self.input_dim = input_dim
+        self.num_semantic_classes = num_semantic_classes
+
+        self.conv1 = nn.Conv2d(input_dim, 96, 3, padding=1)
+        self.conv2 = nn.Conv2d(96, 1, 3, padding=1)  
+        self.pool = nn.AdaptiveAvgPool2d(70)
+ 
+        self.scale_nets = nn.ModuleList()
+        for i in range(num_semantic_classes):
+            self.scale_nets.append(nn.Linear((70*70) + 4, self.num_bins + 1))
+
+    def forward(self, x, boxes, labels):
+        bins_map_scale = get_uniform_bins(torch.zeros(x.shape[0], 1, 1, 1).to(x.device), 0, 15, self.num_bins).squeeze(-1).squeeze(-1)
+
+        boxes_valid_normalized_projected, num_valid_boxes = get_valid_normalized_projected_boxes(x, boxes, labels, self.downsampling)
+
+        out = self.pool(F.relu(self.conv1(x)))
+        out = self.pool(F.relu(self.conv2(out)))
+
+        out = torch.flatten(out, 1)
+        out = torch.cat((out, boxes_valid_normalized_projected), dim=1) # Concat boxes
+
+        out_list = []
+        for i in range(self.num_semantic_classes):
+
+            probs = torch.softmax(self.scale_nets[i](out), axis=1)
+            scale = (probs * bins_map_scale.detach()).sum(1, keepdim=True)
+       
+            uncertainty = torch.sqrt((probs * ((bins_map_scale.detach() - scale)**2)).sum(1, keepdim=True))
+            scale_unc = torch.cat([scale, uncertainty], dim=1)
+            out_list.append(scale_unc)     
+
+        out = torch.cat(out_list, dim=1)
+        
+        return out
+
+
+
 class ROISelectScaleHuge(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, downsampling=4, num_out=14):
         super(ROISelectScaleHuge, self).__init__()
         self.downsampling = downsampling   
-        self.num_semantic_classes = num_semantic_classes
+        self.num_out = num_out
         self.input_dim = input_dim
 
         self.conv1 = nn.Conv2d(input_dim, input_dim, 3, padding=1)  
@@ -169,7 +316,7 @@ class ROISelectScaleHuge(nn.Module):
         self.conv3 = nn.Conv2d(96, 1, 3, padding=1)  
         self.pool = nn.AdaptiveAvgPool2d(70) 
         self.fc1 = nn.Linear((70*70) + 4, 800)  
-        self.fc2 = nn.Linear(800+4, 2*num_semantic_classes) # Scale and shift 
+        self.fc2 = nn.Linear(800+4, num_out) # Scale and shift 
         
     def forward(self, x, boxes, labels):
         boxes_valid_normalized_projected, num_valid_boxes = get_valid_normalized_projected_boxes(x, boxes, labels, self.downsampling)
@@ -183,7 +330,59 @@ class ROISelectScaleHuge(nn.Module):
         out = self.fc1(out)
         out = torch.cat((out, boxes_valid_normalized_projected), dim=1)
         out = self.fc2(out)
-        out = out.view(num_valid_boxes, 2*self.num_semantic_classes)
+        out = out.view(num_valid_boxes, num_out)
+        
+        return out
+
+
+"""
+Predict scale with bins for a ROI with bbox concat
+"""
+class ROISelectScaleHugeBins(nn.Module):
+    def __init__(self, input_dim=32, downsampling=4, num_semantic_classesi=13, num_bins=50):
+        super(ROISelectBigBins, self).__init__()
+        self.downsampling = downsampling   
+        self.num_bins = num_bins
+        self.input_dim = input_dim
+        self.num_semantic_classes = num_semantic_classes
+
+        self.conv1 = nn.Conv2d(input_dim, input_dim, 3, padding=1)  
+        self.conv2 = nn.Conv2d(input_dim, 96, 3, padding=1)  
+        self.conv3 = nn.Conv2d(96, 1, 3, padding=1)   
+        self.pool = nn.AdaptiveAvgPool2d(70)
+ 
+        self.scale_nets_1 = nn.ModuleList()
+        self.scale_nets_2 = nn.ModuleList()
+        for i in range(num_semantic_classes):
+            self.scale_nets_1.append(nn.Linear((70*70) + 4, 800))
+            self.scale_nets_2.append(nn.Linear(800 + 4, self.num_bins + 1))
+
+    def forward(self, x, boxes, labels):
+        bins_map_scale = get_uniform_bins(torch.zeros(x.shape[0], 1, 1, 1).to(x.device), 0, 15, self.num_bins).squeeze(-1).squeeze(-1)
+
+        boxes_valid_normalized_projected, num_valid_boxes = get_valid_normalized_projected_boxes(x, boxes, labels, self.downsampling)
+
+        out = self.pool(F.relu(self.conv1(x)))
+        out = self.pool(F.relu(self.conv2(out)))
+        out = self.pool(F.relu(self.conv3(out)))
+
+        out = torch.flatten(out, 1)
+        out = torch.cat((out, boxes_valid_normalized_projected), dim=1) # Concat boxes
+
+        out_list = []
+        for i in range(self.num_semantic_classes):
+            out = self.scale_nets_1[i](out)
+            out = torch.cat((out, boxes_valid_normalized_projected), dim=1)
+            out = self.scale_nets_2[i](out)
+
+            probs = torch.softmax(out, axis=1)
+            scale = (probs * bins_map_scale.detach()).sum(1, keepdim=True)
+       
+            uncertainty = torch.sqrt((probs * ((bins_map_scale.detach() - scale)**2)).sum(1, keepdim=True))
+            scale_unc = torch.cat([scale, uncertainty], dim=1)
+            out_list.append(scale_unc)     
+
+        out = torch.cat(out_list, dim=1)
         
         return out
 

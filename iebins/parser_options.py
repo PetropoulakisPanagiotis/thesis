@@ -34,11 +34,15 @@ train_parser.add_argument('--var',                       type=int,   help='varia
 train_parser.add_argument('--padding_instances',         type=int,   help='how many pixels to padd the bbox', default='0')
 train_parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
 train_parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
-train_parser.add_argument('--predict_unc',               dest='predict_unc',  help='true to predict uncertainty from the decoder feature map', action='store_true')
+train_parser.add_argument('--d3vo',                      dest='d3vo',  help='predict uncertainty for scale d3vo', action='store_true')
+train_parser.add_argument('--d3vo_c',                    dest='d3vo_c',  help='predict also the uncertainty for canonical depth with d3vo', action='store_true')
+train_parser.add_argument('--d3vo_original',             dest='d3vo_original',  help='use original d3vo loss with no beta', action='store_true')
 train_parser.add_argument('--segmentation',              dest='segmentation', help='segmentation variation', action='store_true')
 train_parser.add_argument('--instances',                 dest='instances',    help='instances variation', action='store_true')
 train_parser.add_argument('--roi_align',                 type=int,   help='use roi align', default='0')
 train_parser.add_argument('--roi_align_size',            type=int,   help='size of roi align', default='32')
+train_parser.add_argument('--bins_scale',                type=int,   help='Bins for scale', default='100')
+train_parser.add_argument('--virtual_depth_variation',    type=int,   help='0 for scale/shift, for 1 for scale regression and 2 for scale with bins', default='0')
 
 # Log and save
 train_parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
@@ -112,10 +116,15 @@ eval_parser.add_argument('--update_block',              type=int,   help='head b
 eval_parser.add_argument('--var',                       type=int,   help='variation of head block', default='0')
 eval_parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
 eval_parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
-eval_parser.add_argument('--predict_unc',               dest='predict_unc',  help='True to predict uncertainty from the decoder', action='store_true')
 eval_parser.add_argument('--segmentation',              dest='segmentation', help='segmentation variation', action='store_true')
 eval_parser.add_argument('--instances',                 dest='instances',    help='instances variation', action='store_true')
 eval_parser.add_argument('--padding_instances',         type=int,            help='how many pixels to padd for bbox', default='0')
+eval_parser.add_argument('--d3vo',                      help='d3vo uncertainty variation', action='store_true')
+eval_parser.add_argument('--d3vo_c',                    help='d3vo uncertainty variation canonical', action='store_true')
+eval_parser.add_argument('--bins_scale',                type=int,   help='Bins for scale', default='100')
+eval_parser.add_argument('--virtual_depth_variation',   type=int,   help='0 for scale/shift, for 1 for scale regression and 2 for scale with bins', default='0')
+eval_parser.add_argument('--roi_align',                 type=int,   help='use roi align', default='0')
+eval_parser.add_argument('--roi_align_size',            type=int,   help='size of roi align', default='32')
 
 # Preprocessing
 eval_parser.add_argument('--do_random_rotate',                      help='if set, will perform random rotation for augmentation', action='store_true')
@@ -135,3 +144,4 @@ eval_parser.add_argument('--max_depth_eval',            type=float, help='maximu
 eval_parser.add_argument('--eigen_crop',                            help='if set, crops according to Eigen NIPS14', action='store_true')
 eval_parser.add_argument('--garg_crop',                             help='if set, crops according to Garg  ECCV16', action='store_true')
 eval_parser.add_argument('--pick_class',                type=int,   help='evaluate single class for debug', default=0)
+
