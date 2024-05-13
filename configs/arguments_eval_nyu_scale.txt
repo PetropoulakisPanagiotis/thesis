@@ -14,14 +14,15 @@
 --eigen_crop
 
 --update_block 1
---segmentation
 --loss_type 1
+--segmentation
 --exp_name eval
---bins_scale 50
+--evaluate_uncertainty
 
 --bin_num 40
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
+--bins_scale 50
 
---checkpoint_path /usr/stud/petp/code/thesis/tmp/uniform-scale-sem-4/model-18000-best_silog_13.68384
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/uniform-scale-sem-4/nyu/model-18000-best_silog_13.68384

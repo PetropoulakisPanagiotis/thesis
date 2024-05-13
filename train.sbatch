@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name="ins-align-6"
+#SBATCH --job-name="scale-u-8"
 #SBATCH --nodelist=node[16]
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1,VRAM:48G
 #SBATCH --mem=24G
-#SBATCH --time=30:00:00
+#SBATCH --time=40:00:00
 #SBATCH --mail-type=NONE
-#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-ins-align-6-%j.out
-#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-ins-align-6-%j.out
-srun python /usr/stud/petp/code/thesis/iebins/train_clean.py /usr/stud/petp/code/thesis/configs/ins_align_6.txt
+#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-scale-u-8-%j.out
+#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-scale-u-8-%j.out
+srun python /usr/stud/petp/code/thesis/iebins/train_clean_scale.py /usr/stud/petp/code/thesis/configs/scale_u_8.txt
 
 # SBATCH --nodelist=node[12,14,15,16,17,18]
 # SBATCH --nodelist=node[11,12,13,16,17,18]
