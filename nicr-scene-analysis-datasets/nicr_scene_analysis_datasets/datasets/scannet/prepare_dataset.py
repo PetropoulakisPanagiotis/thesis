@@ -283,17 +283,16 @@ class NICRImageZip:
 
         return failed_images if len(failed_images) > 0 else None
 
-    def remove_small_instances(self, img, threshold=500):
+    def remove_small_instances(self, img, threshold=768):
+        """
+            0.25% of h*w
+        """
         instances, counts = np.unique(img[img != 0], return_counts=True)
 
         for instance, count in zip(instances, counts):
             if count < threshold:
-                cv2.imshow("ii", img)
-                cv2.waitKey(0)
                 img[img == instance] = 0
-                print(count)
-                cv2.imshow("ii", img)
-                cv2.waitKey(0)
+                #print("skipping small instance")
 
     def add_export(
             self,

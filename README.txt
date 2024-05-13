@@ -44,6 +44,8 @@ Othe commands:
 nohup bash your_script.sh > output.txt 2>&1 &
 export CUDA_VISIBLE_DEVICES=0
 tensorboard --logdir=./ --port=6004
+scp -P 58022 -r g2opy/ petp@131.159.19.194:~/code/thesis/
+
 
 
  
