@@ -67,17 +67,18 @@ class depthConsistencyErrorTerm:
         # Petrubation around zero #
         rot_angle_axis = np.asarray([x_local[0], x_local[1], x_local[2]])
         w_rotation_matrix_c = np.asarray(R.from_rotvec(rot_angle_axis).as_matrix())
-
+        c_rotation_matrix_w = w_rotation_matrix_c.T
         ###############
         #  0  -qz  ay #
         #  az  0  -qx #
         # -qy qx   0  #
         ###############
 
-        #####################################
-        # c_R_w = \delta(q) * \tilda{c_R_w} #
-        # w_R_c = c_R_w.T                   #
-        #####################################
+        #################################################
+        # c_R_w = \delta(w_q) * \tilda{c_R_w}           #
+        # w_R_c = c_R_w.T                               # 
+        # Petrube w_q. Then from w_R_c find the new w_q #
+        #################################################
 
         # qx petrubation #
         dqx_plus = np.eye(3) - np.asarray([
@@ -85,7 +86,7 @@ class depthConsistencyErrorTerm:
                                         [0, 0, -(0 + h)],
                                         [0, 0 + h, 0],
                                         ])
-        c_R_w_new = dqx_plus @ w_rotation_matrix_c
+        c_R_w_new = dqx_plus @ c_rotation_matrix_w
         w_R_c_new = c_R_w_new.T
         w_q_c_new = R.from_matrix(w_R_c_new)
         x_local[0:3] = w_q_c_new.as_rotvec()
@@ -96,7 +97,7 @@ class depthConsistencyErrorTerm:
                                         [0, 0, -(0 - h)],
                                         [0, 0 - h, 0],
                                         ])
-        c_R_w_new = dqx_minus @ w_rotation_matrix_c
+        c_R_w_new = dqx_minus @ c_rotation_matrix_w
         w_R_c_new = c_R_w_new.T
         w_q_c_new = R.from_matrix(w_R_c_new)
         x_local[0:3] = w_q_c_new.as_rotvec()
@@ -111,7 +112,7 @@ class depthConsistencyErrorTerm:
                                         [0, 0, 0],
                                         [-(0 + h), 0, 0],
                                         ])
-        c_R_w_new = dqy_plus @ w_rotation_matrix_c
+        c_R_w_new = dqy_plus @ c_rotation_matrix_w
         w_R_c_new = c_R_w_new.T
         w_q_c_new = R.from_matrix(w_R_c_new)
         x_local[0:3] = w_q_c_new.as_rotvec()
@@ -122,7 +123,7 @@ class depthConsistencyErrorTerm:
                                         [0, 0, 0],
                                         [-(0 - h), 0, 0],
                                         ])
-        c_R_w_new = dqy_minus @ w_rotation_matrix_c
+        c_R_w_new = dqy_minus @ c_rotation_matrix_w
         w_R_c_new = c_R_w_new.T
         w_q_c_new = R.from_matrix(w_R_c_new)
         x_local[0:3] = w_q_c_new.as_rotvec()
@@ -137,7 +138,7 @@ class depthConsistencyErrorTerm:
                                         [0 + h, 0, 0],
                                         [0, 0, 0],
                                         ])
-        c_R_w_new = dqz_plus @ w_rotation_matrix_c
+        c_R_w_new = dqz_plus @ c_rotation_matrix_w
         w_R_c_new = c_R_w_new.T
         w_q_c_new = R.from_matrix(w_R_c_new)
         x_local[0:3] = w_q_c_new.as_rotvec()
@@ -148,7 +149,7 @@ class depthConsistencyErrorTerm:
                                         [0 - h, 0, 0],
                                         [0, 0, 0],
                                         ])
-        c_R_w_new = dqz_minus @ w_rotation_matrix_c
+        c_R_w_new = dqz_minus @ c_rotation_matrix_w
         w_R_c_new = c_R_w_new.T
         w_q_c_new = R.from_matrix(w_R_c_new)
         x_local[0:3] = w_q_c_new.as_rotvec()
@@ -253,104 +254,43 @@ class depthConsistencyErrorTerm:
         return analytical_grad
 
 if __name__ == '__main__':
+    ############################################
     # angle-axis, translation, landmark, scale #
-    # all are from camera to world             #
+    # from camera to world reference frame     #
+    ############################################
     x = [0, np.pi/2, 0, 0.2, 0.5, 0.6, 1.2, 2.2, 1.4, 3]
 
     dc = depthConsistencyErrorTerm()
-
     grad_numerical = dc.numerical_grad(x)
     grad_analytical = dc.analytical_grad(x)
+    assert np.all(np.isclose(grad_numerical, grad_analytical, atol=0.00001))
 
-    if np.all(np.isclose(grad_numerical[:3], grad_analytical[:3], atol=0.00001)):
-        print("rotations equal\n")
-    else:
-        print("Grad_numerical: ", grad_numerical[:3])
-        print("Grad_analytical: ", grad_analytical[:3])
-    if np.all(np.isclose(grad_numerical[3:6], grad_analytical[3:6], atol=0.00001)):
-        print("translation equal\n")
-    if np.all(np.isclose(grad_numerical[6:9], grad_analytical[6:9], atol=0.00001)):
-        print("landmark equal\n")
-    if np.all(np.isclose(grad_numerical[9], grad_analytical[9], atol=0.00001)):
-        print("scale\n")
-    exit()
     # Case 2
     x = [0, 0, np.pi/2, 0.3, 1.5, 0.2, 0.2, 2.5, 1.2, 1.7]
-
     dc = depthConsistencyErrorTerm()
-
     grad_numerical = dc.numerical_grad(x)
     grad_analytical = dc.analytical_grad(x)
-
-    if np.all(np.isclose(grad_numerical[:3], grad_analytical[:3], atol=0.00001)):
-        print("rotations equal\n")
-    else:
-        print("Grad_numerical: ", grad_numerical[:3])
-        print("Grad_analytical: ", grad_analytical[:3])
-    if np.all(np.isclose(grad_numerical[3:6], grad_analytical[3:6], atol=0.00001)):
-        print("translation equal\n")
-    if np.all(np.isclose(grad_numerical[6:9], grad_analytical[6:9], atol=0.00001)):
-        print("landmark equal\n")
-    if np.all(np.isclose(grad_numerical[9], grad_analytical[9], atol=0.00001)):
-        print("scale\n")
+    assert np.all(np.isclose(grad_numerical, grad_analytical, atol=0.00001))
 
     # Case 3
     x = [np.pi/2, 0, 0, 0.3, 1.5, 0.2, 0.2, 2.5, 1.2, 1.7]
-
     dc = depthConsistencyErrorTerm()
-
     grad_numerical = dc.numerical_grad(x)
     grad_analytical = dc.analytical_grad(x)
 
-    if np.all(np.isclose(grad_numerical[:3], grad_analytical[:3], atol=0.00001)):
-        print("rotations equal\n")
-    else:
-        print("Grad_numerical: ", grad_numerical[:3])
-        print("Grad_analytical: ", grad_analytical[:3])
-    if np.all(np.isclose(grad_numerical[3:6], grad_analytical[3:6], atol=0.00001)):
-        print("translation equal\n")
-    if np.all(np.isclose(grad_numerical[6:9], grad_analytical[6:9], atol=0.00001)):
-        print("landmark equal\n")
-    if np.all(np.isclose(grad_numerical[9], grad_analytical[9], atol=0.00001)):
-        print("scale\n")
-
+    assert np.all(np.isclose(grad_numerical, grad_analytical, atol=0.00001))
 
     # Case 4
     x = [np.pi/3, 0, 0, 0.3, 1.5, 0.2, 0.2, 2.5, 1.2, 1.7]
 
     dc = depthConsistencyErrorTerm()
-
     grad_numerical = dc.numerical_grad(x)
     grad_analytical = dc.analytical_grad(x)
-
-    if np.all(np.isclose(grad_numerical[:3], grad_analytical[:3], atol=0.00001)):
-        print("rotations equal\n")
-    else:
-        print("Grad_numerical: ", grad_numerical[:3])
-        print("Grad_analytical: ", grad_analytical[:3])
-    if np.all(np.isclose(grad_numerical[3:6], grad_analytical[3:6], atol=0.00001)):
-        print("translation equal\n")
-    if np.all(np.isclose(grad_numerical[6:9], grad_analytical[6:9], atol=0.00001)):
-        print("landmark equal\n")
-    if np.all(np.isclose(grad_numerical[9], grad_analytical[9], atol=0.00001)):
-        print("scale\n")
+    assert np.all(np.isclose(grad_numerical, grad_analytical, atol=0.00001))
 
     # Case 5
     x = [0, np.pi/3, 0, 0.3, 1.5, 0.2, 0.2, 2.5, 1.2, 1.7]
-
     dc = depthConsistencyErrorTerm()
-
     grad_numerical = dc.numerical_grad(x)
     grad_analytical = dc.analytical_grad(x)
-
-    if np.all(np.isclose(grad_numerical[:3], grad_analytical[:3], atol=0.00001)):
-        print("rotations equal\n")
-    else:
-        print("Grad_numerical: ", grad_numerical[:3])
-        print("Grad_analytical: ", grad_analytical[:3])
-    if np.all(np.isclose(grad_numerical[3:6], grad_analytical[3:6], atol=0.00001)):
-        print("translation equal\n")
-    if np.all(np.isclose(grad_numerical[6:9], grad_analytical[6:9], atol=0.00001)):
-        print("landmark equal\n")
-    if np.all(np.isclose(grad_numerical[9], grad_analytical[9], atol=0.00001)):
-        print("scale\n")
+    assert np.all(np.isclose(grad_numerical, grad_analytical, atol=0.00001))
