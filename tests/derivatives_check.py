@@ -289,7 +289,7 @@ if __name__ == '__main__':
     assert np.all(np.isclose(grad_numerical, grad_analytical, atol=0.00001))
 
     # Case 5
-    x = [0, np.pi/3, 0, 0.3, 1.5, 0.2, 0.2, 2.5, 1.2, 1.7]
+    x = [0, np.pi/1.5, 0, 0.3, 1.5, 0.2, 1.2, 2.4, 2.2, 4.7]
     dc = depthConsistencyErrorTerm()
     grad_numerical = dc.numerical_grad(x)
     grad_analytical = dc.analytical_grad(x)

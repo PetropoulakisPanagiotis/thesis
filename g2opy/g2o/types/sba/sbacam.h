@@ -346,13 +346,13 @@ namespace g2o {
         // use simple multiplications and additions for production code in calculating dRdx,y,z
         Eigen::Matrix3d dRidx, dRidy, dRidz;
         dRidx << 0.0,0.0,0.0,  
-              0.0,0.0,2.0,
-              0.0,-2.0,0.0;
-        dRidy  << 0.0,0.0,-2.0,
+              0.0,0.0,1.0,
+              0.0,-1.0,0.0;
+        dRidy  << 0.0,0.0,-1.0,
                0.0,0.0,0.0,
-               2.0,0.0,0.0;
-        dRidz  << 0.0,2.0,0.0,  
-               -2.0,0.0,0.0,
+               1.0,0.0,0.0;
+        dRidz  << 0.0,1.0,0.0,  
+               -1.0,0.0,0.0,
                0.0,0.0,0.0;
 
         // for dS'*R', with dS the incremental change

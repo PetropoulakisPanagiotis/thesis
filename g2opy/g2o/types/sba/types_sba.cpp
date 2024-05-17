@@ -654,37 +654,34 @@ namespace g2o {
     }
 
 
+    // Rotation
     Eigen::Matrix<double,3,1,Eigen::ColMajor> pwt;
-
-    // wX - xtc 
     pwt = (pt-trans).head<3>(); 
 
-    // dx
     Eigen::Matrix<double,3,1,Eigen::ColMajor> dp = cam.dRdx * pwt; // dR'/dq * [pw - t]
-    _jacobianOplus[0](0,3) = (-1.0/s) * dp.dot(mask); 
-    // dy
-    dp = cam.dRdy * pwt; // dR'/dq * [pw - t]
-    _jacobianOplus[0](0,4) = (-1.0/s) * dp.dot(mask);
-    // dz
-    dp = cam.dRdz * pwt; // dR'/dq * [pw - t]
-    _jacobianOplus[0](0,5) = (-1.0/s) * dp.dot(mask);
+    _jacobianOplus[0](0,3) = (1.0/s) * dp.dot(mask); // x
+    
+    dp = cam.dRdy * pwt; 
+    _jacobianOplus[0](0,4) = (1.0/s) * dp.dot(mask); // y
 
-    // set d(t) values [ pz*dpx/dx - px*dpz/dx ] / pz^2
-    dp = -cam.w2n.col(0);        // dpc / dx
-    _jacobianOplus[0](0,0) = (-1.0/s) * dp.dot(mask); 
-    dp = -cam.w2n.col(1);        // dpc / dy
-    _jacobianOplus[0](0,1) = (-1.0/s) * dp.dot(mask);
-    dp = -cam.w2n.col(2);        // dpc / dz
-    _jacobianOplus[0](0,2) = (-1.0/s) * dp.dot(mask);
+    dp = cam.dRdz * pwt; 
+    _jacobianOplus[0](0,5) = (1.0/s) * dp.dot(mask); // z
 
-    // Jacobians wrt point parameters
-    // set d(t) values [ pz*dpx/dx - px*dpz/dx ] / pz^2
-    dp = cam.w2n.col(0);        // dpc / dx
-    _jacobianOplus[2](0,0) = (-1.0/s) * dp.dot(mask); 
-    dp = cam.w2n.col(1);        // dpc / dy
-    _jacobianOplus[2](0,1) = (-1.0/s) * dp.dot(mask);
-    dp = cam.w2n.col(2);        // dpc / dz
-    _jacobianOplus[2](0,2) = (-1.0/s) * dp.dot(mask);
+    // Translation
+    dp = -cam.w2n.col(0);  
+    _jacobianOplus[0](0,0) = (-1.0/s) * dp.dot(mask);  // x
+    dp = -cam.w2n.col(1);
+    _jacobianOplus[0](0,1) = (-1.0/s) * dp.dot(mask); // y
+    dp = -cam.w2n.col(2);       
+    _jacobianOplus[0](0,2) = (-1.0/s) * dp.dot(mask); // z
+
+    // Landmark 
+    dp = cam.w2n.col(0);    
+    _jacobianOplus[2](0,0) = (1.0/s) * dp.dot(mask); // x 
+    dp = cam.w2n.col(1);     
+    _jacobianOplus[2](0,1) = (1.0/s) * dp.dot(mask); // y
+    dp = cam.w2n.col(2);
+    _jacobianOplus[2](0,2) = (1.0/s) * dp.dot(mask); // z
   
     // Scale
     _jacobianOplus[1](0,0) = (-1.0/(s*s)) * (pc.dot(mask));
