@@ -9,6 +9,21 @@ def generate_colors(num_colors: int) -> np.ndarray:
     colors = np.random.rand(num_colors, 3)
     return colors
 
+def invert_transformation_matrix(T: np.ndarray) -> np.ndarray:
+    rotation = T[:3, :3]
+    translation = T[:3, 3]
+    inv_rotation = rotation.T
+    inv_translation = -inv_rotation @ translation
+    inv_T = np.eye(4)
+    inv_T[:3, :3] = inv_rotation
+    inv_T[:3, 3] = inv_translation
+    return inv_T
+
+def is_valid_rotation_matrix(R: np.ndarray) -> bool:
+    should_be_identity = np.allclose(R @ R.T, np.eye(3), atol=1e-6)
+    should_be_one = np.isclose(np.linalg.det(R), 1.0, atol=1e-6)
+    return should_be_identity and should_be_one
+
 def visualize_matching_point_clouds(points_original: np.ndarray, points_perturb: np.ndarray) -> None:
     num_matches = points_original.shape[0]
     colors = generate_colors(num_matches)

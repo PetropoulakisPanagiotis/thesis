@@ -6,13 +6,14 @@ from collections import namedtuple
 from scipy.spatial.transform import Rotation as R
 import open3d as o3d
 from utils.utils import get_test_points_pixel_and_world_coords, visualize_depth_map, perturb_transformation_matrix, \
-                        get_point_cloud_from_pixels, visualize_matching_point_clouds
+                        get_point_cloud_from_pixels, visualize_matching_point_clouds, \
+                        invert_transformation_matrix, is_valid_rotation_matrix
 
 if __name__ == '__main__':
     path = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted'
     scene = 'scene0655_01'
     split = 'valid'
-    test_id = 5
+    test_id = 7
 
     ids = [(file.split('.')[0]) for file in os.listdir(path + "/" + split + "/rgb/" + scene)]
     ids = sorted(ids, key=lambda x: str(x))
@@ -45,6 +46,8 @@ if __name__ == '__main__':
     transformation_matrix_test[:3, :3] = rotation_test.as_matrix()
     transformation_matrix_test[:3, 3] = [x_test, y_test, z_test]
 
+    assert is_valid_rotation_matrix(transformation_matrix_test[:3, :3])
+
     # Extrinsics base image #
     with open(path + "/" + split + '/extrinsics/' + scene + "/" + img_base_path + ".json", 'r') as json_file:
         data = json.load(json_file)
@@ -55,10 +58,14 @@ if __name__ == '__main__':
     transformation_matrix_base = np.eye(4)
     transformation_matrix_base[:3, :3] = rotation_base.as_matrix()
     transformation_matrix_base[:3, 3] = [x_base, y_base, z_base]
-    transformation_matrix_base_inv = transformation_matrix_base.T
+    transformation_matrix_base_inv = invert_transformation_matrix(transformation_matrix_base)
+
+    assert is_valid_rotation_matrix(transformation_matrix_base[:3, :3])
 
     # Base frame is not at zero, transform frames to the origin #
-    transformation_matrix_test_corrected = transformation_matrix_base_inv * transformation_matrix_test
+    transformation_matrix_test_corrected = transformation_matrix_base_inv @ transformation_matrix_test
+
+    assert is_valid_rotation_matrix(transformation_matrix_test_corrected[:3, :3])
 
     # Load test image and depth #
     img_test = cv2.imread(img_test_path, -1)
@@ -70,22 +77,17 @@ if __name__ == '__main__':
 
     pixels, points_w = get_test_points_pixel_and_world_coords(
         cam=cam, camera_to_world_transform=transformation_matrix_test_corrected, image=img_test, depth_map=depth_test,
-        num_points=50, viz=False)
+        num_points=50, viz=True)
 
-    translation_perturbation = np.array([0.00, 0.00, 0.0])  # cm
-    rotation_perturbation = np.array([0, 0, 0])  # degrees
+    translation_perturbation = np.array([0.025, 0.025, 0.025])  # cm
+    rotation_perturbation = np.array([2.5, 2.5, 2.5])  # degrees
 
     transformation_matrix_test_corrected_perturb = perturb_transformation_matrix(transformation_matrix_test_corrected,
                                                                                  translation_perturbation,
                                                                                  rotation_perturbation)
- 
-    print(transformation_matrix_test_corrected_perturb)
-    print(transformation_matrix_test_corrected)
-    exit()
+
+    assert is_valid_rotation_matrix(transformation_matrix_test_corrected_perturb[:3,:3])
+
     points_w_perturb = get_point_cloud_from_pixels(cam, pixels[0, :], pixels[1, :], depth_test, transformation_matrix_test_corrected_perturb)
 
-
-    print(points_w[0:5, :])
-    print(points_w_perturb[0:5, :])
-
-    visualize_matching_point_clouds(points_w[0:5, :], points_w_perturb[0:5, :])
+    visualize_matching_point_clouds(points_w, points_w_perturb)
