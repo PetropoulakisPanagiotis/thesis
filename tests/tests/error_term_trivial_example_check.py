@@ -4,29 +4,9 @@ import json
 import os
 from collections import namedtuple
 from scipy.spatial.transform import Rotation as R
-
-
-
-def visualize_depth_map(depth_map: np.ndarray) -> None:
-    # Normalize depth values to the range [0, 255]
-    min_depth = np.min(depth_map[depth_map > 0])  # Ignore zero (invalid depth)
-    max_depth = np.max(depth_map)
-    norm_depth = (depth_map - min_depth) / (max_depth - min_depth)
-    norm_depth = (norm_depth * 255).astype(np.uint8)
-
-    # Apply a colormap: closer points are darker, distant points are lighter
-    colormap = cv2.COLORMAP_JET
-    depth_colored = cv2.applyColorMap(norm_depth, colormap)
-
-    # Display the depth map
-    cv2.imshow("Depth Map Visualization", depth_colored)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
-
-def get_test_points_pixel_and_world_coords(cam: namedtuple, camera_to_world_transform: np.ndarray, depth_map: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    pass
-
+import open3d as o3d
+from utils.utils import get_test_points_pixel_and_world_coords, visualize_depth_map, perturb_transformation_matrix, \
+                        get_point_cloud_from_pixels, visualize_matching_point_clouds
 
 if __name__ == '__main__':
     path = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted'
@@ -52,12 +32,7 @@ if __name__ == '__main__':
     # Intrinsics #
     with open(path + "/" + split + '/rgb_intrinsics/' + scene + ".json", 'r') as json_file:
         data = json.load(json_file)
-        cam = namedtuple('camera', 'fx fy cx cy scale')(
-        data['fx'],
-        data['fy'],
-        data['cx'],
-        data['cy'],
-        1000.0)
+        cam = namedtuple('camera', 'fx fy cx cy scale')(data['fx'], data['fy'], data['cx'], data['cy'], 1000.0)
 
     # Extrinsics test image #
     with open(path + "/" + split + '/extrinsics/' + scene + "/" + img_test_id_str + ".json", 'r') as json_file:
@@ -91,4 +66,26 @@ if __name__ == '__main__':
     depth_test = np.asarray(depth_test)
     depth_test = depth_test / cam.scale
 
-    visualize_depth_map(depth_test)
+    #visualize_depth_map(depth_test)
+
+    pixels, points_w = get_test_points_pixel_and_world_coords(
+        cam=cam, camera_to_world_transform=transformation_matrix_test_corrected, image=img_test, depth_map=depth_test,
+        num_points=50, viz=False)
+
+    translation_perturbation = np.array([0.00, 0.00, 0.0])  # cm
+    rotation_perturbation = np.array([0, 0, 0])  # degrees
+
+    transformation_matrix_test_corrected_perturb = perturb_transformation_matrix(transformation_matrix_test_corrected,
+                                                                                 translation_perturbation,
+                                                                                 rotation_perturbation)
+ 
+    print(transformation_matrix_test_corrected_perturb)
+    print(transformation_matrix_test_corrected)
+    exit()
+    points_w_perturb = get_point_cloud_from_pixels(cam, pixels[0, :], pixels[1, :], depth_test, transformation_matrix_test_corrected_perturb)
+
+
+    print(points_w[0:5, :])
+    print(points_w_perturb[0:5, :])
+
+    visualize_matching_point_clouds(points_w[0:5, :], points_w_perturb[0:5, :])

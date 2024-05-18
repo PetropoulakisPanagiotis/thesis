@@ -41,7 +41,7 @@ class depthConsistencyErrorTerm:
         w_rotation_matrix_c = np.asarray(R.from_rotvec(rot_angle_axis).as_matrix())
         c_rotation_matrix_w = w_rotation_matrix_c.T
 
-        # landmark from world to camera # 
+        # landmark from world to camera #
         c_landmark = (np.dot(c_rotation_matrix_w, w_landmark) - np.dot(c_rotation_matrix_w, w_translation_c))
 
         return (1.0 / scale) * np.dot(c_landmark, self.mask.T)
@@ -58,13 +58,13 @@ class depthConsistencyErrorTerm:
             mask_grad = np.zeros(self.dim)
             mask_grad[i] = 1
 
-            f1 = self.__call__(x_local + h*mask_grad)
-            f2 = self.__call__(x_local - h*mask_grad)
+            f1 = self.__call__(x_local + h * mask_grad)
+            f2 = self.__call__(x_local - h * mask_grad)
 
             numerical_grad[i] = (f1 - f2) / (2 * h)
 
         # Rotation is a manifold  #
-        # Petrubation around zero #
+        # Perturb around zero #
         rot_angle_axis = np.asarray([x_local[0], x_local[1], x_local[2]])
         w_rotation_matrix_c = np.asarray(R.from_rotvec(rot_angle_axis).as_matrix())
         c_rotation_matrix_w = w_rotation_matrix_c.T
@@ -76,16 +76,16 @@ class depthConsistencyErrorTerm:
 
         #################################################
         # c_R_w = \delta(w_q) * \tilda{c_R_w}           #
-        # w_R_c = c_R_w.T                               # 
-        # Petrube w_q. Then from w_R_c find the new w_q #
+        # w_R_c = c_R_w.T                               #
+        # Perturb w_q. Then from w_R_c find the new w_q #
         #################################################
 
         # qx petrubation #
         dqx_plus = np.eye(3) - np.asarray([
-                                        [0, 0, 0],
-                                        [0, 0, -(0 + h)],
-                                        [0, 0 + h, 0],
-                                        ])
+            [0, 0, 0],
+            [0, 0, -(0 + h)],
+            [0, 0 + h, 0],
+        ])
         c_R_w_new = dqx_plus @ c_rotation_matrix_w
         w_R_c_new = c_R_w_new.T
         w_q_c_new = R.from_matrix(w_R_c_new)
@@ -93,10 +93,10 @@ class depthConsistencyErrorTerm:
         f1 = self.__call__(x_local)
 
         dqx_minus = np.eye(3) - np.asarray([
-                                        [0, 0, 0],
-                                        [0, 0, -(0 - h)],
-                                        [0, 0 - h, 0],
-                                        ])
+            [0, 0, 0],
+            [0, 0, -(0 - h)],
+            [0, 0 - h, 0],
+        ])
         c_R_w_new = dqx_minus @ c_rotation_matrix_w
         w_R_c_new = c_R_w_new.T
         w_q_c_new = R.from_matrix(w_R_c_new)
@@ -108,10 +108,10 @@ class depthConsistencyErrorTerm:
 
         # qy petrubation #
         dqy_plus = np.eye(3) - np.asarray([
-                                        [0, 0, 0 + h],
-                                        [0, 0, 0],
-                                        [-(0 + h), 0, 0],
-                                        ])
+            [0, 0, 0 + h],
+            [0, 0, 0],
+            [-(0 + h), 0, 0],
+        ])
         c_R_w_new = dqy_plus @ c_rotation_matrix_w
         w_R_c_new = c_R_w_new.T
         w_q_c_new = R.from_matrix(w_R_c_new)
@@ -119,10 +119,10 @@ class depthConsistencyErrorTerm:
         f1 = self.__call__(x_local)
 
         dqy_minus = np.eye(3) - np.asarray([
-                                        [0, 0, 0 - h],
-                                        [0, 0, 0],
-                                        [-(0 - h), 0, 0],
-                                        ])
+            [0, 0, 0 - h],
+            [0, 0, 0],
+            [-(0 - h), 0, 0],
+        ])
         c_R_w_new = dqy_minus @ c_rotation_matrix_w
         w_R_c_new = c_R_w_new.T
         w_q_c_new = R.from_matrix(w_R_c_new)
@@ -134,10 +134,10 @@ class depthConsistencyErrorTerm:
 
         # qz petrubation #
         dqz_plus = np.eye(3) - np.asarray([
-                                        [0, -(0 + h), 0],
-                                        [0 + h, 0, 0],
-                                        [0, 0, 0],
-                                        ])
+            [0, -(0 + h), 0],
+            [0 + h, 0, 0],
+            [0, 0, 0],
+        ])
         c_R_w_new = dqz_plus @ c_rotation_matrix_w
         w_R_c_new = c_R_w_new.T
         w_q_c_new = R.from_matrix(w_R_c_new)
@@ -145,10 +145,10 @@ class depthConsistencyErrorTerm:
         f1 = self.__call__(x_local)
 
         dqz_minus = np.eye(3) - np.asarray([
-                                        [0, -(0 - h), 0],
-                                        [0 - h, 0, 0],
-                                        [0, 0, 0],
-                                        ])
+            [0, -(0 - h), 0],
+            [0 - h, 0, 0],
+            [0, 0, 0],
+        ])
         c_R_w_new = dqz_minus @ c_rotation_matrix_w
         w_R_c_new = c_R_w_new.T
         w_q_c_new = R.from_matrix(w_R_c_new)
@@ -159,7 +159,6 @@ class depthConsistencyErrorTerm:
         numerical_grad[2] = (f1 - f2) / (2 * h)
 
         return numerical_grad
-
 
     def analytical_grad(self, x: np.ndarray) -> np.ndarray:
         assert self.dim == len(x)
@@ -198,21 +197,21 @@ class depthConsistencyErrorTerm:
         # (dc_R_W * w_q_c)/dw_q_c = \delta(q) * \tilda{c_R_w} #
         #######################################################
         delta_qx_dir = np.asarray([
-                                    [0, 0, 0],
-                                    [0, 0, -1],
-                                    [0, 1, 0],
-                                 ])
+            [0, 0, 0],
+            [0, 0, -1],
+            [0, 1, 0],
+        ])
 
         delta_qy_dir = np.asarray([
-                                    [0, 0, 1],
-                                    [0, 0, 0],
-                                    [-1, 0, 0],
-                                  ])
+            [0, 0, 1],
+            [0, 0, 0],
+            [-1, 0, 0],
+        ])
         delta_qz_dir = np.asarray([
-                                    [0, -1, 0],
-                                    [1, 0, 0],
-                                    [0, 0, 0],
-                                 ])
+            [0, -1, 0],
+            [1, 0, 0],
+            [0, 0, 0],
+        ])
         ######################################################
         # The below will be usefull for rotation Jacobian    #
         # ||c_C_j - {(c_R_w*(w_l - w_t_c))z()/c_S}||         #
@@ -249,16 +248,17 @@ class depthConsistencyErrorTerm:
 
         # Scale #
         landmark_c = (np.dot(c_rotation_matrix_w, landmark_w) - np.dot(c_rotation_matrix_w, w_translation_c))
-        analytical_grad[9] = -np.dot(landmark_c, self.mask)/(scale ** 2)
+        analytical_grad[9] = -np.dot(landmark_c, self.mask) / (scale**2)
 
         return analytical_grad
+
 
 if __name__ == '__main__':
     ############################################
     # angle-axis, translation, landmark, scale #
     # from camera to world reference frame     #
     ############################################
-    x = [0, np.pi/2, 0, 0.2, 0.5, 0.6, 1.2, 2.2, 1.4, 3]
+    x = [0, np.pi / 2, 0, 0.2, 0.5, 0.6, 1.2, 2.2, 1.4, 3]
 
     dc = depthConsistencyErrorTerm()
     grad_numerical = dc.numerical_grad(x)
@@ -266,14 +266,14 @@ if __name__ == '__main__':
     assert np.all(np.isclose(grad_numerical, grad_analytical, atol=0.00001))
 
     # Case 2
-    x = [0, 0, np.pi/2, 0.3, 1.5, 0.2, 0.2, 2.5, 1.2, 1.7]
+    x = [0, 0, np.pi / 2, 0.3, 1.5, 0.2, 0.2, 2.5, 1.2, 1.7]
     dc = depthConsistencyErrorTerm()
     grad_numerical = dc.numerical_grad(x)
     grad_analytical = dc.analytical_grad(x)
     assert np.all(np.isclose(grad_numerical, grad_analytical, atol=0.00001))
 
     # Case 3
-    x = [np.pi/2, 0, 0, 0.3, 1.5, 0.2, 0.2, 2.5, 1.2, 1.7]
+    x = [np.pi / 2, 0, 0, 0.3, 1.5, 0.2, 0.2, 2.5, 1.2, 1.7]
     dc = depthConsistencyErrorTerm()
     grad_numerical = dc.numerical_grad(x)
     grad_analytical = dc.analytical_grad(x)
@@ -281,7 +281,7 @@ if __name__ == '__main__':
     assert np.all(np.isclose(grad_numerical, grad_analytical, atol=0.00001))
 
     # Case 4
-    x = [np.pi/3, 0, 0, 0.3, 1.5, 0.2, 0.2, 2.5, 1.2, 1.7]
+    x = [np.pi / 3, 0, 0, 0.3, 1.5, 0.2, 0.2, 2.5, 1.2, 1.7]
 
     dc = depthConsistencyErrorTerm()
     grad_numerical = dc.numerical_grad(x)
@@ -289,7 +289,7 @@ if __name__ == '__main__':
     assert np.all(np.isclose(grad_numerical, grad_analytical, atol=0.00001))
 
     # Case 5
-    x = [0, np.pi/1.5, 0, 0.3, 1.5, 0.2, 1.2, 2.4, 2.2, 4.7]
+    x = [0, np.pi / 1.5, 0, 0.3, 1.5, 0.2, 1.2, 2.4, 2.2, 4.7]
     dc = depthConsistencyErrorTerm()
     grad_numerical = dc.numerical_grad(x)
     grad_analytical = dc.analytical_grad(x)
