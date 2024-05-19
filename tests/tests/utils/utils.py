@@ -5,17 +5,17 @@ from collections import namedtuple
 from scipy.spatial.transform import Rotation as R
 
 
-def reprojection_error_test(u: float, v: float, cam: namedtuple,
-        point_w: np.ndarray, c_transformation_w) -> float:
+def reprojection_error_test(u: float, v: float, cam: namedtuple, point_w: np.ndarray, c_transformation_w) -> float:
 
     point_w_h = np.append(point_w, 1)
     point_c_h = np.dot(c_transformation_w, point_w_h)
 
     error = [np.inf, np.inf]
-    error[0] = u - (cam.fx*point_c_h[0]/point_c_h[2] + cam.cx)
-    error[1] = v - (cam.fy*point_c_h[1]/point_c_h[2] + cam.cy)
+    error[0] = u - (cam.fx * point_c_h[0] / point_c_h[2] + cam.cx)
+    error[1] = v - (cam.fy * point_c_h[1] / point_c_h[2] + cam.cy)
 
     return error
+
 
 def generate_colors(num_colors: int) -> np.ndarray:
     colors = np.random.rand(num_colors, 3)
@@ -91,7 +91,6 @@ def get_test_points_pixel_and_world_coords(cam: namedtuple, camera_to_world_tran
     point_cloud_w = get_point_cloud_from_pixels(cam, u, v, depth_map, camera_to_world_transform)
 
     pixels = np.vstack((u, v))
-
 
     if viz:
         image_local = image.copy()

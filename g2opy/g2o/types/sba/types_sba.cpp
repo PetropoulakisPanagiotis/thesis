@@ -51,7 +51,7 @@ namespace g2o {
   G2O_REGISTER_TYPE(VERTEX_CUSTOM_XYZ, VertexCustomXYZ);
   G2O_REGISTER_TYPE(VERTEX_CUSTOM_CAM, VertexCustomCam);
   G2O_REGISTER_TYPE(VERTEX_SCALE, VertexScale);
-  G2O_REGISTER_TYPE(EDGE_STEREO, EdgeStereo);
+  G2O_REGISTER_TYPE(EDGE_CUSTOM_CAMERA, EdgeCustomCamera);
   G2O_REGISTER_TYPE(EDGE_SCALE_NETWORK_CONSISTENCY, EdgeScaleNetworkConsistency);
   G2O_REGISTER_TYPE(EDGE_DEPTH_CONSISTENCY_SCALE, EdgeDepthConsistencyScale);
 
@@ -474,12 +474,12 @@ namespace g2o {
 
 
   // Added point to camera projection, stereo
-  EdgeStereo::EdgeStereo() :
+  EdgeCustomCamera::EdgeCustomCamera() :
     BaseBinaryEdge<2, Vector2D, VertexCustomXYZ, VertexCustomCam>()
   {
   }
 
-  bool EdgeStereo::read(std::istream& is)
+  bool EdgeCustomCamera::read(std::istream& is)
   {
     Vector2D meas;
     for (int i=0; i<2; i++)
@@ -490,7 +490,7 @@ namespace g2o {
     return true;
   }
 
-  bool EdgeStereo::write(std::ostream& os) const
+  bool EdgeCustomCamera::write(std::ostream& os) const
   {
     for (int i=0; i<2; i++)
       os  << measurement()[i] << " ";
@@ -500,7 +500,7 @@ namespace g2o {
 /**
  * \brief Jacobian for stereo projection
  */
-  void EdgeStereo::linearizeOplus()
+  void EdgeCustomCamera::linearizeOplus()
   {
     VertexCustomCam *vc = static_cast<VertexCustomCam *>(_vertices[1]);
     const CustomCam &cam = vc->estimate();

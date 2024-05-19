@@ -394,11 +394,11 @@ class G2O_TYPES_SBA_API EdgeScaleNetworkConsistency :  public BaseUnaryEdge<1, d
 /* Added */
 // stereo projection
 // first two args are the measurement type, second two the connection classes
- class G2O_TYPES_SBA_API EdgeStereo: public  BaseBinaryEdge<2, Vector2D, VertexCustomXYZ, VertexCustomCam>
+ class G2O_TYPES_SBA_API EdgeCustomCamera: public  BaseBinaryEdge<2, Vector2D, VertexCustomXYZ, VertexCustomCam>
 {
   public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    EdgeStereo();
+    EdgeCustomCamera();
     virtual bool read(std::istream& is);
     virtual bool write(std::ostream& os) const;
 

@@ -56,7 +56,8 @@ class BundleAdjustment(g2o.SparseOptimizer):
         scale_v.set_estimate(scale)
         super().add_vertex(scale_v)
 
-    def add_scale_edge(self, edge_id: int, scale_id: int, meas: float, information: np.ndarray = np.identity(1)) -> None:
+    def add_scale_edge(self, edge_id: int, scale_id: int, meas: float,
+                       information: np.ndarray = np.identity(1)) -> None:
         edge = g2o.EdgeScaleNetworkConsistency()
         edge.set_measurement(meas)
         edge.set_information(information)
@@ -66,7 +67,6 @@ class BundleAdjustment(g2o.SparseOptimizer):
         kernel = g2o.RobustKernelHuber(self.delta)
         edge.set_robust_kernel(kernel)
         super().add_edge(edge)
-
 
     def add_camera_edge(self, edge_id: int, point_id: int, pose_id: int, meas: np.ndarray,
                         information: np.ndarray = np.identity(2)) -> None:
@@ -81,8 +81,8 @@ class BundleAdjustment(g2o.SparseOptimizer):
         edge.set_robust_kernel(kernel)
         super().add_edge(edge)
 
-    def add_depth_scale_consistency_edge(self, edge_id: int, point_id: int, pose_id: int, 
-            scale_id: int,  meas: float, information: np.ndarray = np.identity(1)) -> None:
+    def add_depth_scale_consistency_edge(self, edge_id: int, point_id: int, pose_id: int, scale_id: int, meas: float,
+                                         information: np.ndarray = np.identity(1)) -> None:
         edge = g2o.EdgeDepthConsistencyScale()
         edge.set_id(edge_id)
         edge.set_measurement(meas)
@@ -112,9 +112,9 @@ class LocalBA(object):
         # threshold for confidence interval of 95%
         self.huber_threshold = 5.991
         self.total_points = 0
+
     def set_data(self, pose: g2o.SE3Quat, cam: namedtuple, points: np.ndarray, pixels: np.ndarray,
-                 canonical_depth: np.ndarray, scale_network: float = 1,
-                 scale: float = 1) -> None:
+                 canonical_depth: np.ndarray, scale_network: float = 1, scale: float = 1) -> None:
         self.clear()
 
         self.optimizer.add_pose(0, pose, cam)
@@ -129,7 +129,8 @@ class LocalBA(object):
         self.optimizer.add_scale_edge(self.total_points + 1, self.total_points + 3, scale_network)
 
         for ii, point in enumerate(points):
-            self.optimizer.add_depth_scale_consistency_edge(self.total_points + 2, ii + 2, 0, self.total_points+3, canonical_depth[ii])
+            self.optimizer.add_depth_scale_consistency_edge(self.total_points + 2, ii + 2, 0, self.total_points + 3,
+                                                            canonical_depth[ii])
 
     def get_bad_measurements(self):
         bad_measurements = []

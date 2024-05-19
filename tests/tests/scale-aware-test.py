@@ -23,7 +23,7 @@ if __name__ == '__main__':
     scene = 'scene0655_01'
     split = 'valid'
     test_id = 7
- 
+
     ids = [(file.split('.')[0]) for file in os.listdir(path + "/" + split + "/rgb/" + scene)]
     ids = sorted(ids, key=lambda x: str(x))
 
@@ -51,11 +51,11 @@ if __name__ == '__main__':
         qx_test, qy_test, qz_test, qw_test = data['quat_x'], data['quat_y'], data['quat_z'], data['quat_w']
         x_test, y_test, z_test = data['x'], data['y'], data['z']
 
+    # From camera to world #
     rotation_test = R.from_quat([qx_test, qy_test, qz_test, qw_test])
     transformation_matrix_test = np.eye(4)
     transformation_matrix_test[:3, :3] = rotation_test.as_matrix()
     transformation_matrix_test[:3, 3] = [x_test, y_test, z_test]
-
     assert is_valid_rotation_matrix(transformation_matrix_test[:3, :3])
 
     # Extrinsics base image #
@@ -64,18 +64,18 @@ if __name__ == '__main__':
         qx_base, qy_base, qz_base, qw_base = data['quat_x'], data['quat_y'], data['quat_z'], data['quat_w']
         x_base, y_base, z_base = data['x'], data['y'], data['z']
 
+    # From camera to world: first frame #
     rotation_base = R.from_quat([qx_base, qy_base, qz_base, qw_base])
     transformation_matrix_base = np.eye(4)
     transformation_matrix_base[:3, :3] = rotation_base.as_matrix()
     transformation_matrix_base[:3, 3] = [x_base, y_base, z_base]
     transformation_matrix_base_inv = invert_transformation_matrix(transformation_matrix_base)
-
     assert is_valid_rotation_matrix(transformation_matrix_base[:3, :3])
 
     # Base frame is not at zero, transform frames to the origin #
-    transformation_matrix_test_corrected = transformation_matrix_base_inv @ transformation_matrix_test
-
-    assert is_valid_rotation_matrix(transformation_matrix_test_corrected[:3, :3])
+    # camera_to_world_transform for test frame                  #
+    camera_to_world_transform = transformation_matrix_base_inv @ transformation_matrix_test
+    assert is_valid_rotation_matrix(camera_to_world_transform[:3, :3])
 
     # Load test image and depth #
     img_test = cv2.imread(img_test_path, -1)
@@ -87,28 +87,26 @@ if __name__ == '__main__':
 
     # Get some 3D points #
     pixels, points_w = get_test_points_pixel_and_world_coords(
-        cam=cam, camera_to_world_transform=transformation_matrix_test_corrected, image=img_test, depth_map=depth_test,
+        cam=cam, camera_to_world_transform=camera_to_world_transform, image=img_test, depth_map=depth_test,
         num_points=50, viz=False)
 
-    world_to_camera_transform = invert_transformation_matrix(transformation_matrix_test_corrected)
+    world_to_camera_transform = invert_transformation_matrix(camera_to_world_transform)
 
     reprojection_error = reprojection_error_test(pixels[0, 5], pixels[1, 5], cam, points_w[5,:], \
                                                  world_to_camera_transform)
     assert np.all(np.allclose(reprojection_error, 0, atol=0.0001))
+
     # Perturb pose #
     translation_perturbation = np.array([0.05, 0.05, 0.05])  # cm
     rotation_perturbation = np.array([5, 5, 5])  # degrees
-
-    transformation_matrix_test_corrected_perturb = perturb_transformation_matrix(transformation_matrix_test_corrected,
-                                                                                 translation_perturbation,
-                                                                                 rotation_perturbation)
-
-    assert is_valid_rotation_matrix(transformation_matrix_test_corrected_perturb[:3, :3])
+    camera_to_world_transform_perturb = perturb_transformation_matrix(camera_to_world_transform,
+                                                                     translation_perturbation,
+                                                                     rotation_perturbation)
+    assert is_valid_rotation_matrix(camera_to_world_transform_perturb[:3, :3])
 
     # Get perturb points #
-    points_w_perturb = get_point_cloud_from_pixels(cam, pixels[0, :], pixels[1, :], depth_test,
-                                                   transformation_matrix_test_corrected_perturb)
-
+    #points_w_perturb = get_point_cloud_from_pixels(cam, pixels[0, :], pixels[1, :], depth_test,
+    #                                               camera_to_world_transform_perturb)
     #visualize_matching_point_clouds(points_w, points_w_perturb)
 
     #####################
@@ -118,8 +116,8 @@ if __name__ == '__main__':
     # Assume scale = 1 and canonical_depth == depth camera #
     canonical_depth = depth_test[pixels[1, :], pixels[0, :]]
 
-    w_pose_c = g2o.SE3Quat(transformation_matrix_test_corrected_perturb[:3, :3],
-                           transformation_matrix_test_corrected_perturb[:3, 3])
+    w_pose_c = g2o.SE3Quat(camera_to_world_transform_perturb[:3, :3],
+                           camera_to_world_transform_perturb[:3, 3])
 
     optimizer = LocalBA()
     optimizer.set_data(w_pose_c, cam, points_w, pixels, canonical_depth, scale_network=1, scale=0.8)
@@ -137,20 +135,22 @@ if __name__ == '__main__':
     # Calculate errors #
     ####################
     print("Scale-Aware test")
-    rte = RTE(transformation_matrix_test_corrected, transformation_matrix_test_corrected_perturb)
-    rre = RRE(transformation_matrix_test_corrected, transformation_matrix_test_corrected_perturb)
-    ate_rot = ATE_rot(transformation_matrix_test_corrected, transformation_matrix_test_corrected_perturb)
-    ate_trans = ATE_trans(transformation_matrix_test_corrected, transformation_matrix_test_corrected_perturb)
+
     print("Before optimization: ")
+    rte = RTE(camera_to_world_transform, camera_to_world_transform_perturb)
+    rre = RRE(camera_to_world_transform, camera_to_world_transform_perturb)
+    ate_rot = ATE_rot(camera_to_world_transform, camera_to_world_transform_perturb)
+    ate_trans = ATE_trans(camera_to_world_transform, camera_to_world_transform_perturb)
     print("relative trans error: ", rte)
     print("relative rot error: ", rte)
     print("absolute traj error (rot): ", ate_rot)
     print("absolute traj error (trans): ", ate_trans)
-    rte = RTE(transformation_matrix_test_corrected, estimated_transformation)
-    rre = RRE(transformation_matrix_test_corrected, estimated_transformation)
-    ate_rot = ATE_rot(transformation_matrix_test_corrected, estimated_transformation)
-    ate_trans = ATE_trans(transformation_matrix_test_corrected, estimated_transformation)
+
     print("After optimization: ")
+    rte = RTE(camera_to_world_transform, estimated_transformation)
+    rre = RRE(camera_to_world_transform, estimated_transformation)
+    ate_rot = ATE_rot(camera_to_world_transform, estimated_transformation)
+    ate_trans = ATE_trans(camera_to_world_transform, estimated_transformation)
     print("relative trans error: ", rte)
     print("relative rot error: ", rte)
     print("absolute traj error (rot): ", ate_rot)

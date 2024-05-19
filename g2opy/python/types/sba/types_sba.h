@@ -95,10 +95,10 @@ void declareTypesSBA(py::module & m) {
     // added stereo projection
     // first two args are the measurement type, second two the connection classes
     templatedBaseBinaryEdge<2, Vector2D, VertexCustomXYZ, VertexCustomCam>(m, "_3_Vector3D_VertexCustomXYZ_VertexCustomCam");
-    py::class_<EdgeStereo, BaseBinaryEdge<2, Vector2D, VertexCustomXYZ, VertexCustomCam>>(m, "EdgeStereo")
+    py::class_<EdgeCustomCamera, BaseBinaryEdge<2, Vector2D, VertexCustomXYZ, VertexCustomCam>>(m, "EdgeCustomCamera")
         .def(py::init<>())
-        .def("compute_error", &EdgeStereo::computeError)    // () -> void
-        .def("linearize_oplus", &EdgeStereo::linearizeOplus)
+        .def("compute_error", &EdgeCustomCamera::computeError)    // () -> void
+        .def("linearize_oplus", &EdgeCustomCamera::linearizeOplus)
     ;
 
 
