@@ -90,7 +90,7 @@ void declareCustomCam(py::module & m) {
                 "m"_a, "trans"_a, "qrot"_a)                                                                              // (Eigen::Matrix<double,3,4>&, const Eigen::Vector3d&, const Eigen::Quaterniond&) ->
 
         .def("set_cam", &CustomCam::setKcam,
-                "fx"_a, "fy"_a, "cx"_a, "cy"_a, "tx"_a,
+                "fx"_a, "fy"_a, "cx"_a, "cy"_a,
                 "set up camera matrix")  
 
         .def("set_transform", &CustomCam::setTransform,
@@ -106,7 +106,6 @@ void declareCustomCam(py::module & m) {
 
         .def_readwrite("cam", &CustomCam::Kcam, "camera matrix")
         .def_readwrite("Kcam", &CustomCam::Kcam, "camera matrix")
-        .def_readwrite("baseline", &CustomCam::baseline, "stereo baseline")
 
         .def_readwrite("w2n", &CustomCam::w2n, "transform from world to node coordinates")
         .def_readwrite("w2i", &CustomCam::w2i, "transform from world to image coordinates")

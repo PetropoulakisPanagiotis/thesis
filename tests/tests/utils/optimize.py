@@ -48,7 +48,7 @@ class BundleAdjustment(g2o.SparseOptimizer):
         sbacam = g2o.CustomCam(
             pose.orientation(), pose.position())
         sbacam.set_cam(
-            cam.fx, cam.fy, cam.cx, cam.cy, cam.baseline)
+            cam.fx, cam.fy, cam.cx, cam.cy)
 
         #v_se3 = g2o.VertexCam()
         #v_se3.set_id(pose_id * 2)
@@ -63,10 +63,8 @@ class BundleAdjustment(g2o.SparseOptimizer):
         super().add_vertex(v_se3)
 
     def add_point(self, point_id, point, fixed=False, marginalized=True):
-        #v_p = g2o.VertexSBAPointXYZ()
         v_p = g2o.VertexCustomXYZ()
-
-        v_p.set_id(point_id * 2 + 1)
+        v_p.set_id(point_id + 1)
         v_p.set_marginalized(marginalized)
         v_p.set_estimate(point)
         v_p.set_fixed(fixed)
@@ -165,29 +163,25 @@ class LocalBA(object):
 
     def set_data(self, pose, cam, points, canonical_depth, scale=1):
         self.clear()
-        pose_id = 0
-        self.optimizer.add_pose(pose_id, pose, cam, fixed=False)
 
+        self.optimizer.add_pose(0, pose, cam, fixed=False)
+
+        # +1 id #
+        for ii, point in enumerate(points):
+            self.optimizer.add_point(ii, point)
+
+
+
+        """
         for ii, point in enumerate(points):
             self.optimizer.add_point(ii, point)
 
             edge_id = len(self.measurements)
-
             self.optimizer.add_edge(edge_id, pt.id, kf.id, m)
 
-                if self.local_counter == 0:
                     self.optimizer.add_edge_depth_consistency(kf.pose, kf.cam, pt.position)
-                    self.local_counter = 1
+            """
 
-                self.measurements.append(m)
-
-        for kf in fixed_keyframes:
-            self.optimizer.add_pose(kf.id, kf.pose, kf.cam, fixed=True)
-            for m in kf.measurements():
-                if m.mappoint in self.mappoints:
-                    edge_id = len(self.measurements)
-                    self.optimizer.add_edge(edge_id, m.mappoint.id, kf.id, m)
-                    self.measurements.append(m)
 
     def get_bad_measurements(self):
         bad_measurements = []

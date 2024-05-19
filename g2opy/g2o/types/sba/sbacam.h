@@ -245,7 +245,6 @@ namespace g2o {
 
       // camera matrix and stereo baseline
       Eigen::Matrix3d Kcam; 
-      double baseline;
 
       // transformations
       Eigen::Matrix<double,3,4> w2n; // transform from world to node coordinates
@@ -259,7 +258,7 @@ namespace g2o {
       CustomCam()
       {
         SE3Quat();
-        setKcam(1,1,0.5,0.5,0);  // unit image projection
+        setKcam(1,1,0.5,0.5);  // unit image projection
       }
 
 
@@ -319,7 +318,7 @@ namespace g2o {
       }
 
       // set up camera matrix
-      void setKcam(double fx, double fy, double cx, double cy, double tx)
+      void setKcam(double fx, double fy, double cx, double cy)
       { 
         Kcam.setZero();
         Kcam(0,0) = fx;
@@ -327,7 +326,6 @@ namespace g2o {
         Kcam(0,2) = cx;
         Kcam(1,2) = cy;
         Kcam(2,2) = 1.0;
-        baseline = tx;
         setProjection();
         setDr();
       }

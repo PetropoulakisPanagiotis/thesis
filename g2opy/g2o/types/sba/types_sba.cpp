@@ -50,7 +50,11 @@ namespace g2o {
   /* Added */ 
   G2O_REGISTER_TYPE(VERTEX_CUSTOM_XYZ, VertexCustomXYZ);
   G2O_REGISTER_TYPE(VERTEX_CUSTOM_CAM, VertexCustomCam);
+  G2O_REGISTER_TYPE(VERTEX_SCALE, VertexScale);
   G2O_REGISTER_TYPE(EDGE_STEREO, EdgeStereo);
+  G2O_REGISTER_TYPE(EDGE_SCALE_NETWORK_CONSISTENCY, EdgeScaleNetworkConsistency);
+  G2O_REGISTER_TYPE(EDGE_DEPTH_CONSISTENCY_SCALE, EdgeDepthConsistencyScale);
+
   
   // constructor
   VertexIntrinsics::VertexIntrinsics() 
@@ -265,18 +269,18 @@ namespace g2o {
     // form the camera object
     CustomCam cam(r,t);
 
-    // now fx, fy, cx, cy, baseline
-    double fx, fy, cx, cy, tx;
+    // now fx, fy, cx, cy
+    double fx, fy, cx, cy;
 
     // try to read one value
     is >>  fx;
     if (is.good()) {
-      is >>  fy >> cx >> cy >> tx;
-      cam.setKcam(fx,fy,cx,cy,tx);
+      is >>  fy >> cx >> cy;
+      cam.setKcam(fx,fy,cx,cy);
     } else{
       is.clear();
       std::cerr << "cam not defined, using defaults" << std::endl;
-      cam.setKcam(300,300,320,320,0.1);
+      cam.setKcam(300,300,320,320);
     }
 
     // set the object
@@ -296,12 +300,11 @@ namespace g2o {
     for (int i=0; i<4; i++)
       os << cam.rotation().coeffs()[i] << " ";
 
-    // now fx, fy, cx, cy, baseline
+    // now fx, fy, cx, cy
     os << cam.Kcam(0,0) << " ";
     os << cam.Kcam(1,1) << " ";
     os << cam.Kcam(0,2) << " ";
     os << cam.Kcam(1,2) << " ";
-    os << cam.baseline << " ";
     return os.good();
   }
 
@@ -472,14 +475,14 @@ namespace g2o {
 
   // Added point to camera projection, stereo
   EdgeStereo::EdgeStereo() :
-    BaseBinaryEdge<3, Vector3D, VertexCustomXYZ, VertexCustomCam>()
+    BaseBinaryEdge<2, Vector2D, VertexCustomXYZ, VertexCustomCam>()
   {
   }
 
   bool EdgeStereo::read(std::istream& is)
   {
-    Vector3D meas;
-    for (int i=0; i<3; i++)
+    Vector2D meas;
+    for (int i=0; i<2; i++)
       is >> meas[i];
     setMeasurement(meas);
     // information matrix is the identity for features, could be changed to allow arbitrary covariances
@@ -489,7 +492,7 @@ namespace g2o {
 
   bool EdgeStereo::write(std::ostream& os) const
   {
-    for (int i=0; i<3; i++)
+    for (int i=0; i<2; i++)
       os  << measurement()[i] << " ";
     return os.good();
   }
@@ -525,7 +528,6 @@ namespace g2o {
 
     double ipz2fx = ipz2*cam.Kcam(0,0); // Fx
     double ipz2fy = ipz2*cam.Kcam(1,1); // Fy
-    double b      = cam.baseline; // stereo baseline
 
     Eigen::Matrix<double,3,1,Eigen::ColMajor> pwt;
 
@@ -536,46 +538,37 @@ namespace g2o {
     Eigen::Matrix<double,3,1,Eigen::ColMajor> dp = cam.dRdx * pwt; // dR'/dq * [pw - t]
     _jacobianOplusXj(0,3) = (pz*dp(0) - px*dp(2))*ipz2fx;
     _jacobianOplusXj(1,3) = (pz*dp(1) - py*dp(2))*ipz2fy;
-    _jacobianOplusXj(2,3) = (pz*dp(0) - (px-b)*dp(2))*ipz2fx; // right image px
     // dy
     dp = cam.dRdy * pwt; // dR'/dq * [pw - t]
     _jacobianOplusXj(0,4) = (pz*dp(0) - px*dp(2))*ipz2fx;
     _jacobianOplusXj(1,4) = (pz*dp(1) - py*dp(2))*ipz2fy;
-    _jacobianOplusXj(2,4) = (pz*dp(0) - (px-b)*dp(2))*ipz2fx; // right image px
     // dz
     dp = cam.dRdz * pwt; // dR'/dq * [pw - t]
     _jacobianOplusXj(0,5) = (pz*dp(0) - px*dp(2))*ipz2fx;
     _jacobianOplusXj(1,5) = (pz*dp(1) - py*dp(2))*ipz2fy;
-    _jacobianOplusXj(2,5) = (pz*dp(0) - (px-b)*dp(2))*ipz2fx; // right image px
 
     // set d(t) values [ pz*dpx/dx - px*dpz/dx ] / pz^2
     dp = -cam.w2n.col(0);        // dpc / dx
     _jacobianOplusXj(0,0) = (pz*dp(0) - px*dp(2))*ipz2fx;
     _jacobianOplusXj(1,0) = (pz*dp(1) - py*dp(2))*ipz2fy;
-    _jacobianOplusXj(2,0) = (pz*dp(0) - (px-b)*dp(2))*ipz2fx; // right image px
     dp = -cam.w2n.col(1);        // dpc / dy
     _jacobianOplusXj(0,1) = (pz*dp(0) - px*dp(2))*ipz2fx;
     _jacobianOplusXj(1,1) = (pz*dp(1) - py*dp(2))*ipz2fy;
-    _jacobianOplusXj(2,1) = (pz*dp(0) - (px-b)*dp(2))*ipz2fx; // right image px
     dp = -cam.w2n.col(2);        // dpc / dz
     _jacobianOplusXj(0,2) = (pz*dp(0) - px*dp(2))*ipz2fx;
     _jacobianOplusXj(1,2) = (pz*dp(1) - py*dp(2))*ipz2fy;
-    _jacobianOplusXj(2,2) = (pz*dp(0) - (px-b)*dp(2))*ipz2fx; // right image px
 
     // Jacobians wrt point parameters
     // set d(t) values [ pz*dpx/dx - px*dpz/dx ] / pz^2
     dp = cam.w2n.col(0); // dpc / dx
     _jacobianOplusXi(0,0) = (pz*dp(0) - px*dp(2))*ipz2fx;
     _jacobianOplusXi(1,0) = (pz*dp(1) - py*dp(2))*ipz2fy;
-    _jacobianOplusXi(2,0) = (pz*dp(0) - (px-b)*dp(2))*ipz2fx; // right image px
     dp = cam.w2n.col(1); // dpc / dy
     _jacobianOplusXi(0,1) = (pz*dp(0) - px*dp(2))*ipz2fx;
     _jacobianOplusXi(1,1) = (pz*dp(1) - py*dp(2))*ipz2fy;
-    _jacobianOplusXi(2,1) = (pz*dp(0) - (px-b)*dp(2))*ipz2fx; // right image px
     dp = cam.w2n.col(2); // dpc / dz
     _jacobianOplusXi(0,2) = (pz*dp(0) - px*dp(2))*ipz2fx;
     _jacobianOplusXi(1,2) = (pz*dp(1) - py*dp(2))*ipz2fy;
-    _jacobianOplusXi(2,2) = (pz*dp(0) - (px-b)*dp(2))*ipz2fx; // right image px
   }
 
 

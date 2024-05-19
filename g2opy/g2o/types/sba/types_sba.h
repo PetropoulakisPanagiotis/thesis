@@ -394,7 +394,7 @@ class G2O_TYPES_SBA_API EdgeScaleNetworkConsistency :  public BaseUnaryEdge<1, d
 /* Added */
 // stereo projection
 // first two args are the measurement type, second two the connection classes
- class G2O_TYPES_SBA_API EdgeStereo: public  BaseBinaryEdge<3, Vector3D, VertexCustomXYZ, VertexCustomCam>
+ class G2O_TYPES_SBA_API EdgeStereo: public  BaseBinaryEdge<2, Vector2D, VertexCustomXYZ, VertexCustomCam>
 {
   public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -410,7 +410,7 @@ class G2O_TYPES_SBA_API EdgeScaleNetworkConsistency :  public BaseUnaryEdge<1, d
       VertexCustomCam *cam = static_cast<VertexCustomCam*>(_vertices[1]);
 
       // calculate the projection
-      Vector3D kp;
+      Vector2D kp;
       Vector4D pt;
       pt.head<3>() = point->estimate();
       pt(3) = 1.0;
@@ -421,15 +421,9 @@ class G2O_TYPES_SBA_API EdgeScaleNetworkConsistency :  public BaseUnaryEdge<1, d
       /* nd.setDr(); */
 
       Vector3D p1 = nd.w2i * pt; 
-      Vector3D p2 = nd.w2n * pt; 
-      Vector3D pb(nd.baseline,0,0);
 
       double invp1 = 1.0/p1(2);
       kp.head<2>() = p1.head<2>()*invp1;
-
-      // right camera px
-      p2 = nd.Kcam*(p2-pb);
-      kp(2) = p2(0)/p2(2);
 
       // std::cout << std::endl << "CAM   " << cam->estimate() << std::endl; 
       // std::cout << "POINT " << pt.transpose() << std::endl; 
