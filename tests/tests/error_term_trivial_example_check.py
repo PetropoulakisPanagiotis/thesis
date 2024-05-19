@@ -11,7 +11,7 @@ from utils.utils import get_test_points_pixel_and_world_coords, visualize_depth_
                         get_point_cloud_from_pixels, visualize_matching_point_clouds, \
                         invert_transformation_matrix, is_valid_rotation_matrix
 from utils.optimize import LocalBA
-
+from utils.metrics import ATE, ARE
 
 if __name__ == '__main__':
     path = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted'
@@ -27,6 +27,7 @@ if __name__ == '__main__':
     rgb_ids = [path + '/' + split + '/rgb/' + scene + "/" + str(item) + '.jpg' for item in ids]
     depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
 
+    # Pick test images #
     img_test_id_str = ids[test_id]
     img_test_path = rgb_ids[test_id]
     depth_test_path = depth_ids[test_id]
@@ -37,7 +38,8 @@ if __name__ == '__main__':
     # Intrinsics #
     with open(path + "/" + split + '/rgb_intrinsics/' + scene + ".json", 'r') as json_file:
         data = json.load(json_file)
-        cam = namedtuple('camera', 'fx fy cx cy scale baseline')(data['fx'], data['fy'], data['cx'], data['cy'], 1000.0, 0)
+        cam = namedtuple('camera', 'fx fy cx cy scale baseline')(data['fx'], data['fy'], data['cx'], data['cy'], 1000.0,
+                                                                 0)
 
     # Extrinsics test image #
     with open(path + "/" + split + '/extrinsics/' + scene + "/" + img_test_id_str + ".json", 'r') as json_file:
@@ -79,10 +81,12 @@ if __name__ == '__main__':
 
     #visualize_depth_map(depth_test)
 
+    # Get some 3D points #
     pixels, points_w = get_test_points_pixel_and_world_coords(
         cam=cam, camera_to_world_transform=transformation_matrix_test_corrected, image=img_test, depth_map=depth_test,
         num_points=50, viz=False)
 
+    # Perturb pose #
     translation_perturbation = np.array([0.025, 0.025, 0.025])  # cm
     rotation_perturbation = np.array([2.5, 2.5, 2.5])  # degrees
 
@@ -90,16 +94,29 @@ if __name__ == '__main__':
                                                                                  translation_perturbation,
                                                                                  rotation_perturbation)
 
-    assert is_valid_rotation_matrix(transformation_matrix_test_corrected_perturb[:3,:3])
+    assert is_valid_rotation_matrix(transformation_matrix_test_corrected_perturb[:3, :3])
 
-    points_w_perturb = get_point_cloud_from_pixels(cam, pixels[0, :], pixels[1, :], depth_test, transformation_matrix_test_corrected_perturb)
+    # Get perturb points #
+    points_w_perturb = get_point_cloud_from_pixels(cam, pixels[0, :], pixels[1, :], depth_test,
+                                                   transformation_matrix_test_corrected_perturb)
 
     #visualize_matching_point_clouds(points_w, points_w_perturb)
+
+    #####################
+    # Test optimization #
+    #####################
 
     # Assume scale = 1 and canonical_depth == depth camera #
     canonical_depth = depth_test[pixels[1, :], pixels[0, :]]
 
-    pose = g2o.SE3Quat(transformation_matrix_test_corrected_perturb[:3, :3], transformation_matrix_test_corrected_perturb[:3, 3])
+    w_pose_c = g2o.SE3Quat(transformation_matrix_test_corrected_perturb[:3, :3],
+                           transformation_matrix_test_corrected_perturb[:3, 3])
 
     optimizer = LocalBA()
-    optimizer.set_data(pose, cam, points_w_perturb, None, 1)
+    optimizer.set_data(w_pose_c, cam, points_w_perturb, pixels, None, 1)
+    optimizer.optimize(10)
+    estimated_transformation = optimizer.get_estimate(0).matrix()
+
+    #print(ATE(transformation_matrix_test_corrected, estimated_transformation))
+
+    print(estimated_transformation, transformation_matrix_test_corrected_perturb)

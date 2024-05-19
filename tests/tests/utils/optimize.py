@@ -1,11 +1,13 @@
+from collections import namedtuple
 import numpy as np
 import g2o
+
 
 class BundleAdjustment(g2o.SparseOptimizer):
     def __init__(self, ):
         super().__init__()
 
-        # Higher confident (better than CHOLMOD, according to 
+        # Higher confident (better than CHOLMOD, according to
         # paper "3-D Mapping With an RGB-D Camera")
         solver = g2o.BlockSolverSE3(g2o.LinearSolverCSparseSE3())
         solver = g2o.OptimizationAlgorithmLevenberg(solver)
@@ -28,69 +30,49 @@ class BundleAdjustment(g2o.SparseOptimizer):
         finally:
             self.aborted = False
 
-    def add_pose(self, pose_id, pose, cam, fixed=False):
-        #sbacam = g2o.SBACam(
-        #    pose.orientation(), pose.position())
-        #sbacam.set_cam(
-        #    cam.fx, cam.fy, cam.cx, cam.cy, cam.baseline)
+    def add_pose(self, pose_id: int, pose: g2o.SE3Quat, cam: namedtuple, fixed: bool = False) -> None:
 
-        c = g2o.VertexCanonical()
-        c.set_id(pose_id * 2)
-        c.set_estimate(5)
-        c.set_fixed(fixed)
-
-        s = g2o.VertexScale()
-        s.set_id(pose_id * 2)
-        s.set_estimate(5)
-        s.set_fixed(fixed)
-
-
-        sbacam = g2o.CustomCam(
-            pose.orientation(), pose.position())
-        sbacam.set_cam(
-            cam.fx, cam.fy, cam.cx, cam.cy)
-
-        #v_se3 = g2o.VertexCam()
-        #v_se3.set_id(pose_id * 2)
-        #v_se3.set_estimate(sbacam)
-        #v_se3.set_fixed(fixed)
+        sbacam = g2o.CustomCam(pose.orientation(), pose.position())
+        sbacam.set_cam(cam.fx, cam.fy, cam.cx, cam.cy)
 
         v_se3 = g2o.VertexCustomCam()
-        v_se3.set_id(pose_id * 2)
+        v_se3.set_id(pose_id)
         v_se3.set_estimate(sbacam)
         v_se3.set_fixed(fixed)
 
         super().add_vertex(v_se3)
 
-    def add_point(self, point_id, point, fixed=False, marginalized=True):
+    def add_point(self, point_id: int, point: np.ndarray, fixed: bool = False, marginalized: bool = True) -> None:
         v_p = g2o.VertexCustomXYZ()
-        v_p.set_id(point_id + 1)
+        v_p.set_id(point_id)
         v_p.set_marginalized(marginalized)
         v_p.set_estimate(point)
         v_p.set_fixed(fixed)
         super().add_vertex(v_p)
 
-    def add_edge(self, id, point_id, pose_id, meas):
-        if meas.is_stereo():
-            edge = self.stereo_edge(meas.xyx)
-        elif meas.is_left():
-            edge = self.mono_edge(meas.xy)
-        elif meas.is_right():
-            edge = self.mono_edge_right(meas.xy)
+    def add_scale(self, scale_id: int, scale: float, fixed: bool = False, marginalized: bool = False):
+        scale_v = g2o.VertexScale()
+        scale_v.set_id(scale_id)
+        scale_v.set_estimate(scale)
+        super().add_vertex(scale_v)
 
-        edge.set_id(id)
-        edge.set_vertex(0, self.vertex(point_id * 2 + 1))
-        edge.set_vertex(1, self.vertex(pose_id * 2))
+    def add_camera_edge(self, edge_id: int, point_id: int, pose_id: int, meas: np.ndarray,
+                        information: np.ndarray = np.identity(2)) -> None:
+        edge = g2o.EdgeStereo()
+        edge.set_measurement(meas)
+        edge.set_information(information)
+
+        edge.set_id(edge_id)
+        edge.set_vertex(0, self.vertex(point_id))
+        edge.set_vertex(1, self.vertex(pose_id))
         kernel = g2o.RobustKernelHuber(self.delta)
         edge.set_robust_kernel(kernel)
         super().add_edge(edge)
 
     def add_edge_depth_consistency(self, pose, cam, point):
         id = 5000000
-        sbacam = g2o.CustomCam(
-            pose.orientation(), pose.position())
-        sbacam.set_cam(
-            cam.fx, cam.fy, cam.cx, cam.cy, cam.baseline)
+        sbacam = g2o.CustomCam(pose.orientation(), pose.position())
+        sbacam.set_cam(cam.fx, cam.fy, cam.cx, cam.cy, cam.baseline)
 
         v_se3 = g2o.VertexCustomCam()
         v_se3.set_id(id)
@@ -100,58 +82,44 @@ class BundleAdjustment(g2o.SparseOptimizer):
 
         v_p = g2o.VertexCustomXYZ()
 
-        v_p.set_id(id+1)
+        v_p.set_id(id + 1)
         v_p.set_marginalized(True)
         v_p.set_estimate(point)
         v_p.set_fixed(False)
         super().add_vertex(v_p)
 
         c = g2o.VertexCanonical()
-        c.set_id(id+2)
+        c.set_id(id + 2)
         c.set_estimate(5)
         c.set_fixed(False)
         super().add_vertex(c)
 
         s = g2o.VertexScale()
-        s.set_id(id+3)
+        s.set_id(id + 3)
         s.set_estimate(5)
         s.set_fixed(False)
         super().add_vertex(s)
 
         e = g2o.EdgeDepthConsistencyScale()
-        e.set_id(id+4)
+        e.set_id(id + 4)
         e.set_measurement(5)
         e.set_information(np.identity(1))
 
         # 0 cam: Pose + t
-        # 1 3D point: XYZ 
+        # 1 3D point: XYZ
         # 2 canonical: C
         # 3 scale: S
         e.set_vertex(0, self.vertex(id))
-        e.set_vertex(1, self.vertex(id+2))
-        e.set_vertex(2, self.vertex(id+3))
+        e.set_vertex(1, self.vertex(id + 2))
+        e.set_vertex(2, self.vertex(id + 3))
         kernel = g2o.RobustKernelHuber(self.delta)
         e.set_robust_kernel(kernel)
 
-    def stereo_edge(self, projection, information=np.identity(3)):
-        #e = g2o.EdgeProjectP2SC()
-        #e.set_measurement(projection)
-        #e.set_information(information)
-
-        e = g2o.EdgeStereo()
-        e.set_measurement(projection)
-        e.set_information(information)
-        return e
-
-    def get_pose(self, id):
-        return self.vertex(id * 2).estimate()
-
-    def get_point(self, id):
-        return self.vertex(id * 2 + 1).estimate()
+    def get_estimate(self, vertex_id: int) -> np.ndarray:
+        return self.vertex(vertex_id).estimate()
 
     def abort(self):
         self.aborted = True
-
 
 
 class LocalBA(object):
@@ -161,27 +129,17 @@ class LocalBA(object):
         # threshold for confidence interval of 95%
         self.huber_threshold = 5.991
 
-    def set_data(self, pose, cam, points, canonical_depth, scale=1):
+    def set_data(self, pose: g2o.SE3Quat, cam: namedtuple, points: np.ndarray, pixels: np.ndarray,
+                 canonical_depth: np.ndarray, scale: float = 1) -> None:
         self.clear()
 
-        self.optimizer.add_pose(0, pose, cam, fixed=False)
+        self.optimizer.add_pose(0, pose, cam)
+        self.optimizer.add_scale(1, scale)
 
         # +1 id #
         for ii, point in enumerate(points):
-            self.optimizer.add_point(ii, point)
-
-
-
-        """
-        for ii, point in enumerate(points):
-            self.optimizer.add_point(ii, point)
-
-            edge_id = len(self.measurements)
-            self.optimizer.add_edge(edge_id, pt.id, kf.id, m)
-
-                    self.optimizer.add_edge_depth_consistency(kf.pose, kf.cam, pt.position)
-            """
-
+            self.optimizer.add_point(ii + 2, point)
+            self.optimizer.add_camera_edge(ii, ii + 2, 0, pixels[:, ii])
 
     def get_bad_measurements(self):
         bad_measurements = []
@@ -189,6 +147,9 @@ class LocalBA(object):
             if edge.chi2() > self.huber_threshold:
                 bad_measurements.append(self.measurements[edge.id()])
         return bad_measurements
+
+    def get_estimate(self, vertex_id: int) -> np.ndarray:
+        return self.optimizer.get_estimate(vertex_id)
 
     def clear(self):
         self.optimizer.clear()

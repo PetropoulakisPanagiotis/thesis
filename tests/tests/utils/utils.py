@@ -9,6 +9,7 @@ def generate_colors(num_colors: int) -> np.ndarray:
     colors = np.random.rand(num_colors, 3)
     return colors
 
+
 def invert_transformation_matrix(T: np.ndarray) -> np.ndarray:
     rotation = T[:3, :3]
     translation = T[:3, 3]
@@ -19,15 +20,17 @@ def invert_transformation_matrix(T: np.ndarray) -> np.ndarray:
     inv_T[:3, 3] = inv_translation
     return inv_T
 
+
 def is_valid_rotation_matrix(R: np.ndarray) -> bool:
     should_be_identity = np.allclose(R @ R.T, np.eye(3), atol=1e-6)
     should_be_one = np.isclose(np.linalg.det(R), 1.0, atol=1e-6)
     return should_be_identity and should_be_one
 
+
 def visualize_matching_point_clouds(points_original: np.ndarray, points_perturb: np.ndarray) -> None:
     num_matches = points_original.shape[0]
     colors = generate_colors(num_matches)
- 
+
     pcd_original = o3d.geometry.PointCloud()
     pcd_original.points = o3d.utility.Vector3dVector(points_original)
 
@@ -91,7 +94,8 @@ def get_test_points_pixel_and_world_coords(cam: namedtuple, camera_to_world_tran
     return pixels, point_cloud_w
 
 
-def get_point_cloud_from_pixels(cam: namedtuple, u: np.ndarray, v: np.ndarray, depth: np.ndarray, transformation_matrix: np.ndarray) -> np.ndarray:
+def get_point_cloud_from_pixels(cam: namedtuple, u: np.ndarray, v: np.ndarray, depth: np.ndarray,
+                                transformation_matrix: np.ndarray) -> np.ndarray:
     x = (u - cam.cx) * depth[v, u] / cam.fx
     y = (v - cam.cy) * depth[v, u] / cam.fy
     z = depth[v, u]
@@ -108,7 +112,8 @@ def normalize_angles(angles: np.ndarray) -> np.ndarray:
     return angles
 
 
-def perturb_transformation_matrix(transformation_matrix: np.ndarray, translation_perturbation: np.ndarray, rotation_perturbation: np.ndarray) -> np.ndarray:
+def perturb_transformation_matrix(transformation_matrix: np.ndarray, translation_perturbation: np.ndarray,
+                                  rotation_perturbation: np.ndarray) -> np.ndarray:
     rotation_matrix = transformation_matrix[:3, :3]
     translation_vector = transformation_matrix[:3, 3]
 
