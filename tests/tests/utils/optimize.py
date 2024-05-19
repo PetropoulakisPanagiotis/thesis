@@ -9,7 +9,7 @@ class BundleAdjustment(g2o.SparseOptimizer):
 
         # Higher confident (better than CHOLMOD, according to
         # paper "3-D Mapping With an RGB-D Camera")
-        solver = g2o.BlockSolverSE3(g2o.LinearSolverCSparseSE3())
+        solver = g2o.BlockSolverX(g2o.LinearSolverCSparseX())
         solver = g2o.OptimizationAlgorithmLevenberg(solver)
         super().set_algorithm(solver)
 
@@ -43,8 +43,7 @@ class BundleAdjustment(g2o.SparseOptimizer):
         super().add_vertex(v_se3)
 
     def add_point(self, point_id: int, point: np.ndarray, fixed: bool = False, marginalized: bool = True) -> None:
-        v_p = g2o.VertexSBAPointXYZ()#g2o.VertexCustomXYZ()
-        #v_p = g2o.VertexCustomXYZ()
+        v_p = g2o.VertexCustomXYZ()
         v_p.set_id(point_id)
         v_p.set_marginalized(marginalized)
         v_p.set_estimate(point)
@@ -57,10 +56,21 @@ class BundleAdjustment(g2o.SparseOptimizer):
         scale_v.set_estimate(scale)
         super().add_vertex(scale_v)
 
+    def add_scale_edge(self, edge_id: int, scale_id: int, meas: float, information: np.ndarray = np.identity(1)) -> None:
+        edge = g2o.EdgeScaleNetworkConsistency()
+        edge.set_measurement(meas)
+        edge.set_information(information)
+
+        edge.set_id(edge_id)
+        edge.set_vertex(0, self.vertex(scale_id))
+        kernel = g2o.RobustKernelHuber(self.delta)
+        edge.set_robust_kernel(kernel)
+        super().add_edge(edge)
+
+
     def add_camera_edge(self, edge_id: int, point_id: int, pose_id: int, meas: np.ndarray,
                         information: np.ndarray = np.identity(2)) -> None:
-        #edge = g2o.EdgeStereo()
-        edge = g2o.EdgeProjectP2MC()
+        edge = g2o.EdgeCustomCamera()
         edge.set_measurement(meas)
         edge.set_information(information)
 
@@ -130,29 +140,36 @@ class LocalBA(object):
 
         # threshold for confidence interval of 95%
         self.huber_threshold = 5.991
-
+        self.total_points = 0
     def set_data(self, pose: g2o.SE3Quat, cam: namedtuple, points: np.ndarray, pixels: np.ndarray,
-                 canonical_depth: np.ndarray, scale: float = 1) -> None:
+                 canonical_depth: np.ndarray, scale_network: float = 1,
+                 scale: float = 1) -> None:
         self.clear()
 
         self.optimizer.add_pose(0, pose, cam)
         self.optimizer.add_scale(1, scale)
-
+        self.total_points = points.shape[0]
         for ii, point in enumerate(points):
             self.optimizer.add_point(ii + 2, point)
             u, v = pixels[:, ii]
             self.optimizer.add_camera_edge(ii, ii + 2, 0, [u, v])
 
+        self.optimizer.add_scale(self.total_points + 3, scale)
+        self.optimizer.add_scale_edge(self.total_points + 1, self.total_points + 3, scale_network)
+
     def get_bad_measurements(self):
         bad_measurements = []
         for edge in self.optimizer.active_edges():
-            print(edge.chi2())
+            #print(edge.chi2())
             if edge.chi2() > self.huber_threshold:
                 bad_measurements.append(edge.id())
         return bad_measurements
 
     def get_poses(self) -> list[np.ndarray]:
         return [self.optimizer.get_estimate(0)]
+
+    def get_scales(self) -> list[np.ndarray]:
+        return [self.optimizer.get_estimate(self.total_points + 3)]
 
     def clear(self):
         self.optimizer.clear()

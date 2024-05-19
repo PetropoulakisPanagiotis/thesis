@@ -92,12 +92,12 @@ if __name__ == '__main__':
 
     world_to_camera_transform = invert_transformation_matrix(transformation_matrix_test_corrected)
 
-    reprojection_error = reprojection_error_test(pixels[0, 0], pixels[1, 0], cam, points_w[0,:], \
+    reprojection_error = reprojection_error_test(pixels[0, 5], pixels[1, 5], cam, points_w[5,:], \
                                                  world_to_camera_transform)
     assert np.all(np.allclose(reprojection_error, 0, atol=0.0001))
     # Perturb pose #
-    translation_perturbation = np.array([0.02, 0.02, 0.02])  # cm
-    rotation_perturbation = np.array([0, 0, 0])  # degrees
+    translation_perturbation = np.array([0.05, 0.05, 0.05])  # cm
+    rotation_perturbation = np.array([5, 5, 5])  # degrees
 
     transformation_matrix_test_corrected_perturb = perturb_transformation_matrix(transformation_matrix_test_corrected,
                                                                                  translation_perturbation,
@@ -118,22 +118,24 @@ if __name__ == '__main__':
     # Assume scale = 1 and canonical_depth == depth camera #
     canonical_depth = depth_test[pixels[1, :], pixels[0, :]]
 
-    w_pose_c = g2o.SE3Quat(transformation_matrix_test_corrected[:3, :3],
-                           transformation_matrix_test_corrected[:3, 3])
+    w_pose_c = g2o.SE3Quat(transformation_matrix_test_corrected_perturb[:3, :3],
+                           transformation_matrix_test_corrected_perturb[:3, 3])
 
     optimizer = LocalBA()
-    optimizer.set_data(w_pose_c, cam, points_w, pixels, canonical_depth, 1)
-    optimizer.optimize(10)
-    print(optimizer.get_bad_measurements())
+    optimizer.set_data(w_pose_c, cam, points_w, pixels, canonical_depth, scale_network=1, scale=0.8)
+    optimizer.optimize(50)
+    #print(optimizer.get_bad_measurements())
 
     ###############
     # Get results #
     ###############
 
     estimated_transformation = optimizer.get_poses()[0].matrix()
-    print(estimated_transformation)
-    print(transformation_matrix_test_corrected)
-    print(transformation_matrix_test_corrected_perturb)
+    estimated_scale = optimizer.get_scales()[0]
+    print(estimated_scale)
+    #print(estimated_transformation)
+    #print(transformation_matrix_test_corrected)
+    #print(transformation_matrix_test_corrected_perturb)
     rte = RTE(transformation_matrix_test_corrected, estimated_transformation)
     rre = RRE(transformation_matrix_test_corrected, estimated_transformation)
     ate_rot = ATE_rot(transformation_matrix_test_corrected, estimated_transformation)
