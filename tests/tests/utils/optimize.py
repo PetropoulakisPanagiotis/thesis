@@ -81,51 +81,22 @@ class BundleAdjustment(g2o.SparseOptimizer):
         edge.set_robust_kernel(kernel)
         super().add_edge(edge)
 
-    def add_edge_depth_consistency(self, pose, cam, point):
-        id = 5000000
-        sbacam = g2o.CustomCam(pose.orientation(), pose.position())
-        sbacam.set_cam(cam.fx, cam.fy, cam.cx, cam.cy, cam.baseline)
+    def add_depth_scale_consistency_edge(self, edge_id: int, point_id: int, pose_id: int, 
+            scale_id: int,  meas: float, information: np.ndarray = np.identity(1)) -> None:
+        edge = g2o.EdgeDepthConsistencyScale()
+        edge.set_id(edge_id)
+        edge.set_measurement(meas)
+        edge.set_information(information)
 
-        v_se3 = g2o.VertexCustomCam()
-        v_se3.set_id(id)
-        v_se3.set_estimate(sbacam)
-        v_se3.set_fixed(False)
-        super().add_vertex(v_se3)
-
-        v_p = g2o.VertexCustomXYZ()
-
-        v_p.set_id(id + 1)
-        v_p.set_marginalized(True)
-        v_p.set_estimate(point)
-        v_p.set_fixed(False)
-        super().add_vertex(v_p)
-
-        c = g2o.VertexCanonical()
-        c.set_id(id + 2)
-        c.set_estimate(5)
-        c.set_fixed(False)
-        super().add_vertex(c)
-
-        s = g2o.VertexScale()
-        s.set_id(id + 3)
-        s.set_estimate(5)
-        s.set_fixed(False)
-        super().add_vertex(s)
-
-        e = g2o.EdgeDepthConsistencyScale()
-        e.set_id(id + 4)
-        e.set_measurement(5)
-        e.set_information(np.identity(1))
-
-        # 0 cam: Pose + t
-        # 1 3D point: XYZ
-        # 2 canonical: C
-        # 3 scale: S
-        e.set_vertex(0, self.vertex(id))
-        e.set_vertex(1, self.vertex(id + 2))
-        e.set_vertex(2, self.vertex(id + 3))
+        # 0 Cam
+        # 1 3D point
+        # 2 scale
+        edge.set_vertex(0, self.vertex(pose_id))
+        edge.set_vertex(1, self.vertex(point_id))
+        edge.set_vertex(2, self.vertex(scale_id))
         kernel = g2o.RobustKernelHuber(self.delta)
-        e.set_robust_kernel(kernel)
+        edge.set_robust_kernel(kernel)
+        super().add_edge(edge)
 
     def get_estimate(self, vertex_id: int) -> np.ndarray:
         return self.vertex(vertex_id).estimate()
@@ -157,10 +128,13 @@ class LocalBA(object):
         self.optimizer.add_scale(self.total_points + 3, scale)
         self.optimizer.add_scale_edge(self.total_points + 1, self.total_points + 3, scale_network)
 
+        for ii, point in enumerate(points):
+            self.optimizer.add_depth_scale_consistency_edge(self.total_points + 2, ii + 2, 0, self.total_points+3, canonical_depth[ii])
+
     def get_bad_measurements(self):
         bad_measurements = []
         for edge in self.optimizer.active_edges():
-            #print(edge.chi2())
+            print(edge.chi2())
             if edge.chi2() > self.huber_threshold:
                 bad_measurements.append(edge.id())
         return bad_measurements

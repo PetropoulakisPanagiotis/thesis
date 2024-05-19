@@ -23,7 +23,7 @@ if __name__ == '__main__':
     scene = 'scene0655_01'
     split = 'valid'
     test_id = 7
-    
+ 
     ids = [(file.split('.')[0]) for file in os.listdir(path + "/" + split + "/rgb/" + scene)]
     ids = sorted(ids, key=lambda x: str(x))
 
@@ -123,7 +123,7 @@ if __name__ == '__main__':
 
     optimizer = LocalBA()
     optimizer.set_data(w_pose_c, cam, points_w, pixels, canonical_depth, scale_network=1, scale=0.8)
-    optimizer.optimize(50)
+    optimizer.optimize(5)
     #print(optimizer.get_bad_measurements())
 
     ###############
@@ -132,15 +132,25 @@ if __name__ == '__main__':
 
     estimated_transformation = optimizer.get_poses()[0].matrix()
     estimated_scale = optimizer.get_scales()[0]
-    print(estimated_scale)
-    #print(estimated_transformation)
-    #print(transformation_matrix_test_corrected)
-    #print(transformation_matrix_test_corrected_perturb)
+
+    ####################
+    # Calculate errors #
+    ####################
+    print("Scale-Aware test")
+    rte = RTE(transformation_matrix_test_corrected, transformation_matrix_test_corrected_perturb)
+    rre = RRE(transformation_matrix_test_corrected, transformation_matrix_test_corrected_perturb)
+    ate_rot = ATE_rot(transformation_matrix_test_corrected, transformation_matrix_test_corrected_perturb)
+    ate_trans = ATE_trans(transformation_matrix_test_corrected, transformation_matrix_test_corrected_perturb)
+    print("Before optimization: ")
+    print("relative trans error: ", rte)
+    print("relative rot error: ", rte)
+    print("absolute traj error (rot): ", ate_rot)
+    print("absolute traj error (trans): ", ate_trans)
     rte = RTE(transformation_matrix_test_corrected, estimated_transformation)
     rre = RRE(transformation_matrix_test_corrected, estimated_transformation)
     ate_rot = ATE_rot(transformation_matrix_test_corrected, estimated_transformation)
     ate_trans = ATE_trans(transformation_matrix_test_corrected, estimated_transformation)
-
+    print("After optimization: ")
     print("relative trans error: ", rte)
     print("relative rot error: ", rte)
     print("absolute traj error (rot): ", ate_rot)
