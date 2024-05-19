@@ -9,9 +9,11 @@ import g2o
 
 from utils.utils import get_test_points_pixel_and_world_coords, visualize_depth_map, perturb_transformation_matrix, \
                         get_point_cloud_from_pixels, visualize_matching_point_clouds, \
-                        invert_transformation_matrix, is_valid_rotation_matrix
+                        invert_transformation_matrix, is_valid_rotation_matrix, \
+                        reprojection_error_test
 from utils.optimize import LocalBA
-from utils.metrics import ATE, ARE
+from utils.metrics import RTE, RRE, ATE_rot, ATE_trans
+
 
 if __name__ == '__main__':
     path = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted'
@@ -38,8 +40,7 @@ if __name__ == '__main__':
     # Intrinsics #
     with open(path + "/" + split + '/rgb_intrinsics/' + scene + ".json", 'r') as json_file:
         data = json.load(json_file)
-        cam = namedtuple('camera', 'fx fy cx cy scale baseline')(data['fx'], data['fy'], data['cx'], data['cy'], 1000.0,
-                                                                 0)
+        cam = namedtuple('camera', 'fx fy cx cy scale')(data['fx'], data['fy'], data['cx'], data['cy'], 1000.0)
 
     # Extrinsics test image #
     with open(path + "/" + split + '/extrinsics/' + scene + "/" + img_test_id_str + ".json", 'r') as json_file:
@@ -86,9 +87,11 @@ if __name__ == '__main__':
         cam=cam, camera_to_world_transform=transformation_matrix_test_corrected, image=img_test, depth_map=depth_test,
         num_points=50, viz=False)
 
+    print(reprojection_error_test(pixels[0, 0], pixels[1, 0], cam, points_w[0,:], invert_transformation_matrix(transformation_matrix_test_corrected)))
+    exit()
     # Perturb pose #
-    translation_perturbation = np.array([0.025, 0.025, 0.025])  # cm
-    rotation_perturbation = np.array([2.5, 2.5, 2.5])  # degrees
+    translation_perturbation = np.array([0.02, 0.02, 0.02])  # cm
+    rotation_perturbation = np.array([0, 0, 0])  # degrees
 
     transformation_matrix_test_corrected_perturb = perturb_transformation_matrix(transformation_matrix_test_corrected,
                                                                                  translation_perturbation,
@@ -109,14 +112,28 @@ if __name__ == '__main__':
     # Assume scale = 1 and canonical_depth == depth camera #
     canonical_depth = depth_test[pixels[1, :], pixels[0, :]]
 
-    w_pose_c = g2o.SE3Quat(transformation_matrix_test_corrected_perturb[:3, :3],
-                           transformation_matrix_test_corrected_perturb[:3, 3])
+    w_pose_c = g2o.SE3Quat(transformation_matrix_test_corrected[:3, :3],
+                           transformation_matrix_test_corrected[:3, 3])
 
     optimizer = LocalBA()
-    optimizer.set_data(w_pose_c, cam, points_w_perturb, pixels, None, 1)
+    optimizer.set_data(w_pose_c, cam, points_w, pixels, canonical_depth, 1)
     optimizer.optimize(10)
-    estimated_transformation = optimizer.get_estimate(0).matrix()
+    print(optimizer.get_bad_measurements())
 
-    #print(ATE(transformation_matrix_test_corrected, estimated_transformation))
+    ###############
+    # Get results #
+    ###############
 
-    print(estimated_transformation, transformation_matrix_test_corrected_perturb)
+    estimated_transformation = optimizer.get_poses()[0].matrix()
+    print(estimated_transformation)
+    print(transformation_matrix_test_corrected)
+    print(transformation_matrix_test_corrected_perturb)
+    rte = RTE(transformation_matrix_test_corrected, estimated_transformation)
+    rre = RRE(transformation_matrix_test_corrected, estimated_transformation)
+    ate_rot = ATE_rot(transformation_matrix_test_corrected, estimated_transformation)
+    ate_trans = ATE_trans(transformation_matrix_test_corrected, estimated_transformation)
+
+    print("relative trans error: ", rte)
+    print("relative rot error: ", rte)
+    print("absolute traj error (rot): ", ate_rot)
+    print("absolute traj error (trans): ", ate_trans)
