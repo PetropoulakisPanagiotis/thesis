@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import random
 import json
 import os
 from collections import namedtuple
@@ -16,11 +17,13 @@ from utils.metrics import RTE, RRE, ATE_rot, ATE_trans
 
 
 if __name__ == '__main__':
+    random.seed(5)
+    np.random.seed(5)
     path = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted'
     scene = 'scene0655_01'
     split = 'valid'
     test_id = 7
-
+    
     ids = [(file.split('.')[0]) for file in os.listdir(path + "/" + split + "/rgb/" + scene)]
     ids = sorted(ids, key=lambda x: str(x))
 
@@ -87,8 +90,11 @@ if __name__ == '__main__':
         cam=cam, camera_to_world_transform=transformation_matrix_test_corrected, image=img_test, depth_map=depth_test,
         num_points=50, viz=False)
 
-    print(reprojection_error_test(pixels[0, 0], pixels[1, 0], cam, points_w[0,:], invert_transformation_matrix(transformation_matrix_test_corrected)))
-    exit()
+    world_to_camera_transform = invert_transformation_matrix(transformation_matrix_test_corrected)
+
+    reprojection_error = reprojection_error_test(pixels[0, 0], pixels[1, 0], cam, points_w[0,:], \
+                                                 world_to_camera_transform)
+    assert np.all(np.allclose(reprojection_error, 0, atol=0.0001))
     # Perturb pose #
     translation_perturbation = np.array([0.02, 0.02, 0.02])  # cm
     rotation_perturbation = np.array([0, 0, 0])  # degrees

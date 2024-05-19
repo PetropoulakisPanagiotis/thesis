@@ -6,13 +6,14 @@ from scipy.spatial.transform import Rotation as R
 
 
 def reprojection_error_test(u: float, v: float, cam: namedtuple,
-        point_w: np.ndarray, w_transformation_c) -> float:
+        point_w: np.ndarray, c_transformation_w) -> float:
+
     point_w_h = np.append(point_w, 1)
-    point_c_h = np.dot(w_transformation_c, point_w_h)
+    point_c_h = np.dot(c_transformation_w, point_w_h)
 
     error = [np.inf, np.inf]
-    error[0] = u - ((cam.fx*point_c_h[0]/point_c_h[2]) + cam.cx)
-    error[1] = v - ((cam.fy*point_c_h[1]/point_c_h[2]) + cam.cy)
+    error[0] = u - (cam.fx*point_c_h[0]/point_c_h[2] + cam.cx)
+    error[1] = v - (cam.fy*point_c_h[1]/point_c_h[2] + cam.cy)
 
     return error
 
@@ -91,6 +92,7 @@ def get_test_points_pixel_and_world_coords(cam: namedtuple, camera_to_world_tran
 
     pixels = np.vstack((u, v))
 
+
     if viz:
         image_local = image.copy()
         for i in range(len(u)):
@@ -113,8 +115,9 @@ def get_point_cloud_from_pixels(cam: namedtuple, u: np.ndarray, v: np.ndarray, d
 
     point_cloud_c = np.vstack((x, y, z, np.ones_like(z)))
     point_cloud_t = transformation_matrix @ point_cloud_c
+    point_cloud_t = point_cloud_t.T[:, :3]
 
-    return point_cloud_t[:3, :].reshape(-1, 3)
+    return point_cloud_t.reshape(-1, 3)
 
 
 def normalize_angles(angles: np.ndarray) -> np.ndarray:
