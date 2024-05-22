@@ -15,7 +15,6 @@ from utils.utils import get_test_points_pixel_and_world_coords, visualize_depth_
 from utils.optimize import LocalBA
 from utils.metrics import RTE, RRE, ATE_rot, ATE_trans
 
-
 if __name__ == '__main__':
     random.seed(5)
     np.random.seed(5)
@@ -86,9 +85,10 @@ if __name__ == '__main__':
     #visualize_depth_map(depth_test)
 
     # Get some 3D points #
-    pixels, points_w = get_test_points_pixel_and_world_coords(
-        cam=cam, camera_to_world_transform=camera_to_world_transform, image=img_test, depth_map=depth_test,
-        num_points=50, viz=False)
+    pixels, points_w = get_test_points_pixel_and_world_coords(cam=cam,
+                                                              camera_to_world_transform=camera_to_world_transform,
+                                                              image=img_test, depth_map=depth_test, num_points=50,
+                                                              viz=False)
 
     world_to_camera_transform = invert_transformation_matrix(camera_to_world_transform)
 
@@ -100,8 +100,7 @@ if __name__ == '__main__':
     translation_perturbation = np.array([0.05, 0.05, 0.05])  # cm
     rotation_perturbation = np.array([5, 5, 5])  # degrees
     camera_to_world_transform_perturb = perturb_transformation_matrix(camera_to_world_transform,
-                                                                     translation_perturbation,
-                                                                     rotation_perturbation)
+                                                                      translation_perturbation, rotation_perturbation)
     assert is_valid_rotation_matrix(camera_to_world_transform_perturb[:3, :3])
 
     # Get perturb points #
@@ -116,8 +115,7 @@ if __name__ == '__main__':
     # Assume scale = 1 and canonical_depth == depth camera #
     canonical_depth = depth_test[pixels[1, :], pixels[0, :]]
 
-    w_pose_c = g2o.SE3Quat(camera_to_world_transform_perturb[:3, :3],
-                           camera_to_world_transform_perturb[:3, 3])
+    w_pose_c = g2o.SE3Quat(camera_to_world_transform_perturb[:3, :3], camera_to_world_transform_perturb[:3, 3])
 
     optimizer = LocalBA()
     optimizer.set_data(w_pose_c, cam, points_w, pixels, canonical_depth, scale_network=1, scale=0.8)
