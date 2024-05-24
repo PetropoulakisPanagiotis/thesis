@@ -13,7 +13,7 @@ python3 train.py ../configs/scale_ins_u_1.txt
 
 
 SCANNET commands:
-nicr_sa_prepare_dataset scannet /usr/stud/petp/storage/user/petp/datasets/scannet/data /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted
+nicr_sa_prepare_dataset scannet /usr/stud/petp/storage/user/petp/datasets/scannet /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted
 nicr_sa_prepare_dataset scannet /home/petropoulakis/Desktop/thesis/code/datasets/scannet/data /home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted 
 python3 download.py --id scene0568_00 -o /usr/stud/petp/storage/user/petp/datasets/scannet/  
 

@@ -98,14 +98,15 @@ if __name__ == '__main__':
 
     # Perturb pose #
     translation_perturbation = np.array([0.05, 0.05, 0.05])  # cm
-    rotation_perturbation = np.array([5, 5, 5])  # degrees
+    rotation_perturbation = np.array([3, 3, 3])  # degrees
     camera_to_world_transform_perturb = perturb_transformation_matrix(camera_to_world_transform,
                                                                       translation_perturbation, rotation_perturbation)
     assert is_valid_rotation_matrix(camera_to_world_transform_perturb[:3, :3])
 
     # Get perturb points #
-    #points_w_perturb = get_point_cloud_from_pixels(cam, pixels[0, :], pixels[1, :], depth_test,
-    #                                               camera_to_world_transform_perturb)
+    perturbation_level = 0.05
+    noise = np.random.normal(scale=perturbation_level, size=points_w.shape)
+    points_w_perturb = points_w + noise
     #visualize_matching_point_clouds(points_w, points_w_perturb)
 
     #####################
@@ -118,8 +119,8 @@ if __name__ == '__main__':
     w_pose_c = g2o.SE3Quat(camera_to_world_transform_perturb[:3, :3], camera_to_world_transform_perturb[:3, 3])
 
     optimizer = LocalBA()
-    optimizer.set_data(w_pose_c, cam, points_w, pixels, canonical_depth, scale_network=1, scale=0.8)
-    optimizer.optimize(5)
+    optimizer.set_data(w_pose_c, cam, points_w_perturb, pixels, canonical_depth, scale_network=1, scale=1)
+    optimizer.optimize(3)
     #print(optimizer.get_bad_measurements())
 
     ###############
@@ -128,6 +129,8 @@ if __name__ == '__main__':
 
     estimated_transformation = optimizer.get_poses()[0].matrix()
     estimated_scale = optimizer.get_scales()[0]
+
+    print("Estimated scaale: ", estimated_scale)
 
     ####################
     # Calculate errors #
@@ -140,7 +143,7 @@ if __name__ == '__main__':
     ate_rot = ATE_rot(camera_to_world_transform, camera_to_world_transform_perturb)
     ate_trans = ATE_trans(camera_to_world_transform, camera_to_world_transform_perturb)
     print("relative trans error: ", rte)
-    print("relative rot error: ", rte)
+    print("relative rot error: ", rre)
     print("absolute traj error (rot): ", ate_rot)
     print("absolute traj error (trans): ", ate_trans)
 
@@ -150,6 +153,6 @@ if __name__ == '__main__':
     ate_rot = ATE_rot(camera_to_world_transform, estimated_transformation)
     ate_trans = ATE_trans(camera_to_world_transform, estimated_transformation)
     print("relative trans error: ", rte)
-    print("relative rot error: ", rte)
+    print("relative rot error: ", rre)
     print("absolute traj error (rot): ", ate_rot)
     print("absolute traj error (trans): ", ate_trans)

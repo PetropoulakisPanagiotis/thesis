@@ -15,7 +15,7 @@ def RRE(gt_pose: np.ndarray, pose: np.ndarray) -> float:
 
 
 def ATE_rot(gt_pose: np.ndarray, pose: np.ndarray) -> float:
-    dt = gt_pose[:3, :3].T * pose[:3, :3]
+    dt = gt_pose[:3, :3].T @ pose[:3, :3]
     angle_axis = R.from_matrix(dt).as_rotvec()
     rot = np.linalg.norm(angle_axis)
     return rot

@@ -135,7 +135,7 @@ class LocalBA(object):
     def get_bad_measurements(self):
         bad_measurements = []
         for edge in self.optimizer.active_edges():
-            print(edge.chi2())
+            print(edge)
             if edge.chi2() > self.huber_threshold:
                 bad_measurements.append(edge.id())
         return bad_measurements
