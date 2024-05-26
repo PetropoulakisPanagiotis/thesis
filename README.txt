@@ -5,7 +5,10 @@ python3 ptam.py --dataset scannet --path /home/petropoulakis/Desktop/thesis/code
 python3 associate.py rgb.txt depth.txt > associations.txt
 evo_traj tum --ref /home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/slam_gt_valid.txt ./results/slam_result.txt -as -p -v --full_check --t_offset 0
 evo_ape tum --ref /home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/slam_gt.txt /home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/slam_result.txt -pa -v --t_offset 0.9
-python2 evaluate.py /home/petropoulakis/Desktop/thesis/code/rgbd_dataset_freiburg1_room/groundtruth.txt /home/petropoulakis/Desktop/thesis/code/rgbd_dataset_freiburg1_room/slam_result.txt --verbose --fixed_delta --plot ./result.png
+
+python2 evaluate.py /home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/slam_gt_valid.txt ./results/slam_result.txt --verbose --fixed_delta --plot ./result.png
+python2 evaluate_ate.py /home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/slam_gt_valid.txt ./results/slam_result.txt --verbose --plot ./result.png
+
 
 IEBINS commands:
 python3 eval.py ../configs/arguments_eval_nyu_scale.txt
@@ -45,7 +48,11 @@ nohup bash your_script.sh > output.txt 2>&1 &
 export CUDA_VISIBLE_DEVICES=0
 tensorboard --logdir=./ --port=6004
 scp -P 58022 -r g2opy/ petp@131.159.19.194:~/code/thesis/
+scp -P 58022 -r petp@131.159.19.194:/usr/stud/petp/storage/user/petp/datasets/predictions/scene0655_01/depth /home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/depth_network/scene0655_01
 
+screen -r 
+screen -ls
+ctrl+a and ctrl+d 
 
 
  

@@ -228,7 +228,8 @@ class ScanNetDataset(object):
         rgb_timestamps = [float(id) for id in ids]
         depth_timestamps = rgb_timestamps
         rgb_ids = [path + '/' + split + '/rgb/' + scene + "/" + str(item) + '.jpg' for item in ids]
-        depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
+        #depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
+        depth_ids = [path + '/' + split + '/depth_network/' + scene + "/" + str(item) + '.png' for item in ids]
 
         # Read depth #
         self.rgb = ImageReader(rgb_ids, rgb_timestamps)
