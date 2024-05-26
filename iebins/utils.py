@@ -357,7 +357,7 @@ def colormap(inputs, name='jet', normalize=True, torch_transpose=True):
         vis = vis[..., :3]
         if torch_transpose:
             vis = vis.transpose(2, 0, 1)
-
+    
     return vis[0,:,:,:]
 
 
@@ -445,7 +445,11 @@ class DistributedSamplerNoEvenlyDivisible(Sampler):
     def set_epoch(self, epoch):
         self.epoch = epoch
     
-    
+
+def map_float_data_to_int(data: np.ndarray, normalization_const: int) -> np.ndarray:
+    return (data * normalization_const).astype('uint16')
+   
+ 
 def find_indexes_valid_instances(labels):
     """
     1-dim

@@ -9,13 +9,11 @@
 --gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
 --filenames_file_eval /usr/stud/petp/code/thesis/data_splits/nyudepthv2_test_files_with_gt.txt
 
---min_depth_eval 1e-3
---max_depth_eval 10
---eigen_crop
+--min_depth_test 1e-3
+--max_depth_test 10
 
 --update_block 18
 --loss_type 1
---exp_name eval
 --virtual_depth_variation 0
 
 --bin_num 40

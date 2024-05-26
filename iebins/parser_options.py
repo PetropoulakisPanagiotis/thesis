@@ -156,7 +156,6 @@ test_parser.add_argument('--checkpoint_path',           type=str,   help='path t
 test_parser.add_argument('--pretrain',                  type=str,   help='path of pretrained encoder', default=None)
 test_parser.add_argument('--loss_type',                 type=int,   help='0 for silog, 1 for l1', default=0)
 
-
 # Dataset
 test_parser.add_argument('--dataset',                   type=str,   help='dataset to train on, kitti or nyu', default='nyu')
 test_parser.add_argument('--input_height',              type=int,   help='input height', default=480)

@@ -17,7 +17,7 @@ from dataloaders.dataloader import DataLoaderCustom
 from networks.NewCRFDepth import NewCRFDepth
 from parser_options import convert_arg_line_to_args, test_parser
 from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
-from utils import compute_errors, sigma_metric_from_canonical_and_scale
+from utils import compute_errors, sigma_metric_from_canonical_and_scale, colormap, map_float_data_to_int
 from aucs import compute_aucs,  SCC
 
 # Parse config file #
@@ -61,18 +61,10 @@ def predict(model, dataloader_eval) -> None:
             # Predict
             if args.instances:
                 result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
-                for scale in result['pred_scale_instances_list'][-1]:
-                    for scale_s in scale:
-                        scales.append(float(scale_s.cpu().numpy()))
             elif args.segmentation:
                 result = model(image, masks=segmentation_map)
-                for scale in result['pred_scale_list'][-1]:
-                    for scale_s in scale:
-                        scales.append(float(scale_s.cpu().numpy()))
             else:
                 result = model(image)
-                for scale in result['pred_scale_list'][-1]:
-                    scales.append(float(scale.cpu().numpy()))
             
             # Unpack result         
             if args.instances:
@@ -155,14 +147,42 @@ def predict(model, dataloader_eval) -> None:
             if args.d3vo:
                 sigma_m = sigma_m.cpu().numpy().squeeze()
         
-
-        cv2.imshow('i', pred_depth)
-        cv2.waitKey(0)       
- 
         pred_depth[pred_depth < args.min_depth_test] = args.min_depth_test
         pred_depth[pred_depth > args.max_depth_test] = args.max_depth_test
         pred_depth[np.isinf(pred_depth)] = args.max_depth_test
         pred_depth[np.isnan(pred_depth)] = args.min_depth_test
+
+        # Save depth metric #
+        filename = f'{step:05d}.png'
+        normalization_const = 1e3
+
+        cv2.imwrite(args.save_dir + 'depth/' + filename, map_float_data_to_int(pred_depth, normalization_const), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+        if args.segmentation:
+            pass
+        elif args.instances:
+            pass
+        else:
+            # Scale #
+            scale = result['pred_scale_list'][-1].cpu().numpy().squeeze()
+            scale_map = np.ones_like(pred_depth) * scale
+            
+            cv2.imwrite(args.save_dir + 'scale/' + filename, map_float_data_to_int(scale_map, normalization_const), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+
+            # Canonical #    
+            canonical = result['pred_depths_rc_list'][-1].cpu().numpy().squeeze()
+            cv2.imwrite(args.save_dir + 'canonical/' + filename, map_float_data_to_int(canonical, normalization_const), [cv2.IMWRITE_PNG_COMPRESSION, 9])    
+
+        if False:
+            gt_depth[gt_depth < args.min_depth_test] = args.min_depth_test
+            gt_depth[gt_depth > args.max_depth_test] = args.max_depth_test
+            gt_depth[np.isinf(gt_depth)] = args.max_depth_test
+            gt_depth[np.isnan(gt_depth)] = args.min_depth_test
+            valid_mask = np.logical_and(gt_depth > args.min_depth_test, gt_depth < args.max_depth_test)
+            cv2.imshow('i', colormap(np.log(pred_depth[np.newaxis,:]), name='magma').transpose(1, 2, 0))
+            cv2.imshow('i', colormap(np.log(gt_depth[np.newaxis,:]), name='magma').transpose(1, 2, 0))
+            cv2.waitKey(0)       
+            measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
+            print(measures)
     
 
 def main_worker(args):
@@ -213,14 +233,14 @@ def main():
     torch.cuda.empty_cache()
     args.distributed = False
     ngpus_per_node = torch.cuda.device_count()
-    exp_name = args.exp_name  
 
-    args.log_directory = os.path.join(args.log_directory,exp_name)  
-    
-    command = 'mkdir -p ' + os.path.join(args.log_directory, args.model_name)
-    os.system(command)
-    print(args.log_directory)
-    
+    print('Save dir: ', args.save_dir)
+    os.makedirs(args.save_dir, exist_ok=True)
+    os.makedirs(args.save_dir + 'depth/', exist_ok=True)
+    os.makedirs(args.save_dir + 'scale/', exist_ok=True)
+    os.makedirs(args.save_dir + 'canonical/', exist_ok=True)
+    os.makedirs(args.save_dir + 'uncertainty/', exist_ok=True)
+
     if ngpus_per_node > 1:
         print("This machine has more than 1 gpu. Please set \'CUDA_VISIBLE_DEVICES=0\'")
         return -1

@@ -147,4 +147,4 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
 
             return eval_measures_cpu, None
 
-        return None
+        return None, None
