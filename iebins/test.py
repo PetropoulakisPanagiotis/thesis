@@ -182,7 +182,6 @@ def predict(model, dataloader_eval) -> None:
             cv2.imshow('i', colormap(np.log(gt_depth[np.newaxis,:]), name='magma').transpose(1, 2, 0))
             cv2.waitKey(0)       
             measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
-            print(measures)
     
 
 def main_worker(args):

@@ -179,9 +179,8 @@ test_parser.add_argument('--roi_align',                 type=int,   help='use ro
 test_parser.add_argument('--roi_align_size',            type=int,   help='size of roi align', default='32')
 
 test_parser.add_argument('--save_dir',       type=str,   help='path to save predicted data', required=True)
-test_parser.add_argument('--data_path_eval',            type=str,   help='path to the data for evaluation', required=False)
-test_parser.add_argument('--data_path',                 type=str,   help='path to the data', required=True)
-test_parser.add_argument('--gt_path_eval',              type=str,   help='path to the groundtruth data for evaluation', required=False)
-test_parser.add_argument('--filenames_file_eval',       type=str,   help='path to the filenames text file for evaluation', required=False)
+test_parser.add_argument('--data_path_eval',            type=str,   help='path to the data for evaluation', required=True)
+test_parser.add_argument('--gt_path_eval',              type=str,   help='path to the groundtruth data for evaluation', required=True)
+test_parser.add_argument('--filenames_file_eval',       type=str,   help='path to the filenames text file for evaluation', required=True)
 test_parser.add_argument('--min_depth_test',            type=float, help='minimum depth for evaluation', default=1e-3)
 test_parser.add_argument('--max_depth_test',            type=float, help='maximum depth for evaluation', default=80)

@@ -1,0 +1,26 @@
+--model_name iebins_nyu
+--encoder tiny07
+--dataset scannet
+--input_height 480
+--input_width 640
+
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scene0655_01.txt
+
+--min_depth_test 1e-3
+--max_depth_test 10
+
+--update_block 18
+--loss_type 1
+--virtual_depth_variation 0
+
+--bin_num 40
+--min_depth 0
+--max_depth 1
+--max_tree_depth 1
+--bins_scale 50
+
+--save_dir /usr/stud/petp/storage/user/petp/datasets/predictions/scene0655_01/
+
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_train_single_1/nyu/model-28000-best_silog_14.65124

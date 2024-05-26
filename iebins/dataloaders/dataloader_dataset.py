@@ -77,7 +77,7 @@ class DatasetPreprocess(Dataset):
                                  load_image_annotations_nyu(annotations_file)
 
             # Not used in NYU
-            if self.args.dataset != 'nyu' and self.args.do_kb_crop is True: 
+            if self.args.dataset != 'nyu' and self.args.dataset != 'scannet' and self.args.do_kb_crop is True: 
                 height = image.height
                 width = image.width
                 top_margin = int(height - 352)
@@ -187,7 +187,7 @@ class DatasetPreprocess(Dataset):
                                  num_semantic_classes = load_image_annotations_nyu(annotations_file)
 
             # Not used in NYU 
-            if self.args.dataset != 'nyu' and self.args.do_kb_crop is True:
+            if self.args.dataset != 'nyu' and self.args.dataset != 'scannet' and self.args.do_kb_crop is True:
                 height = image.shape[0]
                 width = image.shape[1]
 
@@ -212,7 +212,11 @@ class DatasetPreprocess(Dataset):
             sample['instances_areas'] = instances_areas
 
         if self.args.dataset == 'scannet':
-            sample['dataset_path'] = self.args.data_path
+            if self.mode == 'train':
+                sample['dataset_path'] = self.args.data_path
+            else:
+                sample['dataset_path'] = self.args.data_path_eval
+
             sample['filename'] = sample_path      
  
         # ToTensorCustom 
