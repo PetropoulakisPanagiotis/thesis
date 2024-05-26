@@ -23,4 +23,4 @@
 
 --save_dir /usr/stud/petp/storage/user/petp/datasets/predictions/scene0655_01/
 
---checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_train_single_1/nyu/model-28000-best_silog_14.65124
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_train_single_1/nyu/model-47000-best_silog_14.38640

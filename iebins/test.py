@@ -36,6 +36,9 @@ def predict(model, dataloader_eval) -> None:
     num_semantic_classes = dataloader_eval.num_semantic_classes
     num_instances = dataloader_eval.num_instances
 
+    with open(args.filenames_file_eval, 'r') as f:
+        file_id_str = f.read().splitlines()
+
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         with torch.no_grad():
             # Init 
@@ -153,7 +156,7 @@ def predict(model, dataloader_eval) -> None:
         pred_depth[np.isnan(pred_depth)] = args.min_depth_test
 
         # Save depth metric #
-        filename = f'{step:05d}.png'
+        filename = file_id_str[step].split('/')[1] + '.png'
         normalization_const = 1e3
 
         cv2.imwrite(args.save_dir + 'depth/' + filename, map_float_data_to_int(pred_depth, normalization_const), [cv2.IMWRITE_PNG_COMPRESSION, 9])
