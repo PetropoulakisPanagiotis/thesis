@@ -1,7 +1,7 @@
 import os, sys, time, gc
 from datetime import datetime
 from telnetlib import IP
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import torch
 import torch.nn as nn
@@ -69,7 +69,7 @@ def main_worker(gpu, ngpus_per_node, args):
     model.train()
     if args.d3vo: # Set some layers to eval to train the uncertainty decoder
         model.set_to_eval_d3vo()
-
+    
     # Print stats #
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
     print("== Total number of parameters: {}".format(num_params))
@@ -105,8 +105,11 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.d3vo:
         load_checkpoint(args.checkpoint_path, args.gpu, args.retrain, model, optimizer)
     else: # IEBINS load checkpoint - skip some layers 
-        load_checkpoint_skip_update_project(args.checkpoint_path, args.gpu, args.retrain, model, optimizer)
-
+        if 'saved_models' in args.checkpoint_path: # IEBINS saved models 
+            load_checkpoint_skip_update_project(args.checkpoint_path, args.gpu, args.retrain, model, optimizer)
+        else:
+            load_checkpoint(args.checkpoint_path, args.gpu, args.retrain, model, optimizer)
+    
     var_sum = [var.sum().item() for var in model.parameters() if var.requires_grad]
     var_cnt = len(var_sum)
     var_sum = np.sum(var_sum)

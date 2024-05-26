@@ -145,3 +145,44 @@ eval_parser.add_argument('--eigen_crop',                            help='if set
 eval_parser.add_argument('--garg_crop',                             help='if set, crops according to Garg  ECCV16', action='store_true')
 eval_parser.add_argument('--pick_class',                type=int,   help='evaluate single class for debug', default=0)
 
+
+# Test parser 
+test_parser = argparse.ArgumentParser(description='Scale-Aware SLAM PyTorch implementation - test', fromfile_prefix_chars='@')
+test_parser.convert_arg_line_to_args = convert_arg_line_to_args
+
+test_parser.add_argument('--model_name',                type=str,   help='model name', default='iebins')
+test_parser.add_argument('--encoder',                   type=str,   help='type of encoder, base07, large07, tiny07', default='large07')
+test_parser.add_argument('--checkpoint_path',           type=str,   help='path to a checkpoint to load', default='')
+test_parser.add_argument('--pretrain',                  type=str,   help='path of pretrained encoder', default=None)
+test_parser.add_argument('--loss_type',                 type=int,   help='0 for silog, 1 for l1', default=0)
+
+
+# Dataset
+test_parser.add_argument('--dataset',                   type=str,   help='dataset to train on, kitti or nyu', default='nyu')
+test_parser.add_argument('--input_height',              type=int,   help='input height', default=480)
+test_parser.add_argument('--input_width',               type=int,   help='input width',  default=640)
+test_parser.add_argument('--max_depth',                 type=float, help='maximum depth in estimation', default=10)
+test_parser.add_argument('--min_depth',                 type=float, help='minimum depth in estimation', default=0)
+
+# Arch
+test_parser.add_argument('--update_block',              type=int,   help='head block type', default='0')
+test_parser.add_argument('--var',                       type=int,   help='variation of head block', default='0')
+test_parser.add_argument('--max_tree_depth',            type=int,   help='max GRU iterations', default='6')
+test_parser.add_argument('--bin_num',                   type=int,   help='number of bins', default='16')
+test_parser.add_argument('--segmentation',              dest='segmentation', help='segmentation variation', action='store_true')
+test_parser.add_argument('--instances',                 dest='instances',    help='instances variation', action='store_true')
+test_parser.add_argument('--padding_instances',         type=int,            help='how many pixels to padd for bbox', default='0')
+test_parser.add_argument('--d3vo',                      help='d3vo uncertainty variation', action='store_true')
+test_parser.add_argument('--d3vo_c',                    help='d3vo uncertainty variation canonical', action='store_true')
+test_parser.add_argument('--bins_scale',                type=int,   help='Bins for scale', default='100')
+test_parser.add_argument('--virtual_depth_variation',   type=int,   help='0 for scale/shift, for 1 for scale regression and 2 for scale with bins', default='0')
+test_parser.add_argument('--roi_align',                 type=int,   help='use roi align', default='0')
+test_parser.add_argument('--roi_align_size',            type=int,   help='size of roi align', default='32')
+
+test_parser.add_argument('--save_dir',       type=str,   help='path to save predicted data', required=True)
+test_parser.add_argument('--data_path_eval',            type=str,   help='path to the data for evaluation', required=False)
+test_parser.add_argument('--data_path',                 type=str,   help='path to the data', required=True)
+test_parser.add_argument('--gt_path_eval',              type=str,   help='path to the groundtruth data for evaluation', required=False)
+test_parser.add_argument('--filenames_file_eval',       type=str,   help='path to the filenames text file for evaluation', required=False)
+test_parser.add_argument('--min_depth_test',            type=float, help='minimum depth for evaluation', default=1e-3)
+test_parser.add_argument('--max_depth_test',            type=float, help='maximum depth for evaluation', default=80)

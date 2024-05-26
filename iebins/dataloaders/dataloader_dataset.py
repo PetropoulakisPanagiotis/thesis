@@ -19,8 +19,12 @@ class DatasetPreprocess(Dataset):
         self.args = args
 
         if self.args.dataset == 'scannet':
-            with open(args.filenames_file_eval, 'r') as f:
-                self.filenames = f.read().splitlines()
+            if mode == 'train':
+                with open(args.filenames_file, 'r') as f:
+                    self.filenames = f.read().splitlines()
+            else:
+                with open(args.filenames_file_eval, 'r') as f:
+                    self.filenames = f.read().splitlines()
         else:
             if mode == 'online_eval':
                 with open(args.filenames_file_eval, 'r') as f:
@@ -132,11 +136,11 @@ class DatasetPreprocess(Dataset):
             sample = {'image': image, 'depth': depth_gt, 'has_valid_depth': True}
         else:
             if self.args.dataset == 'scannet':
-                rgb_path = self.args.data_path + "rgb/" + sample_path + ".jpg"
+                rgb_path = self.args.data_path_eval + "rgb/" + sample_path + ".jpg"
                 rgb = cv2.imread(rgb_path, cv2.IMREAD_UNCHANGED)
                 image = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
                 image = np.asarray(image, dtype=np.float32) / 255.0
-                depth_path = self.args.data_path + "depth/" + sample_path + ".png"
+                depth_path = self.args.data_path_eval + "depth/" + sample_path + ".png"
                 depth_gt = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED).astype(np.float32)    
                 has_valid_depth = True
             else:

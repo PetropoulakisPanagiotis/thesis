@@ -131,7 +131,7 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
             cnt = eval_measures_cpu[measures_size - 1].item()
             eval_measures_cpu /= cnt
 
-            print('Computing errors for {} eval samples'.format(int(cnt)), ', post_process: ', post_process)
+            print('Computing errors for {} eval samples'.format(int(cnt)))
             print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format('silog', 'abs_rel', 'log10', 'rms',
                                                                                          'sq_rel', 'log_rms', 'd1', 'd2',
                                                                                          'd3'))

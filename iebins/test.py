@@ -1,211 +1,231 @@
-from __future__ import absolute_import, division, print_function
+import os, sys
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 import torch
-import torch.nn as nn
-from torch.autograd import Variable
+import torch.backends.cudnn as cudnn
 
-import os, sys, errno
-import argparse
-import time
-import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+from tensorboardX import SummaryWriter
+
+import argparse
+import numpy as np
+import random
 from tqdm import tqdm
-import open3d as o3d
 
-from utils import post_process_depth, D_to_cloud, flip_lr, inv_normalize
-
+from dataloaders.dataloader import DataLoaderCustom
 from networks.NewCRFDepth import NewCRFDepth
+from parser_options import convert_arg_line_to_args, test_parser
+from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
+from utils import compute_errors, sigma_metric_from_canonical_and_scale
+from aucs import compute_aucs,  SCC
 
-
-def convert_arg_line_to_args(arg_line):
-    for arg in arg_line.split():
-        if not arg.strip():
-            continue
-        yield arg
-
-
-parser = argparse.ArgumentParser(description='IEBins PyTorch implementation.', fromfile_prefix_chars='@')
-parser.convert_arg_line_to_args = convert_arg_line_to_args
-
-parser.add_argument('--model_name', type=str, help='model name', default='iebins')
-parser.add_argument('--encoder', type=str, help='type of encoder, base07, large07', default='large07')
-parser.add_argument('--data_path', type=str, help='path to the data', required=True)
-parser.add_argument('--filenames_file', type=str, help='path to the filenames text file', required=True)
-parser.add_argument('--input_height', type=int, help='input height', default=480)
-parser.add_argument('--input_width', type=int, help='input width', default=640)
-parser.add_argument('--max_depth', type=float, help='maximum depth in estimation', default=10)
-parser.add_argument('--checkpoint_path', type=str, help='path to a specific checkpoint to load', default='')
-parser.add_argument('--dataset', type=str, help='dataset to train on', default='nyu')
-parser.add_argument('--do_kb_crop', help='if set, crop input images as kitti benchmark images', action='store_true')
-parser.add_argument('--pred_clouds', help='if set, pred cloud points', action='store_true')
-parser.add_argument('--save_viz', help='if set, save visulization of the outputs', action='store_true')
-
+# Parse config file #
 if sys.argv.__len__() == 2:
     arg_filename_with_prefix = '@' + sys.argv[1]
-    args = parser.parse_args([arg_filename_with_prefix])
+    args = test_parser.parse_args([arg_filename_with_prefix])
+elif sys.argv.__len__() == 3:
+    arg_filename_with_prefix = '@' + sys.argv[1]
+    args = eval_parser.parse_args([arg_filename_with_prefix])
+    args.pick_class = torch.tensor(int(sys.argv[2]))
 else:
-    args = parser.parse_args()
-
-if args.dataset == 'kitti' or args.dataset == 'nyu':
-    from dataloaders.dataloader import NewDataLoader
-elif args.dataset == 'kittipred':
-    from dataloaders.dataloader_kittipred import NewDataLoader
-
-model_dir = os.path.dirname(args.checkpoint_path)
-sys.path.append(model_dir)
+    args = eval_parser.parse_args()
 
 
-def get_num_lines(file_path):
-    f = open(file_path, 'r')
-    lines = f.readlines()
-    f.close()
-    return len(lines)
+def predict(model, dataloader_eval) -> None:
+    num_semantic_classes = dataloader_eval.num_semantic_classes
+    num_instances = dataloader_eval.num_instances
 
+    for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
+        with torch.no_grad():
+            # Init 
+            pred_depths_r_list, pred_depths_rc_list, pred_depths_instances_r_list, \
+                pred_depths_instances_rc_list, pred_depths_c_list, uncertainty_maps_list, \
+                pred_depths_u_list = [], [], [], [], [], [], []
+            segmentation_map, instances, labels, unc_decoder = None, None, None, None
 
-def test(params):
-    """Test function."""
-    args.mode = 'test'
-    dataloader = NewDataLoader(args, 'test')
-    
-    model = NewCRFDepth(version='large07', inv_depth=False, max_depth=args.max_depth)
-    model = torch.nn.DataParallel(model)
-    
-    checkpoint = torch.load(args.checkpoint_path)
-    model.load_state_dict(checkpoint['model'])
-    model.eval()
-    model.cuda()
+            image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
+            gt_depth = eval_sample_batched['depth']
 
-    num_params = sum([np.prod(p.size()) for p in model.parameters()])
-    print("Total number of parameters: {}".format(num_params))
-
-    num_test_samples = get_num_lines(args.filenames_file)
-
-    with open(args.filenames_file) as f:
-        lines = f.readlines()
-
-    print('now testing {} files with {}'.format(num_test_samples, args.checkpoint_path))
-
-    pred_depths = []
-    pred_clouds = []
-    start_time = time.time()
-    with torch.no_grad():
-        for _, sample in enumerate(tqdm(dataloader.data)):
-            image = Variable(sample['image'].cuda())
-            inv_K_p = Variable(sample['inv_K_p'].cuda())
-            b, _, h, w = image.shape
-            depth_to_cloud = D_to_cloud(b, h, w).cuda()
+            if (args.dataset == 'nyu' or args.dataset == 'scannet') and args.segmentation:
+                segmentation_map = torch.autograd.Variable(eval_sample_batched['segmentation_map'].cuda())
+                instances = torch.autograd.Variable(eval_sample_batched['instances_masks'].cuda())
+                boxes = torch.autograd.Variable(eval_sample_batched['instances_bbox'].cuda())
+                labels = torch.autograd.Variable(eval_sample_batched['instances_labels'].cuda())
+            
+            has_valid_depth = eval_sample_batched['has_valid_depth']
+            if not has_valid_depth:
+                print('Invalid depth. continue.')
+                continue
 
             # Predict
-            pred_depths_r_list, _, _ = model(image)
-            post_process = True
-            if post_process:
-                image_flipped = flip_lr(image)
-                pred_depths_r_list_flipped, _, _ = model(image_flipped)
-                pred_depth = post_process_depth(pred_depths_r_list[-1], pred_depths_r_list_flipped[-1])
+            if args.instances:
+                result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
+                for scale in result['pred_scale_instances_list'][-1]:
+                    for scale_s in scale:
+                        scales.append(float(scale_s.cpu().numpy()))
+            elif args.segmentation:
+                result = model(image, masks=segmentation_map)
+                for scale in result['pred_scale_list'][-1]:
+                    for scale_s in scale:
+                        scales.append(float(scale_s.cpu().numpy()))
+            else:
+                result = model(image)
+                for scale in result['pred_scale_list'][-1]:
+                    scales.append(float(scale.cpu().numpy()))
             
-            if args.pred_clouds:
-                if args.dataset == 'nyu':
-                    color = inv_normalize(image[0, :, :, :]).permute(1, 2, 0)[45:472, 43:608, :].reshape(-1, 3).cpu().numpy()
-                    points = depth_to_cloud(pred_depth, inv_K_p).reshape(1, h, w, 3)[:, 45:472, 43:608, :].reshape(1, -1, 3)
-                    points = points.cpu().numpy().squeeze()
-                else:
-                    color = inv_normalize(image[0, :, :, :]).permute(1, 2, 0).reshape(-1, 3).cpu().numpy()
-                    points = depth_to_cloud(pred_depth, inv_K_p)
-                    points = points.cpu().numpy().squeeze()
-                pc = o3d.geometry.PointCloud()
-                pc.points = o3d.utility.Vector3dVector(points)
-                pc.colors = o3d.utility.Vector3dVector(color)
+            # Unpack result         
+            if args.instances:
+                pred_depths_r_list = result["pred_depths_instances_r_list"]
 
-                pred_clouds.append(pc)
+                pred_depths_instances_rc_list = result["pred_depths_instances_rc_list"]
+                pred_depths_instances_r_list = result["pred_depths_instances_r_list"]
+            else:
+                pred_depths_r_list = result["pred_depths_r_list"]
+                # Canonical segmentation/single scale #
+                if args.update_block != 0 and args.update_block != 4 and args.update_block != 3:    
+                    pred_depths_rc_list = result["pred_depths_rc_list"]
+            
+            # Uncertainty bins #
+            if args.update_block == 0 or args.update_block == 3 or args.update_block == 18 \
+               or args.update_block == 1 or args.update_block == 2:
+                pred_depths_c_list = result["pred_depths_c_list"]
+                uncertainty_maps_list = result["uncertainty_maps_list"]
+           
+            if args.instances:
+                # Fair comparison segmentation - instances: use eval_per_class.sh script   
+                if args.pick_class != 0: 
+                    non_class = torch.nonzero(labels[0] != args.pick_class)
+                    if non_class.shape[0] == 63:
+                        continue
+                    instances[0, non_class] = torch.zeros_like(instances[0, non_class])
+                
+                pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
+                
+                mask = torch.sum(instances, dim=1).unsqueeze(0).to(torch.bool).cpu()
+                gt_depth = (gt_depth * mask)
+                #wals = torch.nonzero(labels[0] == 1)
+                #print(result['pred_shift_instances_list'][-1][0, wals])
+                #print(result['pred_scale_instances_list'][-1][0, wals])
+            elif args.segmentation:
+
+                pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
+
+                if args.d3vo:
+                    sigma_c = torch.sum((segmentation_map * (result["uncertainty_maps_list"][-1] **2)), dim=1)
+                    c = torch.sum((segmentation_map * result["pred_depths_rc_list"][-1]), dim=1)
+                    
+                    if args.d3vo_c:
+                        sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1], result["unc_d3vo_c"], result['pred_scale_list'][-1], result["unc_d3vo"], args)
+                        sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
+                    else:
+                        # uncertainty of canonical is std --> convert to variance
+                        sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1], result['uncertainty_maps_list'][-1] ** 2, result['pred_scale_list'][-1], result["unc_d3vo"], args)
+                        sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
+
+                    s = torch.sum((segmentation_map * result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)), dim=1)
+                    sigma_m = s**2 * sigma_c + c**2 * sigma_s
+                    sigma_m = sigma_m.unsqueeze(0)
+                # Fair comparison segmentation - instances: use eval_per_class.sh script   
+                if True:
+                    if args.pick_class != 0:    
+                        non_class = torch.nonzero(labels[0] != args.pick_class)
+                        if non_class.shape[0] == 63:
+                            continue
+                        instances[0, non_class] = torch.zeros_like(instances[0, non_class])
+                    
+                    if False:
+                        tmp = instances_mask.permute(1,2,0)
+                        cv2.imshow("instances_mapped_image", (tmp.cpu().numpy() * 255).astype('uint8'))
+                        cv2.waitKey(0)
+                        cv2.destroyAllWindows()
+
+                    pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
+                    
+                    mask = torch.sum(instances, dim=1).unsqueeze(0)
+                    pred_depth = pred_depth * mask
+
+                    mask = mask.to(torch.bool).cpu()
+                    gt_depth = (gt_depth * mask)
+            else:
+                pred_depth = pred_depths_r_list[-1]
 
             pred_depth = pred_depth.cpu().numpy().squeeze()
+            gt_depth = gt_depth.cpu().numpy().squeeze()     
+            if args.d3vo:
+                sigma_m = sigma_m.cpu().numpy().squeeze()
+        
 
-            if args.do_kb_crop:
-                height, width = 352, 1216
-                top_margin = int(height - 352)
-                left_margin = int((width - 1216) / 2)
-                pred_depth_uncropped = np.zeros((height, width), dtype=np.float32)
-                pred_depth_uncropped[top_margin:top_margin + 352, left_margin:left_margin + 1216] = pred_depth
-                pred_depth = pred_depth_uncropped
+        cv2.imshow('i', pred_depth)
+        cv2.waitKey(0)       
+ 
+        pred_depth[pred_depth < args.min_depth_test] = args.min_depth_test
+        pred_depth[pred_depth > args.max_depth_test] = args.max_depth_test
+        pred_depth[np.isinf(pred_depth)] = args.max_depth_test
+        pred_depth[np.isnan(pred_depth)] = args.min_depth_test
+    
 
-            pred_depths.append(pred_depth)
+def main_worker(args):
+    
+    dataloader_eval = DataLoaderCustom(args, 'online_eval')
 
-    elapsed_time = time.time() - start_time
-    print('Elapesed time: %s' % str(elapsed_time))
-    print('Done.')
-    
-    save_name = 'models/result_' + args.model_name
-    
-    print('Saving result pngs..')
-    if not os.path.exists(save_name):
-        try:
-            os.mkdir(save_name)
-            os.mkdir(save_name + '/raw')
-            os.mkdir(save_name + '/cmap')
-            os.mkdir(save_name + '/rgb')
-            os.mkdir(save_name + '/gt')
-            os.mkdir(save_name + '/cloud')
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise
-    
-    for s in tqdm(range(num_test_samples)):
-        if args.dataset == 'kitti':
-            date_drive = lines[s].split('/')[1]
-            filename_pred_png = save_name + '/raw/' + date_drive + '_' + lines[s].split()[0].split('/')[-1].replace(
-                '.jpg', '.png')
-            filename_pred_ply = save_name + '/cloud/' + date_drive + '_' + lines[s].split()[0].split('/')[-1][:-4] + '_' + 'iebins' + '.ply'
-            filename_cmap_png = save_name + '/cmap/' + date_drive + '_' + lines[s].split()[0].split('/')[
-                -1].replace('.jpg', '.png')
-            filename_image_png = save_name + '/rgb/' + date_drive + '_' + lines[s].split()[0].split('/')[-1]
-        elif args.dataset == 'kittipred':
-            filename_pred_png = save_name + '/raw/' + lines[s].split()[0].split('/')[-1].replace('.jpg', '.png')
-            filename_cmap_png = save_name + '/cmap/' + lines[s].split()[0].split('/')[-1].replace('.jpg', '.png')
-            filename_image_png = save_name + '/rgb/' + lines[s].split()[0].split('/')[-1]
+    num_semantic_classes = dataloader_eval.num_semantic_classes
+    num_instances = dataloader_eval.num_instances
+
+    # Depth model
+    model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
+                        max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
+                        num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, \
+                        padding_instances=args.padding_instances, \
+                        segmentation_active=args.segmentation,  instances_active=args.instances,\
+                        roi_align=args.roi_align, roi_align_size=args.roi_align_size, \
+                        bins_scale=args.bins_scale, d3vo=args.d3vo, d3vo_c=args.d3vo_c, virtual_depth_variation=args.virtual_depth_variation)
+    model.train()
+
+    num_params = sum([np.prod(p.size()) for p in model.parameters()])
+    print("== Total number of parameters: {}".format(num_params))
+    num_params_update = sum([np.prod(p.shape) for p in model.parameters() if p.requires_grad])
+    print("== Total number of learning parameters: {}".format(num_params_update))
+    model = torch.nn.DataParallel(model)
+    model.cuda()
+    print("== Model Initialized")
+
+    if args.checkpoint_path != '':
+        if os.path.isfile(args.checkpoint_path):
+            print("== Loading checkpoint '{}'".format(args.checkpoint_path))
+            checkpoint = torch.load(args.checkpoint_path, map_location='cpu')
+            model.load_state_dict(checkpoint['model'])
+            print("== Loaded checkpoint '{}'".format(args.checkpoint_path))
+            del checkpoint
         else:
-            scene_name = lines[s].split()[0].split('/')[0]
-            filename_pred_png = save_name + '/raw/' + scene_name + '_' + lines[s].split()[0].split('/')[1].replace(
-                '.jpg', '.png')
-            filename_pred_ply = save_name + '/cloud/' + scene_name + '_' + lines[s].split()[0].split('/')[1][:-4] + '_' + 'iebins' + '.ply'
-            filename_cmap_png = save_name + '/cmap/' + scene_name + '_' + lines[s].split()[0].split('/rgb_')[1].replace(
-                '.jpg', '.png')
-            filename_gt_png = save_name + '/gt/' + scene_name + '_' + lines[s].split()[0].split('/rgb_')[1].replace(
-                '.jpg', '_gt.png')
-            filename_image_png = save_name + '/rgb/' + scene_name + '_' + lines[s].split()[0].split('/rgb_')[1]
-        
-        rgb_path = os.path.join(args.data_path, './' + lines[s].split()[0])
-        image = cv2.imread(rgb_path)
-        if args.dataset == 'nyu':
-            gt_path = os.path.join(args.data_path, './' + lines[s].split()[1])
-            gt = cv2.imread(gt_path, -1).astype(np.float32) / 1000.0  # Visualization purpose only
-            gt[gt == 0] = np.amax(gt)
-        
-        pred_depth = pred_depths[s]
-        
-        if args.dataset == 'kitti' or args.dataset == 'kittipred':
-            pred_depth_scaled = pred_depth * 256.0
-        else:
-            pred_depth_scaled = pred_depth * 1000.0
-        
-        pred_depth_scaled = pred_depth_scaled.astype(np.uint16)
-        cv2.imwrite(filename_pred_png, pred_depth_scaled, [cv2.IMWRITE_PNG_COMPRESSION, 0])
-        
-        if args.save_viz:
-            cv2.imwrite(filename_image_png, image[10:-1 - 9, 10:-1 - 9, :])
-            if args.dataset == 'nyu':
-                plt.imsave(filename_gt_png, (10 - gt) / 10, cmap='jet')
-                pred_depth_cropped = pred_depth[10:-1 - 9, 10:-1 - 9]
-                plt.imsave(filename_cmap_png, (10 - pred_depth) / 10, cmap='jet')
-            else:
-                plt.imsave(filename_cmap_png, np.log10(pred_depth), cmap='magma')
+            print("== No checkpoint found at '{}'".format(args.checkpoint_path))
+            exit()
 
-        if args.pred_clouds:
-            pred_cloud = pred_clouds[s]
-            o3d.io.write_point_cloud(filename_pred_ply, pred_cloud)
+    cudnn.benchmark = True
+
+    # Evaluate #
+    model.eval()
+    with torch.no_grad():
+        predict(model, dataloader_eval)
+
+
+def main():
+    torch.cuda.empty_cache()
+    args.distributed = False
+    ngpus_per_node = torch.cuda.device_count()
+    exp_name = args.exp_name  
+
+    args.log_directory = os.path.join(args.log_directory,exp_name)  
     
-    return
-
+    command = 'mkdir -p ' + os.path.join(args.log_directory, args.model_name)
+    os.system(command)
+    print(args.log_directory)
+    
+    if ngpus_per_node > 1:
+        print("This machine has more than 1 gpu. Please set \'CUDA_VISIBLE_DEVICES=0\'")
+        return -1
+    
+    main_worker(args)
 
 if __name__ == '__main__':
-    test(args)
+    main()
