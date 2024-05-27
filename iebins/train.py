@@ -235,7 +235,16 @@ def main_worker(gpu, ngpus_per_node, args):
 
                     sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).unsqueeze(1)
                     pred_d = torch.sum((pred_depths_rc_list[-1] * segmentation_map), dim=1).unsqueeze(1)
+                else:
+                    if args.d3vo_c:
+                        sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1], unc_d3vo_c, pred_scale_list[-1], unc_d3vo, args)
+                    else:
+                        # uncertainty of canonical is std --> convert to variance
+                        sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1], uncertainty_maps_list[-1] ** 2, pred_scale_list[-1], unc_d3vo, args)
 
+                    pred_d = pred_depths_r_list[-1]
+                    print(pred_d.shape)
+                    print(sigma_metric.shape) 
                 loss = d3vo_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))
                 current_loss_d3vo = loss
             else: # Depth loss #
