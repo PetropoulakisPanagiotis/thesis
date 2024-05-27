@@ -208,19 +208,20 @@ class ScanNetDataset(object):
     cam = namedtuple('camera', 'fx fy cx cy scale')(
         577.5906635802469, 576.3481987847223, 319.15804639274694, 241.9392752941744, 1000)
 
-    def __init__(self, path, scene='scene0191_00', split='train'):
+    def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True):
+        self.scale_aware = scale_aware
         path = os.path.expanduser(path)
-
-
 
         with open(path + "/" + split + '/rgb_intrinsics/' + scene + ".json", 'r') as json_file:
             data = json.load(json_file)
-            ScanNetDataset.cam = namedtuple('camera', 'fx fy cx cy scale')(
+            ScanNetDataset.cam = namedtuple('camera', 'fx fy cx cy scale scale_unc')(
             data['fx'],
             data['fy'],
             data['cx'],
             data['cy'],
-            1000.0)
+            1000.0,
+            10000.0
+            )
 
         ids = [(file.split('.')[0]) for file in os.listdir(path + "/" + split + "/rgb/" + scene)]
         ids = sorted(ids, key=lambda x: str(x))
@@ -228,12 +229,27 @@ class ScanNetDataset(object):
         rgb_timestamps = [float(id) for id in ids]
         depth_timestamps = rgb_timestamps
         rgb_ids = [path + '/' + split + '/rgb/' + scene + "/" + str(item) + '.jpg' for item in ids]
-        #depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
-        depth_ids = [path + '/' + split + '/depth_network/' + scene + "/" + str(item) + '.png' for item in ids]
+
+        if self.scale_aware:
+            depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
+        else:
+            depth_ids = [path + '/' + split + '/depth_network/' + scene + "/" + str(item) + '.png' for item in ids]
+            scale_ids = [path + '/' + split + '/scale/' + scene + "/" + str(item) + '.png' for item in ids]
+            scale_unc_ids = [path + '/' + split + '/scale_unc/' + scene + "/" + str(item) + '.png' for item in ids]
+            canonical_ids = [path + '/' + split + '/canonical/' + scene + "/" + str(item) + '.png' for item in ids]
+            canonical_unc_ids = [path + '/' + split + '/canonical_unc/' + scene + "/" + str(item) + '.png' for item in ids]
+
 
         # Read depth #
         self.rgb = ImageReader(rgb_ids, rgb_timestamps)
         self.depth = ImageReader(depth_ids, depth_timestamps)
+        if self.scale_aware:
+            self.scale = ImageReader(scale_ids, depth_timestamps)
+            self.scale_unc = ImageReader(scale_unc_ids, depth_timestamps)
+            self.canonical = ImageReader(canonical_ids, depth_timestamps)
+            self.canonical_unc = ImageReader(canonical_unc_ids, depth_timestamps)
+
+
         self.timestamps = rgb_timestamps
 
     def __getitem__(self, idx):
