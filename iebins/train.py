@@ -95,7 +95,7 @@ def main_worker(gpu, ngpus_per_node, args):
     global_step = 0
     best_eval_measures_lower_better = torch.zeros(6).cpu() + 1e3
     best_eval_measures_higher_better = torch.zeros(3).cpu()
-    best_eval_steps = np.zeros(9, dtype=np.int32)
+    best_eval_steps = np.zeros(10, dtype=np.int32)
     best_unc = np.inf # Best uncertainty value
 
     optimizer = torch.optim.Adam([{'params': model.module.parameters()}],
@@ -320,15 +320,14 @@ def main_worker(gpu, ngpus_per_node, args):
                         if best_unc > unc_error:
 
 
-                            model_path = '/model-{}-best_{}_{:.5f}'.format(global_step, "unc_d3vo", unc_error)
+                            old_best_step = best_eval_steps[9]
+                            model_path = '/model-{}-best_{}_{:.5f}'.format(old_best_step, "unc_d3vo", unc_error)
                             if os.path.exists(model_path):
                                 command = 'rm {}'.format(model_path)
                                 os.system(command)
                             
                             best_unc = unc_error
                             model_save_name = '/model-{}-best_{}_{:.5f}'.format(global_step, "unc_d3vo", best_unc)
-
-
 
                             print('New best for {}. Saving model: {}'.format("unc_d3vo", model_save_name))
                             checkpoint = {'global_step': global_step,
@@ -340,6 +339,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                           }
                    
                             torch.save(checkpoint, args.log_directory + '/' + args.model_name + model_save_name)
+                            best_eval_steps[9] = global_step
 
                     exp_name = args.exp_name
                     log_txt = os.path.join(args.log_directory + '/' + args.model_name, exp_name+'_logs.txt')
