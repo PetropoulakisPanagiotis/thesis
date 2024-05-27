@@ -214,7 +214,8 @@ def main():
     os.makedirs(args.save_dir + 'depth/', exist_ok=True)
     os.makedirs(args.save_dir + 'scale/', exist_ok=True)
     os.makedirs(args.save_dir + 'canonical/', exist_ok=True)
-    os.makedirs(args.save_dir + 'uncertainty/', exist_ok=True)
+    os.makedirs(args.save_dir + 'scale_unc/', exist_ok=True)
+    os.makedirs(args.save_dir + 'canonical_unc/', exist_ok=True)
 
     if ngpus_per_node > 1:
         print("This machine has more than 1 gpu. Please set \'CUDA_VISIBLE_DEVICES=0\'")
