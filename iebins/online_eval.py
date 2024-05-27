@@ -63,9 +63,11 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
                 else:
                     # uncertainty of canonical is std --> convert to variance
                     sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1], result["uncertainty_maps_list"][-1] ** 2, result["pred_scale_list"][-1], result["unc_d3vo"], args)
-
-                sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).squeeze(0).cpu().numpy()
-
+                if args.segmentation:
+                    sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).squeeze(0).cpu().numpy()
+                else:
+                    sigma_metric = sigma_metric.squeeze(0).squeeze(0).cpu().numpy()
+                
             # Mask gt_depth #
             if args.instances:
                 mask = torch.sum(instances, dim=1).squeeze(0).to(torch.bool).cpu()

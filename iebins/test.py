@@ -99,56 +99,13 @@ def predict(model, dataloader_eval) -> None:
                 
                 mask = torch.sum(instances, dim=1).unsqueeze(0).to(torch.bool).cpu()
                 gt_depth = (gt_depth * mask)
-                #wals = torch.nonzero(labels[0] == 1)
-                #print(result['pred_shift_instances_list'][-1][0, wals])
-                #print(result['pred_scale_instances_list'][-1][0, wals])
             elif args.segmentation:
-
                 pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
-
-                if args.d3vo:
-                    sigma_c = torch.sum((segmentation_map * (result["uncertainty_maps_list"][-1] **2)), dim=1)
-                    c = torch.sum((segmentation_map * result["pred_depths_rc_list"][-1]), dim=1)
-                    
-                    if args.d3vo_c:
-                        sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1], result["unc_d3vo_c"], result['pred_scale_list'][-1], result["unc_d3vo"], args)
-                        sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
-                    else:
-                        # uncertainty of canonical is std --> convert to variance
-                        sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1], result['uncertainty_maps_list'][-1] ** 2, result['pred_scale_list'][-1], result["unc_d3vo"], args)
-                        sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
-
-                    s = torch.sum((segmentation_map * result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)), dim=1)
-                    sigma_m = s**2 * sigma_c + c**2 * sigma_s
-                    sigma_m = sigma_m.unsqueeze(0)
-                # Fair comparison segmentation - instances: use eval_per_class.sh script   
-                if True:
-                    if args.pick_class != 0:    
-                        non_class = torch.nonzero(labels[0] != args.pick_class)
-                        if non_class.shape[0] == 63:
-                            continue
-                        instances[0, non_class] = torch.zeros_like(instances[0, non_class])
-                    
-                    if False:
-                        tmp = instances_mask.permute(1,2,0)
-                        cv2.imshow("instances_mapped_image", (tmp.cpu().numpy() * 255).astype('uint8'))
-                        cv2.waitKey(0)
-                        cv2.destroyAllWindows()
-
-                    pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
-                    
-                    mask = torch.sum(instances, dim=1).unsqueeze(0)
-                    pred_depth = pred_depth * mask
-
-                    mask = mask.to(torch.bool).cpu()
-                    gt_depth = (gt_depth * mask)
             else:
                 pred_depth = pred_depths_r_list[-1]
 
             pred_depth = pred_depth.cpu().numpy().squeeze()
             gt_depth = gt_depth.cpu().numpy().squeeze()     
-            if args.d3vo:
-                sigma_m = sigma_m.cpu().numpy().squeeze()
         
         pred_depth[pred_depth < args.min_depth_test] = args.min_depth_test
         pred_depth[pred_depth > args.max_depth_test] = args.max_depth_test
@@ -157,24 +114,40 @@ def predict(model, dataloader_eval) -> None:
 
         # Save depth metric #
         filename = file_id_str[step].split('/')[1] + '.png'
-        normalization_const = 1e3
+        normalization_const_depth = 1e3
+        normalization_const_unc = 1e4
 
-        cv2.imwrite(args.save_dir + 'depth/' + filename, map_float_data_to_int(pred_depth, normalization_const), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+        cv2.imwrite(args.save_dir + 'depth/' + filename, map_float_data_to_int(pred_depth, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
         if args.segmentation:
             pass
         elif args.instances:
             pass
-        else:
+        else: # Single scale 
             # Scale #
             scale = result['pred_scale_list'][-1].cpu().numpy().squeeze()
             scale_map = np.ones_like(pred_depth) * scale
             
-            cv2.imwrite(args.save_dir + 'scale/' + filename, map_float_data_to_int(scale_map, normalization_const), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+            cv2.imwrite(args.save_dir + 'scale/' + filename, map_float_data_to_int(scale_map, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
             # Canonical #    
             canonical = result['pred_depths_rc_list'][-1].cpu().numpy().squeeze()
-            cv2.imwrite(args.save_dir + 'canonical/' + filename, map_float_data_to_int(canonical, normalization_const), [cv2.IMWRITE_PNG_COMPRESSION, 9])    
+            cv2.imwrite(args.save_dir + 'canonical/' + filename, map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])    
 
+            # Uncertainty canonical and scale #
+            if args.d3vo:
+                if args.d3vo_c:
+                    canonical_unc = result["unc_d3vo_c"].squeeze(0).squeeze(0)              
+                else:
+                    canonical_unc = result["uncertainty_maps_list"].squeeze(0).squeeze(0) ** 2            
+
+                scale_unc = result["unc_d3vo"].squeeze(0).cpu().numpy()
+                canonical_unc = canonical_unc.cpu().numpy()
+                
+                scale_unc = np.tile(scale_unc, (canonical_unc.shape)) 
+                 
+                cv2.imwrite(args.save_dir + 'canonical_unc/' + filename, map_float_data_to_int(canonical_unc, normalization_const_unc), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+                cv2.imwrite(args.save_dir + 'scale_unc/' + filename, map_float_data_to_int(scale_unc, normalization_const_unc), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+    
         if False:
             gt_depth[gt_depth < args.min_depth_test] = args.min_depth_test
             gt_depth[gt_depth > args.max_depth_test] = args.max_depth_test

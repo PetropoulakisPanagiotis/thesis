@@ -320,9 +320,7 @@ class d3vo_loss(nn.Module):
 
 # Variance decomposition: get variance of metric depth from canonical and scale #
 def sigma_metric_from_canonical_and_scale(depth_c, unc_c, scale, unc_scale, args):
-    if args.segmentation:
-        sigma_metric = F.relu(depth_c ** 2 * unc_scale.unsqueeze(-1).unsqueeze(-1) + scale.unsqueeze(-1).unsqueeze(-1) ** 2 * unc_c).clamp(min=1e-4)
-
+    sigma_metric = F.relu(depth_c ** 2 * unc_scale.unsqueeze(-1).unsqueeze(-1) + scale.unsqueeze(-1).unsqueeze(-1) ** 2 * unc_c).clamp(min=1e-4)
     return sigma_metric
 
 
