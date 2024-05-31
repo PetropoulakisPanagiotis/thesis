@@ -121,7 +121,6 @@ class LocalBA(object):
                 edge_id = len(self.measurements)
                 self.optimizer.add_edge(edge_id, pt.id, kf.id, m)
                 self.measurements.append(m)
-
         for kf in fixed_keyframes:
             self.optimizer.add_pose(kf.id, kf.pose, kf.cam, fixed=True)
             for m in kf.measurements():

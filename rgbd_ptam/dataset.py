@@ -49,15 +49,15 @@ class ImageReader(object):
                 return
             idx = self.idx
             t = time.time()
-    
+ 
     def __len__(self):
         return len(self.ids)
 
     def __getitem__(self, idx):
         self.idx = idx
-        # if not self.thread_started:
-        #     self.thread_started = True
-        #     self.preload_thread.start()
+        #if not self.thread_started:
+        #    self.thread_started = True
+        #    self.preload_thread.start()
 
         if idx in self.cache:
             img = self.cache[idx]
@@ -244,10 +244,11 @@ class ScanNetDataset(object):
         self.rgb = ImageReader(rgb_ids, rgb_timestamps)
         self.depth = ImageReader(depth_ids, depth_timestamps)
         if self.scale_aware:
-            self.scale = ImageReader(scale_ids, depth_timestamps)
-            self.scale_unc = ImageReader(scale_unc_ids, depth_timestamps)
-            self.canonical = ImageReader(canonical_ids, depth_timestamps)
-            self.canonical_unc = ImageReader(canonical_unc_ids, depth_timestamps)
+            pass
+            #self.scale = ImageReader(scale_ids, depth_timestamps)
+            #self.scale_unc = ImageReader(scale_unc_ids, depth_timestamps)
+            #self.canonical = ImageReader(canonical_ids, depth_timestamps)
+            #self.canonical_unc = ImageReader(canonical_unc_ids, depth_timestamps)
 
 
         self.timestamps = rgb_timestamps

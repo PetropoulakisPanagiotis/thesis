@@ -4,11 +4,13 @@ import cv2
 from collections import defaultdict
 from numbers import Number
 
-from threading import Thread, Lock 
+from threading import Thread, Lock
 from queue import Queue
 
 
-
+"""
+Image + features 
+"""
 class ImageFeature(object):
     def __init__(self, image, params):
         # TODO: pyramid representation
@@ -63,30 +65,24 @@ class ImageFeature(object):
         matches = [(i, j) for j, i in matches.items()]
         return matches
 
+    # Other ideas: row, col constraints #
     def matched_by(self, descriptors):
         with self._lock:
             unmatched_descriptors = self.descriptors[self.unmatched]
             if len(unmatched_descriptors) == 0:
                 return []
+
             lookup = dict(zip(
-                range(len(unmatched_descriptors)), 
+                range(len(unmatched_descriptors)),
                 np.where(self.unmatched)[0]))
 
-        # TODO: reduce matched points by using predicted position
         matches = self.matcher.match(
             np.array(descriptors), unmatched_descriptors)
         return [(m, m.queryIdx, m.trainIdx) for m in matches]
 
-    def row_match(self, *args, **kwargs):
-        return row_match(self.matcher, *args, **kwargs)
-
-    # def circular_stereo_match(self, *args, **kwargs):
-    #     return circular_stereo_match(self.matcher, *args, **kwargs)
-    def direct_match(self, *args, **kwargs):
-        return direct_match(self.matcher, *args, **kwargs)
-
     def get_keypoint(self, i):
         return self.keypoints[i]
+
     def get_descriptor(self, i):
         return self.descriptors[i]
 
@@ -94,8 +90,6 @@ class ImageFeature(object):
         x = int(np.clip(pt[0], 0, self.width-1))
         y = int(np.clip(pt[1], 0, self.height-1))
         color = self.image[y, x]
-        if isinstance(color, Number):
-            color = np.array([color, color, color])
         return color[::-1] / 255.
 
     def set_matched(self, i):
@@ -114,33 +108,3 @@ class ImageFeature(object):
                 indices.append(i)
 
         return keypoints, descriptors, indices
-
-
-
-# TODO: only match points in neighboring rows
-def row_match(matcher, kps1, desps1, kps2, desps2,
-        matching_distance=40, 
-        max_row_distance=2.5, 
-        max_disparity=100):
-
-    matches = matcher.match(np.array(desps1), np.array(desps2))
-    good = []
-    for m in matches:
-        pt1 = kps1[m.queryIdx].pt
-        pt2 = kps2[m.trainIdx].pt
-        if (m.distance < matching_distance and 
-            abs(pt1[1] - pt2[1]) < max_row_distance and 
-            abs(pt1[0] - pt2[0]) < max_disparity):   # epipolar constraint
-            good.append(m)
-    return good
-    
-
-def direct_match(matcher, desps1, desps2, matching_distance=30, ratio=0.7):
-    matches = dict()
-    distances = defaultdict(lambda: float('inf'))
-    for (m, n) in matcher.knnMatch(np.array(desps1), np.array(desps2), k=2):
-        if m.distance < min(
-            matching_distance, n.distance * ratio, distances[m.trainIdx]):
-            matches[m.trainIdx] = m.queryIdx
-            distances[m.trainIdx] = m.distance
-    return [(i, j) for j, i in matches.items()]

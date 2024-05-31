@@ -14,7 +14,9 @@ from covisibility import GraphMeasurement
 
 
 
-
+"""
+Camera intrinsics
+"""
 class Camera(object):
     def __init__(self, fx, fy, cx, cy, width, height, 
             scale, baseline, depth_near, depth_far, 
@@ -32,16 +34,20 @@ class Camera(object):
             [0, fy, cy], 
             [0, 0, 1]])
 
-        self.depth_near = depth_near
-        self.depth_far = depth_far
-        self.frustum_near = frustum_near
-        self.frustum_far = frustum_far
+        self.depth_near = depth_near     # 0.1
+        self.depth_far = depth_far       # 10
+        self.frustum_near = frustum_near # 0.1
+        self.frustum_far = frustum_far   # 50
 
         self.width = width
         self.height = height
 
 
-
+"""
+Frame:
+       image, pose, cam, timestamp, projection
+       feature: image, keypoints, desc
+"""
 class Frame(object):
     def __init__(self, idx, pose, feature, cam, timestamp=None, 
             pose_covariance=np.identity(6)):
@@ -51,23 +57,26 @@ class Frame(object):
         self.cam = cam
         self.timestamp = timestamp
         self.image = feature.image
-        self.orientation = pose.orientation()
-        self.position = pose.position()
+        self.orientation = pose.orientation() # From camera to world
+        self.position = pose.position() # From camera to world 
         self.pose_covariance = pose_covariance
 
-        self.transform_matrix = pose.inverse().matrix()[:3] # shape: (3, 4)
+        self.transform_matrix = pose.inverse().matrix()[:3] # Shape: (3, 4)
         self.projection_matrix = (
-            self.cam.intrinsic.dot(self.transform_matrix))  # from world frame to image
+            self.cam.intrinsic.dot(self.transform_matrix))  # From world frame to image
 
-    def can_view(self, points, margin=10):    # Frustum Culling (batch version)
+    def can_view(self, points, margin=10):
+        # Frustum Culling (batch version)
         points = np.transpose(points)
         (u, v), depth = self.project(self.transform(points))
+        if depth.max() > 20:
+            exit()
         return np.logical_and.reduce([
             depth >= self.cam.frustum_near,
             depth <= self.cam.frustum_far,
-            u >= - margin,
+            u >= -margin,
             u <= self.cam.width + margin,
-            v >= - margin,
+            v >= -margin,
             v <= self.cam.height + margin])
  
     def update_pose(self, pose):
@@ -82,7 +91,7 @@ class Frame(object):
         self.projection_matrix = (
             self.cam.intrinsic.dot(self.transform_matrix))
 
-    def transform(self, points):    # from world coordinates
+    def transform(self, points): 
         '''
         Transform points from world coordinates frame to camera frame.
         Args:
@@ -123,12 +132,16 @@ class Frame(object):
 
     def get_keypoint(self, i):
         return self.feature.get_keypoint(i)
+
     def get_descriptor(self, i):
         return self.feature.get_descriptor(i)
+
     def get_color(self, pt):
         return self.feature.get_color(pt)
+
     def set_matched(self, i):
         self.feature.set_matched(i)
+
     def get_unmatched_keypoints(self):
         return self.feature.get_unmatched_keypoints()
 
@@ -146,7 +159,10 @@ def depth_to_3d(depth, coords, cam):
     return np.column_stack([xs, ys, zs])
 
 
-
+"""
+Frame +  depth
+rgb is FRAME
+"""
 class RGBDFrame(Frame):
     def __init__(self, idx, pose, feature, depth, cam, timestamp=None, 
             pose_covariance=np.identity(6)):
@@ -159,16 +175,21 @@ class RGBDFrame(Frame):
         x, y = int(px[0]), int(px[1])
         if not (0 <= x <= self.cam.width-1 and 0 <= y <= self.cam.height-1):
             return None
+
         depth = self.depth[y, x] / self.cam.scale
         if not (self.cam.depth_near <= depth <= self.cam.depth_far):
             return None
+
         disparity = self.cam.bf / depth
 
         # virtual right camera observation
-        kp2 = cv2.KeyPoint(x - disparity, y, 1) 
+        kp2 = cv2.KeyPoint(x - disparity, y, 1)
+
         return kp2
 
     def find_matches(self, source, points, descriptors):
+        # Find matches and get measurements
+        # Source: type like TRACKING - enum 
         matches = self.rgb.find_matches(points, descriptors)
         measurements = []
         for i, j in matches:
@@ -180,7 +201,7 @@ class RGBDFrame(Frame):
                     source,
                     [self.rgb.get_keypoint(j), kp2],
                     [self.rgb.get_descriptor(j)] * 2)
-            else:
+            else: # Typically when depth is 0 for this camera
                 measurement = Measurement(
                     Measurement.Type.LEFT,
                     source,
@@ -200,12 +221,17 @@ class RGBDFrame(Frame):
         matched_measurements = self.find_matches(source, points, descriptors)
 
         measurements = []
+        # For a current measurement we attach a mappoint             #
+        # We will update later the descriptor once the current frame #
+        # can see this mappoint point                                #
         for i, meas in matched_measurements:
             meas.mappoint = mappoints[i]
             measurements.append(meas)
         return measurements
 
     def cloudify(self):
+        # Create new mappoints if not matched #
+        # Return mappoints and measurements   #
         kps, desps, idx = self.rgb.get_unmatched_keypoints()
         px = np.array([kp.pt for kp in kps])
         if len(px) == 0:
@@ -220,9 +246,13 @@ class RGBDFrame(Frame):
         mappoints = []
         measurements = []
         for i, point in enumerate(points):
+            # Invalid depth #
             if not (self.cam.depth_near <= pts[i][2] <= self.cam.depth_far):
                 continue
+
             kp2 = self.virtual_stereo(px[i])
+            # Invalid depth for virtual stereo   #
+            # Only mappoints with virtual stereo #
             if kp2 is None:
                 continue
 
@@ -230,16 +260,21 @@ class RGBDFrame(Frame):
             normal /= np.linalg.norm(normal)
             color = self.rgb.get_color(px[i])
 
+            # Triangulation aka virtual stereo #
             mappoint = MapPoint(point, normal, desps[i], color)
             measurement = Measurement(
                 Measurement.Type.STEREO,
                 Measurement.Source.TRIANGULATION,
                 [kps[i], kp2],
                 [desps[i], desps[i]])
+
             measurement.mappoint = mappoint
+
             mappoints.append(mappoint)
             measurements.append(measurement)
+
             self.rgb.set_matched(i)
+
         return mappoints, measurements
 
     def update_pose(self, pose):
@@ -252,25 +287,36 @@ class RGBDFrame(Frame):
         for i, p in enumerate(mappoints):
             points.append(p.position)
             point_normals.append(p.normal)
+
         points = np.asarray(points)
         point_normals = np.asarray(point_normals)
 
         normals = points - self.position
         normals /= np.linalg.norm(normals, axis=-1, keepdims=True)
+
+        # cos(theta) = dot(a,b) / norm(a) * norm(b)                     #
+        # TODO: 'Compare normal of mappoint with current normal camera' #
         cos = np.clip(np.sum(point_normals * normals, axis=1), -1, 1)
 
         parallel = np.arccos(cos) < (np.pi / 4)
+
+        # Depth based #
         can_view = self.rgb.can_view(points)
+
         return np.logical_and(parallel, can_view)
 
     def to_keyframe(self):
         return KeyFrame(
-            self.idx, self.pose, 
-            self.feature, self.depth, 
+            self.idx, self.pose,
+            self.feature, self.depth,
             self.cam, self.timestamp, self.pose_covariance)
 
 
-
+"""
+GraphKeyFrame
+Frame +  depth
+rgb is FRAME
+"""
 class KeyFrame(GraphKeyFrame, RGBDFrame):
     _id = 0
     _id_lock = Lock()
@@ -282,9 +328,9 @@ class KeyFrame(GraphKeyFrame, RGBDFrame):
             self.id = KeyFrame._id
             KeyFrame._id += 1
 
-        self.reference_keyframe = None
-        self.reference_constraint = None
-        self.preceding_keyframe = None
+        self.reference_keyframe = None   # Frame with most matches 
+        self.reference_constraint = None # From the reference to this frame
+        self.preceding_keyframe = None   # Previous keyframe
         self.preceding_constraint = None
         self.loop_keyframe = None
         self.loop_constraint = None
@@ -332,14 +378,17 @@ class MapPoint(GraphMapPoint):
         self.covariance = covariance
         self.color = color
 
-        self.count = defaultdict(int)
+        self.count = defaultdict(int) # TODO: see puprose this
 
     def update_position(self, position):
         self.position = position
+
     def update_normal(self, normal):
         self.normal = normal
+
     def update_descriptor(self, descriptor):
         self.descriptor = descriptor
+
     def set_color(self, color):
         self.color = color
 
@@ -356,12 +405,16 @@ class MapPoint(GraphMapPoint):
     def increase_outlier_count(self):
         with self._lock:
             self.count['outlier'] += 1
+
+    # TODO: inliner always 0 #
     def increase_inlier_count(self):
         with self._lock:
             self.count['inlier'] += 1
+
     def increase_projection_count(self):
         with self._lock:
             self.count['proj'] += 1
+
     def increase_measurement_count(self):
         with self._lock:
             self.count['meas'] += 1
@@ -378,10 +431,10 @@ class Measurement(GraphMeasurement):
 
         self.type = type
         self.source = source
-        self.keypoints = keypoints
+        self.keypoints = keypoints # List: can be left, right
         self.descriptors = descriptors
-
         self.xy = np.array(self.keypoints[0].pt)
+
         if self.is_stereo():
             self.xyx = np.array([
                 *keypoints[0].pt, keypoints[1].pt[0]])
@@ -390,24 +443,30 @@ class Measurement(GraphMeasurement):
 
     def get_descriptor(self, i=0):
         return self.descriptors[i]
+
     def get_keypoint(self, i=0):
         return self.keypoints[i]
 
     def get_descriptors(self):
         return self.descriptors
+
     def get_keypoints(self):
         return self.keypoints
 
     def is_stereo(self):
         return self.type == Measurement.Type.STEREO
+
     def is_left(self):
         return self.type == Measurement.Type.LEFT
+
     def is_right(self):
         return self.type == Measurement.Type.RIGHT
 
     def from_triangulation(self):
         return self.triangulation
+
     def from_tracking(self):
         return self.source == Measurement.Source.TRACKING
+
     def from_refind(self):
         return self.source == Measurement.Source.REFIND

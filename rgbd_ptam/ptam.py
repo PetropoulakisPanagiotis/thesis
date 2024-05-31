@@ -93,7 +93,7 @@ class RGBDPTAM(object):
         print('Tracking:', frame.idx, ' <- ', self.reference.id, self.reference.idx)
 
         predicted_pose, _ = self.motion_model.predict_pose(frame.timestamp)
-        frame.update_pose(predicted_pose)
+        frame.update_pose(predicted_pose) # set pose to frame
         if self.loop_closing is not None:
             if self.loop_correction is not None:
                 estimated_pose = g2o.Isometry3d(
@@ -103,10 +103,13 @@ class RGBDPTAM(object):
                 frame.update_pose(estimated_pose)
                 self.motion_model.apply_correction(self.loop_correction)
                 self.loop_correction = None
+
         local_mappoints = self.filter_points(frame)
         measurements = frame.match_mappoints(
             local_mappoints, Measurement.Source.TRACKING)
 
+        # Measurements -> frame
+        # Local        -> local map
         print('measurements:', len(measurements), '   ', len(local_mappoints))
 
         tracked_map = set()
@@ -321,7 +324,8 @@ if __name__ == '__main__':
             timestamp = dataset.timestamps[i]
 
         time_start = time.time()
-        feature.extract()
+        feature.extract() # Detect keypoints and descriptors of image
+
         frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp)
         if not ptam.is_initialized():
             ptam.initialize(frame)
