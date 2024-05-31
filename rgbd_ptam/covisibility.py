@@ -13,7 +13,7 @@ class GraphKeyFrame(object):
     def __init__(self):
         self.id = None
         self.meas = dict() # Measurement key and value mappoint
-        self.covisible = defaultdict(int) # If another frame is covisible and also count how mant times 
+        self.covisible = defaultdict(int) # If another frame is covisible and also count how many times 
         self._lock = Lock()
 
     def __hash__(self):

@@ -15,11 +15,10 @@ from components import Measurement
 
 
 
-# a very simple implementation
 class LoopDetection(object):
     def __init__(self, params):
         self.params = params
-        self.nns = NearestNeighbors()
+        self.nns = NearestNeighbors() # It contains kfs 
 
     def add_keyframe(self, keyframe):
         embedding = keyframe.feature.descriptors.mean(axis=0)
@@ -29,28 +28,36 @@ class LoopDetection(object):
         embedding = keyframe.feature.descriptors.mean(axis=0)
         kfs, ds = self.nns.search(embedding, k=20)
 
+        # If keyframe is in neighbours (first item) remove #
         if len(kfs) > 0 and kfs[0] == keyframe:
             kfs, ds = kfs[1:], ds[1:]
+
         if len(kfs) == 0:
             return None
 
         min_d = np.min(ds)
         for kf, d in zip(kfs, ds):
+            # Too close timestamps #
             if abs(kf.id - keyframe.id) < self.params.lc_min_inbetween_keyframes:
                 continue
-            if (np.linalg.norm(kf.position - keyframe.position) > 
+
+            # Too far away #
+            if (np.linalg.norm(kf.position - keyframe.position) >
                 self.params.lc_max_inbetween_distance):
                 break
+
+            # Do not match well in embedding space #
             if d > self.params.lc_embedding_distance or d > min_d * 1.5:
                 break
             return kf
+
         return None
 
 
 
 class LoopClosing(object):
     def __init__(self, system, params):
-        self.system = system
+        self.system = system # RGBDPTAM
         self.params = params
 
         self.loop_detector = LoopDetection(params)
@@ -63,6 +70,7 @@ class LoopClosing(object):
         self.maintenance_thread = Thread(target=self.maintenance)
         self.maintenance_thread.start()
 
+    # Main thread waits so that loopClosure stops #
     def stop(self):
         self.stopped = True
         self._queue.put(None)
@@ -80,21 +88,26 @@ class LoopClosing(object):
     def maintenance(self):
         last_query_keyframe = None
         while not self.stopped:
+            # Get last keyframe #
             keyframe = self._queue.get()
+
+            # Stop thread function no more frames or we stopped the loopClosure #
             if keyframe is None or self.stopped:
                 return
 
-            # check if this keyframe share many mappoints with a loop keyframe
-            covisible = sorted(
-                keyframe.covisibility_keyframes().items(), 
+            # Get top 2 covisible. If they are far away continue #
+            # We do no have enough coverage to the map           #
+            covisible = sorted(keyframe.covisibility_keyframes().items(),
                 key=lambda _:_[1], reverse=True)
             if any([(keyframe.id - _[0].id) > 5 for _ in covisible[:2]]):
                 continue
 
+            # Last query frame too close to the current one # 
             if (last_query_keyframe is not None and 
                 abs(last_query_keyframe.id - keyframe.id) < 3):
                 continue
 
+            # No loop candidate #
             candidate = self.loop_detector.detect(keyframe)
             if candidate is None:
                 continue
@@ -102,55 +115,53 @@ class LoopClosing(object):
             query_keyframe = keyframe
             match_keyframe = candidate
 
+            # --> constraint: from matched to query estimation ransac
+            # --> correction: how much correction to apply in query 
             result = match_and_estimate(
                 query_keyframe, match_keyframe, self.params)
-
             if result is None:
                 continue
+
+            # Not enough inliers to calculate relative pose #
             if (result.n_inliers < max(self.params.lc_inliers_threshold, 
                 result.n_matches * self.params.lc_inliers_ratio)):
                 continue
 
-            if (np.abs(result.correction.translation()).max() > 
+            # Too much difference #
+            if (np.abs(result.correction.translation()).max() >
                 self.params.lc_distance_threshold):
                 continue
 
-            self.loops.append(
-                (match_keyframe, query_keyframe, result.constraint))
+            self.loops.append((match_keyframe, query_keyframe, result.constraint))
             query_keyframe.set_loop(match_keyframe, result.constraint)
 
-            # We have to ensure that the mapping thread is on a safe part of code, 
-            # before the selection of KFs to optimize
-            safe_window = self.system.mapping.lock_window()   # set
-            safe_window.add(self.system.reference)
+            # We have to ensure that the mapping thread is on a safe part of code, #
+            # before the selection of KFs to optimize                              #
+            safe_window = self.system.mapping.lock_window()                        # set
+            safe_window.add(self.system.reference)                                 # reference with most matches for current frame 
             for kf in self.system.reference.covisibility_keyframes():
-                safe_window.add(kf)
+                safe_window.add(kf)                                                # add covisibles of reference
  
-            # The safe window established between the Local Mapping must be 
-            # inside the considered KFs.
+            # The safe window established between the Local Mapping must be inside the considered KFs #
             considered_keyframes = self.system.graph.keyframes()
 
+            # Set frames to optimization #
             self.optimizer.set_data(considered_keyframes, self.loops)
 
-            before_lc = [
-                g2o.Isometry3d(kf.orientation, kf.position) for kf in safe_window]
+            before_lc = [g2o.Isometry3d(kf.orientation, kf.position) for kf in safe_window]
 
-            # Propagate initial estimate through 10% of total keyframes 
-            # (or at least 20 keyframes)
+            # Propagate initial estimate through 10% of total keyframes or at least 20 keyframes #
             d = max(20, len(considered_keyframes) * 0.1)
-            #d = len(considered_keyframes)
             propagator = SmoothEstimatePropagator(self.optimizer, d)
             propagator.propagate(self.optimizer.vertex(match_keyframe.id))
 
             # self.optimizer.set_verbose(True)
             self.optimizer.optimize(20)
-            
+ 
             # Exclude KFs that may being use by the local BA.
-            self.optimizer.update_poses_and_points(
-                considered_keyframes, exclude=safe_window)
+            self.optimizer.update_poses_and_points(considered_keyframes, exclude=safe_window)
 
             self.system.stop_adding_keyframes()
-
             # Wait until mapper flushes everything to the map
             self.system.mapping.wait_until_empty_queue()
             while self.system.mapping.is_processing():
@@ -159,28 +170,25 @@ class LoopClosing(object):
             # Calculating optimization introduced by local mapping while loop was been closed
             for i, kf in enumerate(safe_window):
                 after_lc = g2o.Isometry3d(kf.orientation, kf.position)
-                corr = before_lc[i].inverse() * after_lc
+                corr = before_lc[i].inverse() * after_lc # delta
 
                 vertex = self.optimizer.vertex(kf.id)
                 vertex.set_estimate(vertex.estimate() * corr)
 
             self.system.pause()
-
             for keyframe in considered_keyframes[::-1]:
                 if keyframe in safe_window:
                     reference = keyframe
                     break
-            uncorrected = g2o.Isometry3d(
-                reference.orientation, 
-                reference.position)
+
+            uncorrected = g2o.Isometry3d(reference.orientation, reference.position)
             corrected = self.optimizer.vertex(reference.id).estimate()
             T = uncorrected.inverse() * corrected   # close to result.correction
 
-            # We need to wait for the end of the current frame tracking and ensure that we
-            # won't interfere with the tracker.
+            # We need to wait for the end of the current frame tracking and ensure that we won't interfere with the tracker.#
             while self.system.is_tracking():
                 time.sleep(1e-4)
-            self.system.set_loop_correction(T)
+            self.system.set_loop_correction(T) # TODO: check
 
             # Updating keyframes and map points on the lba zone
             self.optimizer.update_poses_and_points(safe_window)
@@ -192,6 +200,7 @@ class LoopClosing(object):
                     keyframes[len(considered_keyframes) - len(keyframes):], 
                     correction=T)
 
+            # TODO: We do not remove old mesurements? #
             for query_meas, match_meas in result.shared_measurements:
                 new_query_meas = Measurement(
                     query_meas.type,
@@ -200,7 +209,7 @@ class LoopClosing(object):
                     query_meas.get_descriptors())
                 self.system.graph.add_measurement(
                     query_keyframe, match_meas.mappoint, new_query_meas)
-                
+
                 new_match_meas = Measurement(
                     match_meas.type,
                     Measurement.Source.REFIND,
@@ -217,8 +226,8 @@ class LoopClosing(object):
                 keyframe = self._queue.get()
                 if keyframe is None:
                     return
+
             last_query_keyframe = query_keyframe
-        
 
 
 def depth_to_3d(depth, coords, cam):
@@ -235,42 +244,50 @@ def depth_to_3d(depth, coords, cam):
 
 def match_and_estimate(query_keyframe, match_keyframe, params):
     query = defaultdict(list)
+    match = defaultdict(list)
+
+    # Find features in query and match #
     for kp, desp in zip(
         query_keyframe.feature.keypoints, query_keyframe.feature.descriptors):
         query['kps'].append(kp)
         query['desps'].append(desp)
         query['px'].append(kp.pt)
 
-    match = defaultdict(list)
     for kp, desp in zip(
         match_keyframe.feature.keypoints, match_keyframe.feature.descriptors):
         match['kps'].append(kp)
         match['desps'].append(desp)
         match['px'].append(kp.pt)
 
+    # Find 2D matches #
     matches = query_keyframe.feature.direct_match(
         query['desps'], match['desps'],
-        params.matching_distance, 
+        params.matching_distance,
         params.matching_distance_ratio)
-
-    query_pts = depth_to_3d(query_keyframe.depth, query['px'], query_keyframe.cam)
-    match_pts = depth_to_3d(match_keyframe.depth, match['px'], match_keyframe.cam)
-
     if len(matches) < params.lc_inliers_threshold:
         return None
 
+    # Find 3D points in camera frames #
+    query_pts = depth_to_3d(query_keyframe.depth, query['px'], query_keyframe.cam)
+    match_pts = depth_to_3d(match_keyframe.depth, match['px'], match_keyframe.cam)
+
     near = query_keyframe.cam.depth_near
     far = query_keyframe.cam.depth_far
+    # Add only points that can be projected to cameras #
     for (i, j) in matches:
+        # Query 
         if (near <= query_pts[i][2] <= far):
-            query['pt12'].append(query_pts[i])
-            query['px12'].append(query['kps'][i].pt)
-            match['px12'].append(match['kps'][j].pt)
-        if (near <= match_pts[j][2] <= far):
-            query['px21'].append(query['kps'][i].pt)
-            match['px21'].append(match['kps'][j].pt)
-            match['pt21'].append(match_pts[j])
+            query['pt12'].append(query_pts[i])       # 3D query
+            query['px12'].append(query['kps'][i].pt) # 2D query 
+            match['px12'].append(match['kps'][j].pt) # 2D match
 
+        # Match
+        if (near <= match_pts[j][2] <= far):
+            query['px21'].append(query['kps'][i].pt) # 2D query 
+            match['px21'].append(match['kps'][j].pt) # 2D match 
+            match['pt21'].append(match_pts[j])       # 3D matrch
+
+    # Not enough 3D points can be projected #
     if len(query['pt12']) < 6 or len(match['pt21']) < 6:
         return None
 
@@ -283,6 +300,8 @@ def match_and_estimate(query_keyframe, match_keyframe, params):
     if T12 is None or T21 is None:
         return None
 
+    # Initial estimate of relative transformation using ransac too big #
+    # False positive loop                                              #
     delta = T21 * T12
     if (g2o.AngleAxis(delta.rotation()).angle() > 0.06 or
         np.linalg.norm(delta.translation()) > 0.06):          # 3° or 0.06m
@@ -291,6 +310,7 @@ def match_and_estimate(query_keyframe, match_keyframe, params):
     ms = set()
     qd = dict()
     md = dict()
+    # Add 2D keypoints #
     for i in inliers12:
         pt1 = (int(query['px12'][i][0]), int(query['px12'][i][1]))
         pt2 = (int(match['px12'][i][0]), int(match['px12'][i][1]))
@@ -299,10 +319,13 @@ def match_and_estimate(query_keyframe, match_keyframe, params):
         pt1 = (int(query['px21'][i][0]), int(query['px21'][i][1]))
         pt2 = (int(match['px21'][i][0]), int(match['px21'][i][1]))
         ms.add((pt1, pt2))
+
+    # Split them to query and current #
     for i, (pt1, pt2) in enumerate(ms):
         qd[pt1] = i
         md[pt2] = i
 
+    # Get corresponding measurements #
     qd2 = dict()
     md2 = dict()
     for m in query_keyframe.measurements():
@@ -310,24 +333,34 @@ def match_and_estimate(query_keyframe, match_keyframe, params):
         idx = qd.get((int(pt[0]), int(pt[1])), None)
         if idx is not None:
             qd2[idx] = m
+
     for m in match_keyframe.measurements():
         pt = m.get_keypoint(0).pt
         idx = md.get((int(pt[0]), int(pt[1])), None)
         if idx is not None:
             md2[idx] = m
+
     shared_measurements = [(qd2[i], md2[i]) for i in (qd2.keys() & md2.keys())]
 
+    # How many 3D points per frame on average #
     n_matches = (len(query['pt12']) + len(match['pt21'])) / 2.
+
+    # How mant inliers in ransac #
     n_inliers = max(len(inliers12), len(inliers21))
+
     query_pose = g2o.Isometry3d(
         query_keyframe.orientation, query_keyframe.position)
     match_pose = g2o.Isometry3d(
         match_keyframe.orientation, match_keyframe.position)
 
-    # TODO: combine T12 and T21
+    # TODO: combine T12 and T21                                      #
+    # This is the initial constraint of the difference of the frames #
     constraint = T12
-    estimated_pose = match_pose * constraint
-    correction = query_pose.inverse() * estimated_pose
+
+    # This is from query to world #
+    estimated_pose = match_pose * constraint 
+    # How much we corrected the pose of query #
+    correction = query_pose.inverse() * estimated_pose 
 
     return namedtuple('MatchEstimateResult',
         ['estimated_pose', 'constraint', 'correction', 'shared_measurements', 
@@ -337,16 +370,16 @@ def match_and_estimate(query_keyframe, match_keyframe, params):
 
 
 def solve_pnp_ransac(pts3d, pts, intrinsic_matrix):
+    # Iter, reprojection error, conf, iterative default #
     val, rvec, tvec, inliers = cv2.solvePnPRansac(
-            np.array(pts3d), np.array(pts), 
-            intrinsic_matrix, None, None, None, 
-            False, 50, 2.0, 0.99, None)
+            np.array(pts3d), np.array(pts),
+            intrinsic_matrix, None, None, None,
+            False, 50, 2.0, 0.99, None,)
     if inliers is None or len(inliers) < 5:
         return None, None
 
     T = g2o.Isometry3d(cv2.Rodrigues(rvec)[0], tvec)
     return T, inliers.ravel()
-    
 
 
 class NearestNeighbors(object):

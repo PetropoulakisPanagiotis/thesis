@@ -12,7 +12,9 @@ from optimization import LocalBA
 from components import Measurement
 
 
-
+"""
+Map used in MappingThread - is-a
+"""
 class Mapping(object):
     def __init__(self, graph, params):
         self.graph = graph
@@ -22,6 +24,11 @@ class Mapping(object):
         self.optimizer = LocalBA()
 
     def add_keyframe(self, keyframe, measurements):
+        """
+            Old local keyframes are removed
+            A local_window is created using covisible of new keyframe
+            BundleAdjustment is performed
+        """
         self.graph.add_keyframe(keyframe)
         self.create_points(keyframe)
 
@@ -29,17 +36,24 @@ class Mapping(object):
             self.graph.add_measurement(keyframe, m.mappoint, m)
 
         self.local_keyframes.clear()
-        self.local_keyframes.append(keyframe)
 
+        # Add also the new frame                                #
+        # Note: Some 3D points belong only to the current frame #
+        #       We start with this frame to create 2D points    #
+        self.local_keyframes.append(keyframe)
+        # Fill covisible #
         self.fill(self.local_keyframes, keyframe)
         self.refind(self.local_keyframes, self.get_owned_points(keyframe))
 
+        # Optimize local window #
         self.bundle_adjust(self.local_keyframes)
+
+        # Remove bad 3D points #
         self.points_culling(self.local_keyframes)
 
     def fill(self, keyframes, keyframe):
         covisible = sorted(
-            keyframe.covisibility_keyframes().items(), 
+            keyframe.covisibility_keyframes().items(),
             key=lambda _:_[1], reverse=True)
 
         for kf, n in covisible:
@@ -64,23 +78,25 @@ class Mapping(object):
             if not kf.is_fixed():
                 adjust_keyframes.add(kf)
 
+        # Add covisible frames that not exist already in adjust #
+        # Should have less timestep                             #
         fixed_keyframes = set()
         for kf in adjust_keyframes:
             for ck, n in kf.covisibility_keyframes().items():
-                if (n > 0 and ck not in adjust_keyframes 
+                if (n > 0 and ck not in adjust_keyframes
                     and self.is_safe(ck) and ck < kf):
                     fixed_keyframes.add(ck)
 
         self.optimizer.set_data(adjust_keyframes, fixed_keyframes)
         completed = self.optimizer.optimize(self.params.ba_max_iterations)
-
         self.optimizer.update_poses()
         self.optimizer.update_points()
-
         if completed:
             self.remove_measurements(self.optimizer.get_bad_measurements())
+
         return completed
 
+    # Should be overloaded #
     def is_safe(self, keyframe):
         return True
 
@@ -91,42 +107,55 @@ class Mapping(object):
                 owned.append(m.mappoint)
         return owned
 
+    # Check if we can view the 3D points to these frame #
+    # Return mappoints that we can view                 #
     def filter_unmatched_points(self, keyframe, mappoints):
         filtered = []
         for i in np.where(keyframe.can_view(mappoints))[0]:
             pt = mappoints[i]
-            if (not pt.is_bad() and 
-                not self.graph.has_measurement(keyframe, pt)):
+
+            # Make sure we use the 2D keypoint once #
+            if (not pt.is_bad() and not self.graph.has_measurement(keyframe, pt)):
                 filtered.append(pt)
+
         return filtered
 
-    def refind(self, keyframes, new_mappoints):    # time consuming
+    # Time consuming                                  #
+    # Check if we can view the mappoints in keyframes #
+    def refind(self, keyframes, new_mappoints):
         if len(new_mappoints) == 0:
             return
+
         for keyframe in keyframes:
+            # Filtered mappoints not added as measurements #
             filtered = self.filter_unmatched_points(keyframe, new_mappoints)
             if len(filtered) == 0:
                 continue
+
+            # How many times we have projected it #
             for mappoint in filtered:
                 mappoint.increase_projection_count()
 
+            # Find 2D location - see if we can match it #
             measuremets = keyframe.match_mappoints(filtered, Measurement.Source.REFIND)
-
             for m in measuremets:
                 self.graph.add_measurement(keyframe, m.mappoint, m)
-                m.mappoint.increase_measurement_count()
+                m.mappoint.increase_measurement_count() # Added
 
+    # 2D related #
     def remove_measurements(self, measurements):
         for m in measurements:
             m.mappoint.increase_outlier_count()
             self.graph.remove_measurement(m)
 
-    def points_culling(self, keyframes):    # Remove bad mappoints
+    # 3D related                                                                       #
+    # Remove bad mappoints, no measurements or many outliers for this mappoint for the #
+    # corresponding 2D keypoints                                                       #
+    def points_culling(self, keyframes):
         mappoints = set(chain(*[kf.mappoints() for kf in keyframes]))
         for pt in mappoints:
             if pt.is_bad():
                 self.graph.remove_mappoint(pt)
-
 
 
 
@@ -153,6 +182,7 @@ class MappingThread(Mapping):
             self.graph.add_measurement(keyframe, m.mappoint, m)
 
         self._queue.put(keyframe)
+        # New keyframe added #
         with self._requests_cv:
             self._requests_cv.notify()
 

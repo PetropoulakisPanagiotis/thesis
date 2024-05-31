@@ -392,6 +392,7 @@ class MapPoint(GraphMapPoint):
     def set_color(self, color):
         self.color = color
 
+    # TODO: check this #
     def is_bad(self):
         with self._lock:
             status =  (

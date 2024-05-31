@@ -13,6 +13,16 @@ from components import Measurement
 from motion import MotionModel
 from loopclosing import LoopClosing
 
+"""
+Three threads:
+              - mapping
+              - loopclosure
+              - main -> tracking
+              - TODO: another thread for fullBA
+Two processed:
+              - main
+              - viewer
+"""
 
 
 class Tracking(object):

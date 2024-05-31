@@ -79,7 +79,10 @@ class ImageFeature(object):
         matches = self.matcher.match(
             np.array(descriptors), unmatched_descriptors)
         return [(m, m.queryIdx, m.trainIdx) for m in matches]
-
+   
+    def direct_match(self, *args, **kwargs):
+        return direct_match(self.matcher, *args, **kwargs)
+        
     def get_keypoint(self, i):
         return self.keypoints[i]
 
@@ -108,3 +111,17 @@ class ImageFeature(object):
                 indices.append(i)
 
         return keypoints, descriptors, indices
+
+
+def direct_match(matcher, desps1, desps2, matching_distance=30, ratio=0.7):
+    matches = dict()
+    distances = defaultdict(lambda: float('inf'))
+
+    # Two matches for each desps1 #
+    for (m, n) in matcher.knnMatch(np.array(desps1), np.array(desps2), k=2):
+        if m.distance < min(
+            matching_distance, n.distance * ratio, distances[m.trainIdx]):
+            matches[m.trainIdx] = m.queryIdx
+            distances[m.trainIdx] = m.distance
+
+    return [(i, j) for j, i in matches.items()]
