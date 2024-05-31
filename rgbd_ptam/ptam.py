@@ -24,7 +24,6 @@ Two processed:
               - viewer
 """
 
-
 class Tracking(object):
     def __init__(self, params):
         self.optimizer = BundleAdjustment()
@@ -38,6 +37,7 @@ class Tracking(object):
         self.optimizer.clear()
         self.optimizer.add_pose(0, pose, cam, fixed=False)
 
+        # BA with one pose #
         for i, m in enumerate(measurements):
             self.optimizer.add_point(i, m.mappoint.position, fixed=True)
             self.optimizer.add_edge(0, i, 0, m)
@@ -63,7 +63,7 @@ class RGBDPTAM(object):
         self.preceding = None        # last keyframe
         self.current = None          # current frame
         self.candidates = []         # candidate keyframes
-        self.results = []            # tracking results
+        self.results = []            # tracking results bool
 
         self.status = defaultdict(bool)
         self.non_keyframes = []
@@ -102,8 +102,9 @@ class RGBDPTAM(object):
         self.current = frame
         print('Tracking:', frame.idx, ' <- ', self.reference.id, self.reference.idx)
 
+        # set pose to frame from tracking
         predicted_pose, _ = self.motion_model.predict_pose(frame.timestamp)
-        frame.update_pose(predicted_pose) # set pose to frame
+        frame.update_pose(predicted_pose) 
         if self.loop_closing is not None:
             if self.loop_correction is not None:
                 estimated_pose = g2o.Isometry3d(
@@ -114,6 +115,7 @@ class RGBDPTAM(object):
                 self.motion_model.apply_correction(self.loop_correction)
                 self.loop_correction = None
 
+        # Get local map and also find measurements for current frame #
         local_mappoints = self.filter_points(frame)
         measurements = frame.match_mappoints(
             local_mappoints, Measurement.Source.TRACKING)
@@ -122,6 +124,8 @@ class RGBDPTAM(object):
         # Local        -> local map
         print('measurements:', len(measurements), '   ', len(local_mappoints))
 
+        # Update featrues                      #
+        # tracked_map -> measurements of frame #
         tracked_map = set()
         for m in measurements:
             mappoint = m.mappoint
@@ -130,33 +134,36 @@ class RGBDPTAM(object):
             tracked_map.add(mappoint)
 
         try:
+            # Find most probable reference frame #
             self.reference = self.graph.get_reference_frame(tracked_map)
+
+            # BA only 1 pose #
             pose = self.tracker.refine_pose(frame.pose, frame.cam, measurements)
 
             frame.update_pose(pose)
-            self.motion_model.update_pose(
-                frame.timestamp, pose.position(), pose.orientation())
-            # if len() > 40:
+            self.motion_model.update_pose(frame.timestamp, pose.position(), pose.orientation())
+
+            # tracking succeed
             self.candidates.append(frame)
             self.params.relax_tracking(False)
-            self.results.append(True)    # tracking succeed
+            self.results.append(True)
         except:
+            # tracking failed - likely not enough points
             self.params.relax_tracking(True)
-            self.results.append(False)   # tracking fail
+            self.results.append(False)
             tracking_fail = True
 
         remedy = False
-        if self.results[-2:].count(False) == 2:
-            if (len(self.candidates) > 0 and
-                self.candidates[-1].idx > self.preceding.idx):
-                frame = self.candidates[-1]
+        if self.results[-2:].count(False) == 2: # Two last frames failed
+            if len(self.candidates) > 0 and self.candidates[-1].idx > self.preceding.idx: # Remedy is not yet a keyframe
+                frame = self.candidates[-1] # Get last valid tracked frame
                 remedy = True
             else:
                 tracking_fail = True
                 print('tracking failed!')
 
-        if remedy or (
-                self.results[-1] and self.should_be_keyframe(frame, measurements)):# or (self.results[-1]):
+        # Remedy frame used or tracking succeded and should be keyframe #
+        if remedy or (self.results[-1] and self.should_be_keyframe(frame, measurements)):# or (self.results[-1]):
             keyframe = frame.to_keyframe()
             keyframe.update_reference(self.reference)
             keyframe.update_preceding(self.preceding)
@@ -164,22 +171,25 @@ class RGBDPTAM(object):
             self.mapping.add_keyframe(keyframe, measurements)
             if self.loop_closing is not None:
                 self.loop_closing.add_keyframe(keyframe)
+
             self.preceding = keyframe
             print('new keyframe', keyframe.idx)
-        else:
+        else: # Remedy already used as keyframe
             if tracking_fail is not True:
                 self.non_keyframes.append(frame)
+
         self.set_tracking(False)
 
 
-
     def filter_points(self, frame):
+        # Get local 3D points #
         # local_mappoints = self.graph.get_local_map(self.tracked_map)[0]
         local_mappoints = self.graph.get_local_map_v2(
             [self.preceding, self.reference])[0]
 
+        # If we can project the 3D map points to the current frame #
         can_view = frame.can_view(local_mappoints)
-        print('filter points:', len(local_mappoints), can_view.sum(), 
+        print('filter points:', len(local_mappoints), can_view.sum(),
             len(self.preceding.mappoints()),
             len(self.reference.mappoints()))
  
@@ -193,6 +203,7 @@ class RGBDPTAM(object):
             filtered.append(pt)
             checked.add(pt)
 
+        # Also add points from preceding and reference #
         for reference in set([self.preceding, self.reference]):
             for pt in reference.mappoints():  # neglect can_view test
                 if pt in checked or pt.is_bad():
@@ -206,9 +217,9 @@ class RGBDPTAM(object):
     def should_be_keyframe(self, frame, measurements):
         if self.adding_keyframes_stopped():
             return False
+
         n_matches = len(measurements)
-        return (n_matches < self.params.min_tracked_points and
-            n_matches > self.params.pnp_min_measurements)
+        return (n_matches < self.params.min_tracked_points and n_matches > self.params.pnp_min_measurements)
 
 
     def set_loop_correction(self, T):

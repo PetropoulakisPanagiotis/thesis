@@ -23,6 +23,8 @@ class Mapping(object):
 
         self.optimizer = LocalBA()
 
+    # The same logic is applied maintenance function  #
+    # This base method is not called at MappingThread #
     def add_keyframe(self, keyframe, measurements):
         """
             Old local keyframes are removed
@@ -31,7 +33,6 @@ class Mapping(object):
         """
         self.graph.add_keyframe(keyframe)
         self.create_points(keyframe)
-
         for m in measurements:
             self.graph.add_measurement(keyframe, m.mappoint, m)
 
@@ -41,8 +42,11 @@ class Mapping(object):
         # Note: Some 3D points belong only to the current frame #
         #       We start with this frame to create 2D points    #
         self.local_keyframes.append(keyframe)
+
         # Fill covisible #
         self.fill(self.local_keyframes, keyframe)
+
+        # Add 3D points of new frame and 2D measurements #
         self.refind(self.local_keyframes, self.get_owned_points(keyframe))
 
         # Optimize local window #
@@ -158,7 +162,6 @@ class Mapping(object):
                 self.graph.remove_mappoint(pt)
 
 
-
 class MappingThread(Mapping):
     def __init__(self, graph, params):
         super().__init__(graph, params)
@@ -167,8 +170,8 @@ class MappingThread(Mapping):
         self._requests = [False, False]   # requests: [LOCKWINDOW_REQUEST, PROCESS_REQUEST]
 
         self._lock = Lock()
-        self.locked_window = set()
-        self.status = defaultdict(bool)
+        self.locked_window = set()        # Set of keyframes
+        self.status = defaultdict(bool)   # processing, window_locked
  
         self._queue = Queue()
         self.maintenance_thread = Thread(target=self.maintenance)
@@ -182,6 +185,7 @@ class MappingThread(Mapping):
             self.graph.add_measurement(keyframe, m.mappoint, m)
 
         self._queue.put(keyframe)
+
         # New keyframe added #
         with self._requests_cv:
             self._requests_cv.notify()
@@ -189,6 +193,10 @@ class MappingThread(Mapping):
     def maintenance(self):
         stopped = False
         while not stopped:
+
+            # case 1: queue empty 
+            # case 2: local_keyframe full
+            # case 3: stop
             while not self._queue.empty():
                 keyframe = self._queue.get()
                 if keyframe is None:
@@ -205,6 +213,9 @@ class MappingThread(Mapping):
                 if self._requests.count(True) == 0:
                     self._requests_cv.wait()
 
+                    # case 1: queue empty 
+                    # case 2: local_keyframe full
+                    # case 3: stop
                     while not self._queue.empty():
                         keyframe = self._queue.get()
                         if keyframe is None:
@@ -216,15 +227,18 @@ class MappingThread(Mapping):
                             if len(self.local_keyframes) >= self.params.keyframes_buffer_size:
                                 self._requests[1] = True
 
-                requests = self._requests[:]
+                requests = self._requests[:] # Current requests 
                 self._requests[0] = False
-                self._requests[1] = False
+                self._requests[1] = False    # Reset 
 
             self.status['processing'] = True
 
+            # Add also covisible of the latest frame #
             if requests[1] and len(self.local_keyframes) > 0:
                 self.fill(self.local_keyframes, self.local_keyframes[-1])
 
+            # Lock window (also a set)                              #
+            # Lock window has bigger coverange than keyframes in BA #
             if requests[0]:
                 with self._lock:
                     for kf in self.local_keyframes:
@@ -235,6 +249,8 @@ class MappingThread(Mapping):
                     self.status['window_locked'] = True
 
             if requests[1] and len(self.local_keyframes) > 0:
+                # Internally we add covisible but as fixed frames #
+                # than has smaller timestamp than query keyframe  #
                 completed = self.bundle_adjust(self.local_keyframes)
                 if completed:
                     self.points_culling(self.local_keyframes)
@@ -248,6 +264,7 @@ class MappingThread(Mapping):
 
         while not self._queue.empty():
             time.sleep(1e-4)
+
         self._queue.put(None)
         self.maintenance_thread.join()
         print('mapping stopped')
@@ -259,17 +276,21 @@ class MappingThread(Mapping):
     def is_processing(self):
         return self.status['processing']
 
+    # Clear local window #
     def lock_window(self):
         with self._lock:
             self.status['window_locked'] = False
             self.locked_window.clear()
 
+        # Window is empty - inform to fill it #
         with self._requests_cv:
             self._requests[0] = True
             self._requests_cv.notify()
 
+        # Wait till has data #
         while not self.is_window_locked():
             time.sleep(1e-4)
+
         return self.locked_window
 
     def free_window(self):
@@ -300,5 +321,6 @@ class MappingThread(Mapping):
                 current_result.extend(xyz)
                 current_result.extend(q)
                 current_result = [str(item) for item in current_result]
+
                 line = ' '.join(current_result)
                 file_result.write(line + '\n')

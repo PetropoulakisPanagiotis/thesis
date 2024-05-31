@@ -209,7 +209,7 @@ class CovisibilityGraph(object):
 
     """
         Given 3D points get most probable frame -> reference
-        Also, for the reference frame get covisibl
+        Also, for the reference frame get covisible
     """
     def get_local_map(self, seedpoints, window_size=15):
         reference = self.get_reference_frame(seedpoints)
