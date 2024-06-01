@@ -10,6 +10,81 @@ from threading import Thread, Lock
 from multiprocessing import Process, Queue
 
 
+class ScaleReader(object):
+    def __init__(self, ids, timestamps=None, max_var=50.0, min_var=1e-4):
+        self.ids = ids
+        self.timestamps = timestamps
+        self.max_var = max_var
+        self.min_var = min_var
+
+    def read(self, path):
+        scale, scale_unc, scale_type = [], [], []
+        with open(path, 'r') as json_file:
+            data = json.load(json_file)
+
+            scale = data['scale']
+
+            scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), self.min_var, self.max_var).tolist()
+
+            scale_type = data['scale_type']
+
+        return scale, scale_unc, scale_type
+
+    def __getitem__(self, idx):
+        scale, scale_unc, scale_type = self.read(self.ids[idx])
+        return scale, scale_unc, scale_type
+
+    def __len__(self):
+        return len(self.ids)
+
+    def __iter__(self):
+        for i, timestamp in enumerate(self.timestamps):
+            yield timestamp, self[i]
+
+    @property
+    def dtype(self):
+        return self[0].dtype
+
+    @property
+    def shape(self):
+        return self[0].shape
+
+
+class UncertaintyReader(object):
+    def __init__(self, ids, timestamps=None, max_var=50.0, min_var=1e-4):
+        self.ids = ids
+        self.timestamps = timestamps
+        self.max_var = max_var
+        self.min_var = min_var
+
+    def read(self, path):
+        canonical_uncertainty = None
+        with open(path, 'r') as json_file:
+            data = json.load(json_file)
+            canonical_uncertainty = np.clip(np.asarray(data['canonical_unc'], dtype=np.float32), self.min_var, self.max_var)
+
+        return canonical_uncertainty
+
+    def __getitem__(self, idx):
+        canonical_uncertainty = self.read(self.ids[idx])
+        return canonical_uncertainty
+
+    def __len__(self):
+        return len(self.ids)
+
+    def __iter__(self):
+        for i, timestamp in enumerate(self.timestamps):
+            yield timestamp, self[i]
+
+    @property
+    def dtype(self):
+        return self[0].dtype
+
+    @property
+    def shape(self):
+        return self[0].shape
+
+
 class ImageReader(object):
     def __init__(self, ids, timestamps=None, cam=None):
         self.ids = ids
@@ -203,9 +278,11 @@ class ScanNetDataset(object):
     cam = namedtuple('camera', 'fx fy cx cy scale')(577.5906635802469, 576.3481987847223, 319.15804639274694,
                                                     241.9392752941744, 1000)
 
-    def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True):
+    def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True, max_var=50.0, min_var=1e-4):
         self.scale_aware = scale_aware
         path = os.path.expanduser(path)
+        self.max_var = max_var
+        self.min_var = min_var
 
         with open(path + "/" + split + '/rgb_intrinsics/' + scene + ".json", 'r') as json_file:
             data = json.load(json_file)
@@ -216,31 +293,32 @@ class ScanNetDataset(object):
         ids = sorted(ids, key=lambda x: str(x))
 
         rgb_timestamps = [float(id) for id in ids]
+        self.timestamps = rgb_timestamps
         depth_timestamps = rgb_timestamps
         rgb_ids = [path + '/' + split + '/rgb/' + scene + "/" + str(item) + '.jpg' for item in ids]
 
         if self.scale_aware:
-            depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
+            depth_ids = [path + '/' + split + '/network_predictions/' + scene + "/depth/" + str(item) + '.png' for item in ids]
+            canonical_ids = [path + '/' + split + '/network_predictions/' + scene + "/canonical/" + str(item) + '.png' for item in ids]
+            canonical_unc_ids = [path + '/' + split + '/network_predictions/' + scene + "/canonical_unc/" + str(item) + '.json' for item in ids]
+            scales_ids = [path + '/' + split + '/network_predictions/' + scene + "/scale/" + str(item) + '.json' for item in ids]
+            pixel_to_scale_map_ids = [path + '/' + split + '/network_predictions/' + scene + "/scale_map/" + str(item) + '.png' for item in ids]
         else:
-            depth_ids = [path + '/' + split + '/depth_network/' + scene + "/" + str(item) + '.png' for item in ids]
-            scale_ids = [path + '/' + split + '/scale/' + scene + "/" + str(item) + '.png' for item in ids]
-            scale_unc_ids = [path + '/' + split + '/scale_unc/' + scene + "/" + str(item) + '.png' for item in ids]
-            canonical_ids = [path + '/' + split + '/canonical/' + scene + "/" + str(item) + '.png' for item in ids]
-            canonical_unc_ids = [
-                path + '/' + split + '/canonical_unc/' + scene + "/" + str(item) + '.png' for item in ids
-            ]
+            depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
 
         # Read depth #
         self.rgb = ImageReader(rgb_ids, rgb_timestamps)
         self.depth = ImageReader(depth_ids, depth_timestamps)
         if self.scale_aware:
-            pass
-            #self.scale = ImageReader(scale_ids, depth_timestamps)
-            #self.scale_unc = ImageReader(scale_unc_ids, depth_timestamps)
-            #self.canonical = ImageReader(canonical_ids, depth_timestamps)
-            #self.canonical_unc = ImageReader(canonical_unc_ids, depth_timestamps)
+            # Canonical #
+            self.canonical = ImageReader(canonical_ids, depth_timestamps)
+            self.canonical_uncertainty = UncertaintyReader(canonical_unc_ids, rgb_timestamps, self.min_var, self.max_var)
 
-        self.timestamps = rgb_timestamps
+            # Map #
+            self.pixel_to_scale_map = ImageReader(pixel_to_scale_map_ids, depth_timestamps)
+
+            # Scale #
+            self.scale = ScaleReader(scales_ids, rgb_timestamps, self.min_var, self.max_var) 
 
     def __getitem__(self, idx):
         return self.rgb[idx], self.depth[idx]

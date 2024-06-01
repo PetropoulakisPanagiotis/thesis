@@ -6,7 +6,7 @@ from itertools import chain
 from collections import defaultdict
 
 from covisibility import CovisibilityGraph
-from optimization import BundleAdjustment
+from optimization import BundleAdjustment, BundleAdjustmentScaleAware
 from mapping import Mapping
 from mapping import MappingThread
 from components import Measurement
@@ -25,33 +25,53 @@ Two processed:
 
 
 class Tracking(object):
-    def __init__(self, params):
-        self.optimizer = BundleAdjustment()
+    def __init__(self, params, args):
+        self.params = params
+        self.args = args
+        self.optimizer = BundleAdjustment() #if not args.scale_aware else BundleAdjustmentScaleAware()
         self.min_measurements = params.pnp_min_measurements
         self.max_iterations = params.pnp_max_iterations
 
-    def refine_pose(self, pose, cam, measurements):
+    def refine_pose(self, pose, cam, measurements, scales=None):
         assert len(measurements) >= self.min_measurements, ('Not enough points')
 
         self.optimizer.clear()
-        self.optimizer.add_pose(0, pose, cam, fixed=False)
 
-        # BA with one pose #
-        for i, m in enumerate(measurements):
-            self.optimizer.add_point(i, m.mappoint.position, fixed=True)
-            self.optimizer.add_edge(0, i, 0, m)
+        # offset etc???? etc 
+        if False and self.args.scale_aware:
+            self.optimizer.add_pose(0, pose, cam, fixed=False)
+
+            # Scales #
+            for i in range(scales):
+                self.optimizer.add_scale(i, scales[i])
+                self.optimizer.add_scale_edge(0, i, scales[i])
+
+            # BA with one pose #
+            for i, m in enumerate(measurements):
+                self.optimizer.add_point(i, m.mappoint.position, fixed=True)
+                self.optimizer.add_camera_edge(0, i, 0, m)
+
+                self.optimizer.add_depth_scale_consistency_edge(0, i, 0, m.scale_id, m.canonical)
+
+        else:
+            self.optimizer.add_pose(0, pose, cam, fixed=False)
+            # BA with one pose #
+            for i, m in enumerate(measurements):
+                self.optimizer.add_point(i, m.mappoint.position, fixed=True)
+                self.optimizer.add_edge(0, i, 0, m)
 
         self.optimizer.optimize(self.max_iterations)
         return self.optimizer.get_pose(0)
 
 
 class RGBDPTAM(object):
-    def __init__(self, params):
+    def __init__(self, params, args):
         self.params = params
+        self.args = args
 
         self.graph = CovisibilityGraph()
         self.mapping = MappingThread(self.graph, params)
-        self.tracker = Tracking(params)
+        self.tracker = Tracking(params, args)
         self.motion_model = MotionModel(params)
 
         self.loop_closing = LoopClosing(self, params)
@@ -286,6 +306,7 @@ if __name__ == '__main__':
     parser.add_argument('--path', type=str, help='dataset path',
                         default='path/to/your/ICL-NUIM_RGBD/living_room_traj3_frei_png')
 
+    parser.add_argument('--scale_aware', action='store_true', default=False, help='Scale-Aware slam enable')
     parser.add_argument(
         '--scene',
         type=str,
@@ -305,10 +326,10 @@ if __name__ == '__main__':
     elif 'icl' in args.dataset.lower():
         dataset = ICLNUIMDataset(args.path)
     elif 'scannet' in args.dataset.lower():
-        dataset = ScanNetDataset(args.path, args.scene, args.split)
+        dataset = ScanNetDataset(args.path, args.scene, args.split, args.scale_aware)
 
     params = Params()
-    ptam = RGBDPTAM(params)
+    ptam = RGBDPTAM(params, args)
 
     if not args.no_viz:
         from viewer import MapViewer
@@ -329,8 +350,14 @@ if __name__ == '__main__':
 
         time_start = time.time()
         feature.extract()  # Detect keypoints and descriptors of image
+        if args.scale_aware:
+            scales, scales_uncertainty, pixel_to_scale_map = dataset.scale[i]
+            frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp, canonical=dataset.canonical[i],
+                              canonical_uncertainty=dataset.canonical_uncertainty, scales=scales, 
+                              scales_uncertainty=scales, pixel_to_scale_map=pixel_to_scale_map)
+        else:
+            frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp)
 
-        frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp)
         if not ptam.is_initialized():
             ptam.initialize(frame)
         else:

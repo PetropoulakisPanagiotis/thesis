@@ -2,6 +2,7 @@ from collections import namedtuple
 import numpy as np
 import g2o
 
+from components import Camera
 
 class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
     def __init__(self, max_frames=50, max_instances=50):
@@ -32,13 +33,13 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         finally:
             self.aborted = False
 
-    def add_pose(self, pose_id: int, pose: g2o.SE3Quat, cam: namedtuple, fixed: bool = False) -> None:
+    def add_pose(self, pose_id: int, pose: g2o.SE3Quat, cam: Camera, fixed: bool = False) -> None:
 
         sbacam = g2o.CustomCam(pose.orientation(), pose.position())
         sbacam.set_cam(cam.fx, cam.fy, cam.cx, cam.cy)
 
         v_se3 = g2o.VertexCustomCam()
-        v_se3.set_id(self.scale_offset + 2 * pose_id + 1)
+        v_se3.set_id(self.scale_offset + 2 * pose_id)
         v_se3.set_estimate(sbacam)
         v_se3.set_fixed(fixed)
 
@@ -100,8 +101,14 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         edge.set_robust_kernel(kernel)
         super().add_edge(edge)
 
-    def get_estimate(self, vertex_id: int) -> np.ndarray:
-        return self.vertex(vertex_id).estimate()
+    def get_pose(self, id):
+        return self.vertex(self.offset + id * 2).estimate()
+
+    def get_point(self, id):
+        return self.vertex(self.offset + id * 2 + 1).estimate()
+
+    def get_scale(self, id):
+        return self.vertex(id).estimate()
 
     def abort(self):
         self.aborted = True
