@@ -147,8 +147,7 @@ def predict(model, dataloader_eval) -> None:
                 # Ids of scales -> one scale, hence 0 idx #
                 cv2.imwrite(args.save_dir + 'scale_map/' + filename, np.zeros_like(canonical), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
-                with open(args.save_dir + 'canonical_unc/' + filename_base + ".json", 'w') as file:           
-                    json.dump({'canonical_unc': canonical_unc.tolist()}, file, indent=4)
+                np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
    
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:           
                 json.dump(scale_data, file, indent=4)

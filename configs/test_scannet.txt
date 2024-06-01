@@ -6,7 +6,7 @@
 
 --data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
 --gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
---filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scene0608_00.txt
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scene0655_01.txt
 
 --min_depth_test 1e-3
 --max_depth_test 10
