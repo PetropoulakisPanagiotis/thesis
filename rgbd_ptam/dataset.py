@@ -21,11 +21,8 @@ class ScaleReader(object):
         scale, scale_unc, scale_type = [], [], []
         with open(path, 'r') as json_file:
             data = json.load(json_file)
-
             scale = data['scale']
-
             scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), self.min_var, self.max_var).tolist()
-
             scale_type = data['scale_type']
 
         return scale, scale_unc, scale_type
@@ -58,10 +55,8 @@ class UncertaintyReader(object):
         self.min_var = min_var
 
     def read(self, path):
-        canonical_uncertainty = None
-        with open(path, 'r') as json_file:
-            data = json.load(json_file)
-            canonical_uncertainty = np.clip(np.asarray(data['canonical_unc'], dtype=np.float32), self.min_var, self.max_var)
+        canonical_uncertainty = np.load(path)
+        canonical_uncertainty = np.clip(canonical_uncertainty, self.min_var, self.max_var)
 
         return canonical_uncertainty
 
@@ -300,7 +295,7 @@ class ScanNetDataset(object):
         if self.scale_aware:
             depth_ids = [path + '/' + split + '/network_predictions/' + scene + "/depth/" + str(item) + '.png' for item in ids]
             canonical_ids = [path + '/' + split + '/network_predictions/' + scene + "/canonical/" + str(item) + '.png' for item in ids]
-            canonical_unc_ids = [path + '/' + split + '/network_predictions/' + scene + "/canonical_unc/" + str(item) + '.json' for item in ids]
+            canonical_unc_ids = [path + '/' + split + '/network_predictions/' + scene + "/canonical_unc/" + str(item) + '.npy' for item in ids]
             scales_ids = [path + '/' + split + '/network_predictions/' + scene + "/scale/" + str(item) + '.json' for item in ids]
             pixel_to_scale_map_ids = [path + '/' + split + '/network_predictions/' + scene + "/scale_map/" + str(item) + '.png' for item in ids]
         else:

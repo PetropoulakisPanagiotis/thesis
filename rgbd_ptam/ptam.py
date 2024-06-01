@@ -351,10 +351,10 @@ if __name__ == '__main__':
         time_start = time.time()
         feature.extract()  # Detect keypoints and descriptors of image
         if args.scale_aware:
-            scales, scales_uncertainty, pixel_to_scale_map = dataset.scale[i]
+            scales, scales_uncertainty, _ = dataset.scale[i]
             frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp, canonical=dataset.canonical[i],
-                              canonical_uncertainty=dataset.canonical_uncertainty, scales=scales, 
-                              scales_uncertainty=scales, pixel_to_scale_map=pixel_to_scale_map)
+                              canonical_uncertainty=dataset.canonical_uncertainty[i], scales=scales, 
+                              scales_uncertainty=scales, pixel_to_scale_map=dataset.pixel_to_scale_map[i])
         else:
             frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp)
 

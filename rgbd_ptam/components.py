@@ -213,7 +213,7 @@ class RGBDFrame(Frame, ScaleAwareFrame):
             px = self.rgb.get_keypoint(j).pt
             kp2 = self.virtual_stereo(px)
 
-            xy = self.rgb.get_keypoint(j).pt
+            xy = tuple(int(item) for item in self.rgb.get_keypoint(j).pt)
             canonical_measurement = None
             covariance_canonical_measurement = None
             scale_id_measurement = None
@@ -283,7 +283,7 @@ class RGBDFrame(Frame, ScaleAwareFrame):
             normal /= np.linalg.norm(normal)
             color = self.rgb.get_color(px[i])
 
-            xy = kps[i].pt
+            xy = tuple(int(item) for item in kps[i].pt)
             canonical_measurement = None
             covariance_canonical_measurement = None
             scale_id_measurement = None
