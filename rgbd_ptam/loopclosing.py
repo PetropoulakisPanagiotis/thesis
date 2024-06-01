@@ -206,7 +206,11 @@ class LoopClosing(object):
                     query_meas.type,
                     Measurement.Source.REFIND,
                     query_meas.get_keypoints(),
-                    query_meas.get_descriptors())
+                    query_meas.get_descriptors(),
+                    query_meas.get_canonical(),
+                    query_meas.get_covariance_canonical_measurement(),
+                    query_meas.get_scale_id_measurement()
+                    )
                 self.system.graph.add_measurement(
                     query_keyframe, match_meas.mappoint, new_query_meas)
 
@@ -214,7 +218,11 @@ class LoopClosing(object):
                     match_meas.type,
                     Measurement.Source.REFIND,
                     match_meas.get_keypoints(),
-                    match_meas.get_descriptors())
+                    match_meas.get_descriptors(),
+                    match_meas.get_canonical(),
+                    match_meas.get_covariance_canonical_measurement(),
+                    match_meas.get_scale_id_measurement()
+                    )
                 self.system.graph.add_measurement(
                     match_keyframe, query_meas.mappoint, new_match_meas)
 

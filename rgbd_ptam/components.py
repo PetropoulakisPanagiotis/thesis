@@ -42,6 +42,23 @@ class Camera(object):
         self.width = width
         self.height = height
 
+"""
+ScaleAware: canonical, scales + uncertainties
+"""
+class ScaleAwareFrame(object):
+    def __init__(self, idx, canonical=None, canonical_uncertainty=None, scales=None, scales_uncertainty=None, pixel_to_scale_map=None):
+        self.idx = idx
+        self.canonical = canonical                          # 'image'
+        if canonical is not None:
+            self.height, self.width = canonical.shape[:2]
+        else:
+            self.height, self.width = 0, 0
+
+        self.canonical_uncertainty = canonical_uncertainty  # 'image'
+
+        self.scales = scales                                # list
+        self.scales_uncertainty = scales_uncertainty        # list
+        self.pixel_to_scale_map = pixel_to_scale_map        # 'image'
 
 """
 Frame:
@@ -57,6 +74,7 @@ class Frame(object):
         self.cam = cam
         self.timestamp = timestamp
         self.image = feature.image
+
         self.orientation = pose.orientation() # From camera to world
         self.position = pose.position() # From camera to world 
         self.pose_covariance = pose_covariance
@@ -163,12 +181,18 @@ def depth_to_3d(depth, coords, cam):
 Frame +  depth
 rgb is FRAME
 """
-class RGBDFrame(Frame):
+class RGBDFrame(Frame, ScaleAwareFrame):
     def __init__(self, idx, pose, feature, depth, cam, timestamp=None, 
-            pose_covariance=np.identity(6)):
+            pose_covariance=np.identity(6),
+            canonical=None,
+            canonical_uncertainty=None,
+            scales=None,
+            scales_uncertainty=None,
+            pixel_to_scale_map=None):
 
         super().__init__(idx, pose, feature, cam, timestamp, pose_covariance)
-        self.rgb  = Frame(idx, pose, feature, cam, timestamp, pose_covariance)
+        self.rgb = Frame(idx, pose, feature, cam, timestamp, pose_covariance)
+        self.scale_aware_frame = ScaleAwareFrame(idx, canonical, canonical_uncertainty, scales, scales_uncertainty, pixel_to_scale_map)
         self.depth = depth
 
     def virtual_stereo(self, px):
@@ -195,18 +219,28 @@ class RGBDFrame(Frame):
         for i, j in matches:
             px = self.rgb.get_keypoint(j).pt
             kp2 = self.virtual_stereo(px)
+
+            xy = self.rgb.get_keypoint(j).pt
+            canonical_measurement = None
+            covariance_canonical_measurement = None
+            scale_id_measurement = None
+            if self.scale_aware_frame.canonical is not None:
+                canonical_measurement = self.scale_aware_frame.canonical[xy[1], xy[0]]
+                covariance_canonical_measurement = self.scale_aware_frame.canonical_uncertainty[xy[1], xy[0]]
+                scale_id_measurement = self.scale_aware_frame.pixel_to_scale_map[xy[1], xy[0]]
+
             if kp2 is not None:
                 measurement = Measurement(
                     Measurement.Type.STEREO,
                     source,
                     [self.rgb.get_keypoint(j), kp2],
-                    [self.rgb.get_descriptor(j)] * 2)
+                    [self.rgb.get_descriptor(j)] * 2, canonical_measurement, covariance_canonical_measurement, scale_id_measurement)
             else: # Typically when depth is 0 for this camera
                 measurement = Measurement(
                     Measurement.Type.LEFT,
                     source,
                     [self.rgb.get_keypoint(j)],
-                    [self.rgb.get_descriptor(j)])
+                    [self.rgb.get_descriptor(j)], canonical_measurement, covariance_canonical_measurement, scale_id_measurement)
             measurements.append((i, measurement))
             self.rgb.set_matched(j)
 
@@ -260,13 +294,22 @@ class RGBDFrame(Frame):
             normal /= np.linalg.norm(normal)
             color = self.rgb.get_color(px[i])
 
+            xy = kps[i].pt
+            canonical_measurement = None
+            covariance_canonical_measurement = None
+            scale_id_measurement = None
+            if self.scale_aware_frame.canonical is not None:
+                canonical_measurement = self.scale_aware_frame.canonical[xy[1], xy[0]]
+                covariance_canonical_measurement = self.scale_aware_frame.canonical_uncertainty[xy[1], xy[0]]
+                scale_id_measurement = self.scale_aware_frame.pixel_to_scale_map[xy[1], xy[0]]
+
             # Triangulation aka virtual stereo #
             mappoint = MapPoint(point, normal, desps[i], color)
             measurement = Measurement(
                 Measurement.Type.STEREO,
                 Measurement.Source.TRIANGULATION,
                 [kps[i], kp2],
-                [desps[i], desps[i]])
+                [desps[i], desps[i]], canonical_measurement, covariance_canonical_measurement, scale_id_measurement)
 
             measurement.mappoint = mappoint
 
@@ -427,7 +470,7 @@ class Measurement(GraphMeasurement):
     Source = Enum('Measurement.Source', ['TRIANGULATION', 'TRACKING', 'REFIND'])
     Type = Enum('Measurement.Type', ['STEREO', 'LEFT', 'RIGHT'])
 
-    def __init__(self, type, source, keypoints, descriptors):
+    def __init__(self, type, source, keypoints, descriptors, canonical_measurement=1, covariance_canonical_measurement=np.identity(1), scale_id_measurement=0):
         super().__init__()
 
         self.type = type
@@ -441,6 +484,20 @@ class Measurement(GraphMeasurement):
                 *keypoints[0].pt, keypoints[1].pt[0]])
 
         self.triangulation = (source == self.Source.TRIANGULATION)
+
+        # Canonical measurement #
+        self.canonical_measurement = canonical_measurement
+        self.covariance_canonical_measurement = covariance_canonical_measurement
+        self.scale_id_measurement = scale_id_measurement
+
+    def get_canonical(self):
+        return self.canonical_measurement
+
+    def get_covariance_canonical_measurement(self):
+        return self.covariance_canonical_measurement
+
+    def get_scale_id_measurement(self):
+        return self.scale_id_measurement
 
     def get_descriptor(self, i=0):
         return self.descriptors[i]

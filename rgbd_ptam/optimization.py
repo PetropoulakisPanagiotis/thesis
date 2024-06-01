@@ -1,6 +1,109 @@
+from collections import namedtuple
 import numpy as np
 import g2o
 
+class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
+    def __init__(self, max_frames=50, max_instances=50):
+        super().__init__()
+
+        # Higher confident (better than CHOLMOD, according to
+        # paper "3-D Mapping With an RGB-D Camera")
+        solver = g2o.BlockSolverX(g2o.LinearSolverCSparseX())
+        solver = g2o.OptimizationAlgorithmLevenberg(solver)
+        super().set_algorithm(solver)
+
+        # Convergence Criterion
+        terminate = g2o.SparseOptimizerTerminateAction()
+        terminate.set_gain_threshold(1e-6)
+        super().add_post_iteration_action(terminate)
+
+        # Robust cost Function (Huber function) delta
+        self.delta = np.sqrt(5.991)
+        self.aborted = False
+
+        self.scale_offset = max_frames * max_instances
+
+    def optimize(self, max_iterations=10):
+        super().initialize_optimization()
+        super().optimize(max_iterations)
+        try:
+            return not self.aborted
+        finally:
+            self.aborted = False
+
+    def add_pose(self, pose_id: int, pose: g2o.SE3Quat, cam: namedtuple, fixed: bool = False) -> None:
+
+        sbacam = g2o.CustomCam(pose.orientation(), pose.position())
+        sbacam.set_cam(cam.fx, cam.fy, cam.cx, cam.cy)
+
+        v_se3 = g2o.VertexCustomCam()
+        v_se3.set_id(self.scale_offset + 2*pose_id + 1)
+        v_se3.set_estimate(sbacam)
+        v_se3.set_fixed(fixed)
+
+        super().add_vertex(v_se3)
+
+    def add_point(self, point_id: int, point: np.ndarray, fixed: bool = False, marginalized: bool = True) -> None:
+        v_p = g2o.VertexCustomXYZ()
+        v_p.set_id(self.scale_offset + 2*point_id + 1)
+        v_p.set_marginalized(marginalized)
+        v_p.set_estimate(point)
+        v_p.set_fixed(fixed)
+        super().add_vertex(v_p)
+
+    def add_scale(self, scale_id: int, scale: float, fixed: bool = False, marginalized: bool = False):
+        scale_v = g2o.VertexScale()
+        scale_v.set_id(scale_id)
+        scale_v.set_estimate(scale)
+        super().add_vertex(scale_v)
+
+    def add_scale_edge(self, edge_id: int, scale_id: int, meas: float,
+                       information: np.ndarray = np.identity(1)) -> None:
+        edge = g2o.EdgeScaleNetworkConsistency()
+        edge.set_measurement(meas)
+        edge.set_information(information)
+
+        edge.set_id(edge_id)
+        edge.set_vertex(0, self.vertex(scale_id))
+        kernel = g2o.RobustKernelHuber(self.delta)
+        edge.set_robust_kernel(kernel)
+        super().add_edge(edge)
+
+    def add_camera_edge(self, edge_id: int, point_id: int, pose_id: int, meas: np.ndarray,
+                        information: np.ndarray = np.identity(2)) -> None:
+        edge = g2o.EdgeCustomCamera()
+        edge.set_measurement(meas)
+        edge.set_information(information)
+
+        edge.set_id(self.scale_offset + 2*edge_id)
+        edge.set_vertex(0, self.vertex(point_id))
+        edge.set_vertex(1, self.vertex(pose_id))
+        kernel = g2o.RobustKernelHuber(self.delta)
+        edge.set_robust_kernel(kernel)
+        super().add_edge(edge)
+
+    def add_depth_scale_consistency_edge(self, edge_id: int, point_id: int, pose_id: int, scale_id: int, meas: float,
+                                         information: np.ndarray = np.identity(1)) -> None:
+        edge = g2o.EdgeDepthConsistencyScale()
+        edge.set_id(self.scale_offset + 2*edge_id + 1)
+        edge.set_measurement(meas)
+        edge.set_information(information)
+
+        # 0 Cam
+        # 1 3D point
+        # 2 scale
+        edge.set_vertex(0, self.vertex(pose_id))
+        edge.set_vertex(1, self.vertex(point_id))
+        edge.set_vertex(2, self.vertex(scale_id))
+        kernel = g2o.RobustKernelHuber(self.delta)
+        edge.set_robust_kernel(kernel)
+        super().add_edge(edge)
+
+    def get_estimate(self, vertex_id: int) -> np.ndarray:
+        return self.vertex(vertex_id).estimate()
+
+    def abort(self):
+        self.aborted = True
 
 
 class BundleAdjustment(g2o.SparseOptimizer):
