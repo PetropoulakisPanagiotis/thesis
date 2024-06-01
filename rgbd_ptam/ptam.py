@@ -311,8 +311,8 @@ if __name__ == '__main__':
         '--scene',
         type=str,
         #default='scene0084_02') # hm...
-        #default='scene0655_01') # nice
-        default='scene0608_00')  # nice
+        default='scene0655_01') # nice
+        #default='scene0608_00')  # nice
     #default='scene0164_00') # nice
     #default='scene0025_02') # nice
     #default='scene0412_00')
