@@ -10,7 +10,6 @@ from threading import Thread, Lock
 from multiprocessing import Process, Queue
 
 
-
 class ImageReader(object):
     def __init__(self, ids, timestamps=None, cam=None):
         self.ids = ids
@@ -19,8 +18,8 @@ class ImageReader(object):
         self.cache = dict()
         self.idx = 0
 
-        self.ahead = 10      # 10 images ahead of current index
-        self.waiting = 1.5   # waiting time
+        self.ahead = 10  # 10 images ahead of current index
+        self.waiting = 1.5  # waiting time
 
         self.preload_thread = Thread(target=self.preload)
         self.thread_started = False
@@ -31,7 +30,7 @@ class ImageReader(object):
             return img
         else:
             return self.cam.rectify(img)
- 
+
     def preload(self):
         idx = self.idx
         t = float('inf')
@@ -49,7 +48,7 @@ class ImageReader(object):
                 return
             idx = self.idx
             t = time.time()
- 
+
     def __len__(self):
         return len(self.ids)
 
@@ -62,7 +61,7 @@ class ImageReader(object):
         if idx in self.cache:
             img = self.cache[idx]
             del self.cache[idx]
-        else:   
+        else:
             img = self.read(self.ids[idx])
         return img
 
@@ -73,11 +72,10 @@ class ImageReader(object):
     @property
     def dtype(self):
         return self[0].dtype
+
     @property
     def shape(self):
         return self[0].shape
-
-
 
 
 class ICLNUIMDataset(object):
@@ -85,8 +83,8 @@ class ICLNUIMDataset(object):
     path example: 'path/to/your/ICL-NUIM R-GBD Dataset/living_room_traj0_frei_png'
     '''
 
-    cam = namedtuple('camera', 'fx fy cx cy scale')(
-        481.20, 480.0, 319.5, 239.5, 5000)
+    cam = namedtuple('camera', 'fx fy cx cy scale')(481.20, 480.0, 319.5, 239.5, 5000)
+
     def __init__(self, path):
         path = os.path.expanduser(path)
         self.rgb = ImageReader(self.listdir(os.path.join(path, 'rgb')))
@@ -94,7 +92,7 @@ class ICLNUIMDataset(object):
         self.timestamps = None
 
     def sort(self, xs):
-        return sorted(xs, key=lambda x:int(x[:-4]))
+        return sorted(xs, key=lambda x: int(x[:-4]))
 
     def listdir(self, dir):
         files = [_ for _ in os.listdir(dir) if _.endswith('.png')]
@@ -102,8 +100,6 @@ class ICLNUIMDataset(object):
 
     def __len__(self):
         return len(self.rgb)
-
-
 
 
 def make_pair(matrix, threshold=1):
@@ -131,7 +127,8 @@ def make_pair(matrix, threshold=1):
             break
     return pairs
 
-def associate(first_list, second_list,offset=0,max_difference=0.02):
+
+def associate(first_list, second_list, offset=0, max_difference=0.02):
     """
     Associate two dictionaries of (stamp,data). As the time stamps never match exactly, we aim 
     to find the closest match for every input tuple.
@@ -148,9 +145,7 @@ def associate(first_list, second_list,offset=0,max_difference=0.02):
     """
     first_keys = first_list.keys()
     second_keys = second_list.keys()
-    potential_matches = [(abs(a - (b + offset)), a, b) 
-                         for a in first_keys 
-                         for b in second_keys 
+    potential_matches = [(abs(a - (b + offset)), a, b) for a in first_keys for b in second_keys
                          if abs(a - (b + offset)) < max_difference]
     potential_matches.sort()
     matches = []
@@ -163,13 +158,13 @@ def associate(first_list, second_list,offset=0,max_difference=0.02):
     matches.sort()
     return matches
 
+
 class TUMRGBDDataset(object):
     '''
     path example: 'path/to/your/TUM R-GBD Dataset/rgbd_dataset_freiburg1_xyz'
     '''
 
-    cam = namedtuple('camera', 'fx fy cx cy scale')(
-        525.0, 525.0, 319.5, 239.5, 5000)
+    cam = namedtuple('camera', 'fx fy cx cy scale')(525.0, 525.0, 319.5, 239.5, 5000)
 
     def __init__(self, path):
         path = os.path.expanduser(path)
@@ -197,16 +192,16 @@ class TUMRGBDDataset(object):
     def __len__(self):
         return len(self.rgb)
 
+
 class ScanNetDataset(object):
     '''
     path example: 'path/to/your/TUM R-GBD Dataset/rgbd_dataset_freiburg1_xyz'
     '''
     cam = None
 
-
     # valid #
-    cam = namedtuple('camera', 'fx fy cx cy scale')(
-        577.5906635802469, 576.3481987847223, 319.15804639274694, 241.9392752941744, 1000)
+    cam = namedtuple('camera', 'fx fy cx cy scale')(577.5906635802469, 576.3481987847223, 319.15804639274694,
+                                                    241.9392752941744, 1000)
 
     def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True):
         self.scale_aware = scale_aware
@@ -214,14 +209,8 @@ class ScanNetDataset(object):
 
         with open(path + "/" + split + '/rgb_intrinsics/' + scene + ".json", 'r') as json_file:
             data = json.load(json_file)
-            ScanNetDataset.cam = namedtuple('camera', 'fx fy cx cy scale scale_unc')(
-            data['fx'],
-            data['fy'],
-            data['cx'],
-            data['cy'],
-            1000.0,
-            10000.0
-            )
+            ScanNetDataset.cam = namedtuple('camera', 'fx fy cx cy scale scale_unc')(data['fx'], data['fy'], data['cx'],
+                                                                                     data['cy'], 1000.0, 10000.0)
 
         ids = [(file.split('.')[0]) for file in os.listdir(path + "/" + split + "/rgb/" + scene)]
         ids = sorted(ids, key=lambda x: str(x))
@@ -237,8 +226,9 @@ class ScanNetDataset(object):
             scale_ids = [path + '/' + split + '/scale/' + scene + "/" + str(item) + '.png' for item in ids]
             scale_unc_ids = [path + '/' + split + '/scale_unc/' + scene + "/" + str(item) + '.png' for item in ids]
             canonical_ids = [path + '/' + split + '/canonical/' + scene + "/" + str(item) + '.png' for item in ids]
-            canonical_unc_ids = [path + '/' + split + '/canonical_unc/' + scene + "/" + str(item) + '.png' for item in ids]
-
+            canonical_unc_ids = [
+                path + '/' + split + '/canonical_unc/' + scene + "/" + str(item) + '.png' for item in ids
+            ]
 
         # Read depth #
         self.rgb = ImageReader(rgb_ids, rgb_timestamps)
@@ -249,7 +239,6 @@ class ScanNetDataset(object):
             #self.scale_unc = ImageReader(scale_unc_ids, depth_timestamps)
             #self.canonical = ImageReader(canonical_ids, depth_timestamps)
             #self.canonical_unc = ImageReader(canonical_unc_ids, depth_timestamps)
-
 
         self.timestamps = rgb_timestamps
 

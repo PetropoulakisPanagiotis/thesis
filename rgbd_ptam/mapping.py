@@ -10,11 +10,11 @@ from collections import defaultdict
 
 from optimization import LocalBA
 from components import Measurement
-
-
 """
 Map used in MappingThread - is-a
 """
+
+
 class Mapping(object):
     def __init__(self, graph, params):
         self.graph = graph
@@ -56,9 +56,7 @@ class Mapping(object):
         self.points_culling(self.local_keyframes)
 
     def fill(self, keyframes, keyframe):
-        covisible = sorted(
-            keyframe.covisibility_keyframes().items(),
-            key=lambda _:_[1], reverse=True)
+        covisible = sorted(keyframe.covisibility_keyframes().items(), key=lambda _: _[1], reverse=True)
 
         for kf, n in covisible:
             if n > 0 and kf not in keyframes and self.is_safe(kf):
@@ -87,8 +85,7 @@ class Mapping(object):
         fixed_keyframes = set()
         for kf in adjust_keyframes:
             for ck, n in kf.covisibility_keyframes().items():
-                if (n > 0 and ck not in adjust_keyframes
-                    and self.is_safe(ck) and ck < kf):
+                if (n > 0 and ck not in adjust_keyframes and self.is_safe(ck) and ck < kf):
                     fixed_keyframes.add(ck)
 
         self.optimizer.set_data(adjust_keyframes, fixed_keyframes)
@@ -144,7 +141,7 @@ class Mapping(object):
             measuremets = keyframe.match_mappoints(filtered, Measurement.Source.REFIND)
             for m in measuremets:
                 self.graph.add_measurement(keyframe, m.mappoint, m)
-                m.mappoint.increase_measurement_count() # Added
+                m.mappoint.increase_measurement_count()  # Added
 
     # 2D related #
     def remove_measurements(self, measurements):
@@ -167,17 +164,17 @@ class MappingThread(Mapping):
         super().__init__(graph, params)
 
         self._requests_cv = Condition()
-        self._requests = [False, False]   # requests: [LOCKWINDOW_REQUEST, PROCESS_REQUEST]
+        self._requests = [False, False]  # requests: [LOCKWINDOW_REQUEST, PROCESS_REQUEST]
 
         self._lock = Lock()
-        self.locked_window = set()        # Set of keyframes
-        self.status = defaultdict(bool)   # processing, window_locked
- 
+        self.locked_window = set()  # Set of keyframes
+        self.status = defaultdict(bool)  # processing, window_locked
+
         self._queue = Queue()
         self.maintenance_thread = Thread(target=self.maintenance)
         self.maintenance_thread.start()
 
-    def add_keyframe(self, keyframe, measurements): 
+    def add_keyframe(self, keyframe, measurements):
         self.graph.add_keyframe(keyframe)
 
         self.create_points(keyframe)
@@ -194,7 +191,7 @@ class MappingThread(Mapping):
         stopped = False
         while not stopped:
 
-            # case 1: queue empty 
+            # case 1: queue empty
             # case 2: local_keyframe full
             # case 3: stop
             while not self._queue.empty():
@@ -213,7 +210,7 @@ class MappingThread(Mapping):
                 if self._requests.count(True) == 0:
                     self._requests_cv.wait()
 
-                    # case 1: queue empty 
+                    # case 1: queue empty
                     # case 2: local_keyframe full
                     # case 3: stop
                     while not self._queue.empty():
@@ -227,9 +224,9 @@ class MappingThread(Mapping):
                             if len(self.local_keyframes) >= self.params.keyframes_buffer_size:
                                 self._requests[1] = True
 
-                requests = self._requests[:] # Current requests 
+                requests = self._requests[:]  # Current requests
                 self._requests[0] = False
-                self._requests[1] = False    # Reset 
+                self._requests[1] = False  # Reset
 
             self.status['processing'] = True
 

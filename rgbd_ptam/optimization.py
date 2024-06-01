@@ -2,6 +2,7 @@ from collections import namedtuple
 import numpy as np
 import g2o
 
+
 class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
     def __init__(self, max_frames=50, max_instances=50):
         super().__init__()
@@ -37,7 +38,7 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         sbacam.set_cam(cam.fx, cam.fy, cam.cx, cam.cy)
 
         v_se3 = g2o.VertexCustomCam()
-        v_se3.set_id(self.scale_offset + 2*pose_id + 1)
+        v_se3.set_id(self.scale_offset + 2 * pose_id + 1)
         v_se3.set_estimate(sbacam)
         v_se3.set_fixed(fixed)
 
@@ -45,7 +46,7 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
 
     def add_point(self, point_id: int, point: np.ndarray, fixed: bool = False, marginalized: bool = True) -> None:
         v_p = g2o.VertexCustomXYZ()
-        v_p.set_id(self.scale_offset + 2*point_id + 1)
+        v_p.set_id(self.scale_offset + 2 * point_id + 1)
         v_p.set_marginalized(marginalized)
         v_p.set_estimate(point)
         v_p.set_fixed(fixed)
@@ -75,7 +76,7 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         edge.set_measurement(meas)
         edge.set_information(information)
 
-        edge.set_id(self.scale_offset + 2*edge_id)
+        edge.set_id(self.scale_offset + 2 * edge_id)
         edge.set_vertex(0, self.vertex(point_id))
         edge.set_vertex(1, self.vertex(pose_id))
         kernel = g2o.RobustKernelHuber(self.delta)
@@ -85,7 +86,7 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
     def add_depth_scale_consistency_edge(self, edge_id: int, point_id: int, pose_id: int, scale_id: int, meas: float,
                                          information: np.ndarray = np.identity(1)) -> None:
         edge = g2o.EdgeDepthConsistencyScale()
-        edge.set_id(self.scale_offset + 2*edge_id + 1)
+        edge.set_id(self.scale_offset + 2 * edge_id + 1)
         edge.set_measurement(meas)
         edge.set_information(information)
 
@@ -110,7 +111,7 @@ class BundleAdjustment(g2o.SparseOptimizer):
     def __init__(self, ):
         super().__init__()
 
-        # Higher confident (better than CHOLMOD, according to 
+        # Higher confident (better than CHOLMOD, according to
         # paper "3-D Mapping With an RGB-D Camera")
         solver = g2o.BlockSolverSE3(g2o.LinearSolverCSparseSE3())
         solver = g2o.OptimizationAlgorithmLevenberg(solver)
@@ -122,7 +123,7 @@ class BundleAdjustment(g2o.SparseOptimizer):
         super().add_post_iteration_action(terminate)
 
         # Robust cost Function (Huber function) delta
-        self.delta = np.sqrt(5.991) # Power 2 is applied internally in g2o
+        self.delta = np.sqrt(5.991)  # Power 2 is applied internally in g2o
         self.aborted = False
 
     def optimize(self, max_iterations=10):
@@ -135,10 +136,8 @@ class BundleAdjustment(g2o.SparseOptimizer):
 
     # 0, 2, 4, 6, ...
     def add_pose(self, pose_id, pose, cam, fixed=False):
-        sbacam = g2o.SBACam(
-            pose.orientation(), pose.position())
-        sbacam.set_cam(
-            cam.fx, cam.fy, cam.cx, cam.cy, cam.baseline)
+        sbacam = g2o.SBACam(pose.orientation(), pose.position())
+        sbacam.set_cam(cam.fx, cam.fy, cam.cx, cam.cy, cam.baseline)
 
         v_se3 = g2o.VertexCam()
         v_se3.set_id(pose_id * 2)
@@ -173,8 +172,7 @@ class BundleAdjustment(g2o.SparseOptimizer):
         e.set_information(information)
         return e
 
-    def mono_edge(self, projection, 
-            information=np.identity(2)):
+    def mono_edge(self, projection, information=np.identity(2)):
         e = g2o.EdgeProjectP2MC()
         e.set_measurement(projection)
         e.set_information(information)
@@ -193,18 +191,20 @@ class BundleAdjustment(g2o.SparseOptimizer):
 """
 For local map
 """
+
+
 class LocalBA(object):
     def __init__(self, ):
         self.optimizer = BundleAdjustment()
-        self.measurements = [] # Measurements, can be both from optimized non-optimzed pose frames  
-        self.keyframes = []    # Frames that their pose is optimized
-        self.mappoints = set() # Only add 3D points that belong to frames that their pose is optimized
+        self.measurements = []  # Measurements, can be both from optimized non-optimzed pose frames
+        self.keyframes = []  # Frames that their pose is optimized
+        self.mappoints = set()  # Only add 3D points that belong to frames that their pose is optimized
 
         # threshold for confidence interval of 95%
         self.huber_threshold = 5.991
 
     def set_data(self, adjust_keyframes, fixed_keyframes):
-        self.clear() # Empty buffers
+        self.clear()  # Empty buffers
         # Note: for edge_id, we add the id of the self.measurements list #
 
         for kf in adjust_keyframes:
@@ -214,7 +214,7 @@ class LocalBA(object):
             for m in kf.measurements():
                 pt = m.mappoint
 
-                # Add 3D point: this point can be visible in many keyframes                  # 
+                # Add 3D point: this point can be visible in many keyframes                  #
                 # But this 3D point can not be matched with many 2D points on the same frame #
                 if pt not in self.mappoints:
                     self.optimizer.add_point(pt.id, pt.position)
@@ -243,7 +243,7 @@ class LocalBA(object):
     def update_poses(self):
         for keyframe in self.keyframes:
             keyframe.update_pose(self.optimizer.get_pose(keyframe.id))
-            # Update pose constraints                # 
+            # Update pose constraints                #
             # From current to reference or preceding #
             keyframe.update_reference()
             keyframe.update_preceding()
@@ -268,8 +268,6 @@ class LocalBA(object):
         return self.optimizer.optimize(max_iterations)
 
 
-
-
 class PoseGraphOptimization(g2o.SparseOptimizer):
     def __init__(self):
         super().__init__()
@@ -288,10 +286,7 @@ class PoseGraphOptimization(g2o.SparseOptimizer):
         v_se3.set_fixed(fixed)
         super().add_vertex(v_se3)
 
-    def add_edge(self, vertices, 
-            measurement=None, 
-            information=np.identity(6),
-            robust_kernel=None):
+    def add_edge(self, vertices, measurement=None, information=np.identity(6), robust_kernel=None):
 
         edge = g2o.EdgeSE3()
 
@@ -302,9 +297,7 @@ class PoseGraphOptimization(g2o.SparseOptimizer):
             edge.set_vertex(i, v)
 
         if measurement is None:
-            measurement = (
-                edge.vertex(0).estimate().inverse() *
-                edge.vertex(1).estimate())
+            measurement = (edge.vertex(0).estimate().inverse() * edge.vertex(1).estimate())
 
         edge.set_measurement(measurement)
         edge.set_information(information)
@@ -313,21 +306,18 @@ class PoseGraphOptimization(g2o.SparseOptimizer):
 
         super().add_edge(edge)
 
-
     def set_data(self, keyframes, loops):
         super().clear()
 
         # Find earliest frame in loop #
-        anchor=None
+        anchor = None
         for kf, *_ in loops:
             if anchor is None or kf < anchor:
                 anchor = kf
 
         # Keyframes should be corrected since we change the pose in the loop #
         for i, kf in enumerate(keyframes):
-            pose = g2o.Isometry3d(
-                kf.orientation,
-                kf.position)
+            pose = g2o.Isometry3d(kf.orientation, kf.position)
 
             # Fix pose of first frame             #
             # Fix pose of frames less than anchor #
@@ -338,20 +328,14 @@ class PoseGraphOptimization(g2o.SparseOptimizer):
             self.add_vertex(kf.id, pose, fixed=fixed)
 
             if kf.preceding_keyframe is not None:
-                self.add_edge(
-                    vertices=(kf.preceding_keyframe.id, kf.id),
-                    measurement=kf.preceding_constraint)
+                self.add_edge(vertices=(kf.preceding_keyframe.id, kf.id), measurement=kf.preceding_constraint)
 
-            if (kf.reference_keyframe is not None and
-                kf.reference_keyframe != kf.preceding_keyframe):
-                self.add_edge(
-                    vertices=(kf.reference_keyframe.id, kf.id),
-                    measurement=kf.reference_constraint)
+            if (kf.reference_keyframe is not None and kf.reference_keyframe != kf.preceding_keyframe):
+                self.add_edge(vertices=(kf.reference_keyframe.id, kf.id), measurement=kf.reference_constraint)
 
         # Add loop frames #
         for kf, kf2, meas in loops:
             self.add_edge((kf.id, kf2.id), measurement=meas)
-
 
     def update_poses_and_points(self, keyframes, correction=None, exclude=set()):
         # Correct keyframes with new pose estimates #
@@ -360,7 +344,7 @@ class PoseGraphOptimization(g2o.SparseOptimizer):
                 continue
 
             uncorrected = g2o.Isometry3d(kf.orientation, kf.position)
-            if correction is None: # Use optimization result
+            if correction is None:  # Use optimization result
                 vertex = self.vertex(kf.id)
                 if vertex.fixed():
                     continue
@@ -371,8 +355,8 @@ class PoseGraphOptimization(g2o.SparseOptimizer):
 
             # Correction is minor discard #
             delta = uncorrected.inverse() * corrected
-            if (g2o.AngleAxis(delta.rotation()).angle() < 0.02 and
-                np.linalg.norm(delta.translation()) < 0.03):          # 1°, 3cm
+            if (g2o.AngleAxis(delta.rotation()).angle() < 0.02
+                    and np.linalg.norm(delta.translation()) < 0.03):  # 1°, 3cm
                 continue
 
             for m in kf.measurements():

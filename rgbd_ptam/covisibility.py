@@ -2,29 +2,27 @@ from threading import Lock
 
 from collections import defaultdict, Counter
 from itertools import chain
-
-
-
 """
 It has many measurements and corresponding mappoints
 KeyFrame is GraphKeyFrame
 """
+
+
 class GraphKeyFrame(object):
     def __init__(self):
         self.id = None
-        self.meas = dict() # Measurement key and value mappoint
-        self.covisible = defaultdict(int) # If another frame is covisible and also count how many times 
+        self.meas = dict()  # Measurement key and value mappoint
+        self.covisible = defaultdict(int)  # If another frame is covisible and also count how many times
         self._lock = Lock()
 
     def __hash__(self):
         return self.id
 
     def __eq__(self, rhs):
-        return (isinstance(rhs, GraphKeyFrame) and
-            self.id == rhs.id)
+        return (isinstance(rhs, GraphKeyFrame) and self.id == rhs.id)
 
     def __lt__(self, rhs):
-        return self.id < rhs.id   # predate
+        return self.id < rhs.id  # predate
 
     def __le__(self, rhs):
         return self.id <= rhs.id
@@ -61,18 +59,19 @@ class GraphKeyFrame(object):
 Mappoint coresponds to many measurements
 Mappoint is GraphMapPoint
 """
+
+
 class GraphMapPoint(object):
     def __init__(self):
         self.id = None
-        self.meas = dict() # Measurements keys and values keyframes
+        self.meas = dict()  # Measurements keys and values keyframes
         self._lock = Lock()
 
     def __hash__(self):
         return self.id
 
     def __eq__(self, rhs):
-        return (isinstance(rhs, GraphMapPoint) and
-            self.id == rhs.id)
+        return (isinstance(rhs, GraphMapPoint) and self.id == rhs.id)
 
     def __lt__(self, rhs):
         return self.id < rhs.id
@@ -99,24 +98,26 @@ class GraphMapPoint(object):
             except KeyError:
                 pass
 
+
 """
 Measurement is GraphMeasurement
 """
+
+
 class GraphMeasurement(object):
     def __init__(self):
         self.keyframe = None
         self.mappoint = None
 
     @property
-    def id(self): # See also meas_lookup
+    def id(self):  # See also meas_lookup
         return (self.keyframe.id, self.mappoint.id)
 
     def __hash__(self):
         return hash(self.id)
 
     def __eq__(self, rhs):
-        return (isinstance(rhs, GraphMeasurement) and
-            self.id == rhs.id)
+        return (isinstance(rhs, GraphMeasurement) and self.id == rhs.id)
 
 
 class CovisibilityGraph(object):
@@ -127,7 +128,7 @@ class CovisibilityGraph(object):
         self.pts = set()
 
         self.kfs_set = set()
-        self.meas_lookup = dict() # id -> measurement
+        self.meas_lookup = dict()  # id -> measurement
 
     def keyframes(self):
         with self._lock:
@@ -193,7 +194,7 @@ class CovisibilityGraph(object):
 
     def has_measurement(self, *args):
         with self._lock:
-            if len(args) == 2: # keyframe, mappoint
+            if len(args) == 2:  # keyframe, mappoint
                 id = (args[0].id, args[1].id)
                 return id in self.meas_lookup
             else:
@@ -211,11 +212,11 @@ class CovisibilityGraph(object):
         Given 3D points get most probable frame -> reference
         Also, for the reference frame get covisible
     """
+
     def get_local_map(self, seedpoints, window_size=15):
         reference = self.get_reference_frame(seedpoints)
-        covisible = chain(
-            reference.covisibility_keyframes().items(), [(reference, float('inf'))])
-        covisible = sorted(covisible, key=lambda _:_[1], reverse=True)
+        covisible = chain(reference.covisibility_keyframes().items(), [(reference, float('inf'))])
+        covisible = sorted(covisible, key=lambda _: _[1], reverse=True)
 
         local_map = [seedpoints]
         local_keyframes = []
@@ -232,6 +233,7 @@ class CovisibilityGraph(object):
     """
         Typically, seedframes: [previous, reference]
     """
+
     def get_local_map_v2(self, seedframes, window_size=12, loop_window_size=8):
         # TODO: add similar (in appearance and location) keyframes' mappoints
         covisible = []
@@ -243,23 +245,21 @@ class CovisibilityGraph(object):
         for kf in set(seedframes):
             covisible[kf] = float('inf')
 
-        local = sorted(
-            covisible.items(), key=lambda _:_[1], reverse=True)
+        local = sorted(covisible.items(), key=lambda _: _[1], reverse=True)
 
         # Get most recent frame #
         id = max([_.id for _ in covisible])
 
         # Get loop frames: 20 frames before the most recent one #
-        loop_frames = [_ for _ in local if _[0].id < id-20]
+        loop_frames = [_ for _ in local if _[0].id < id - 20]
 
         local = local[:window_size]
         loop_local = []
         if len(loop_frames) > 0:
 
             # Find covisible of loop #
-            loop_covisible = sorted(
-                loop_frames[0][0].covisibility_keyframes().items(),
-                key=lambda _:_[1], reverse=True)
+            loop_covisible = sorted(loop_frames[0][0].covisibility_keyframes().items(), key=lambda _: _[1],
+                                    reverse=True)
 
             # If not in local add #
             for kf, n in loop_covisible:
@@ -267,7 +267,7 @@ class CovisibilityGraph(object):
                     loop_local.append((kf, n))
                     if len(loop_local) >= loop_window_size:
                         break
- 
+
         local = chain(local, loop_local)
 
         local_map = []

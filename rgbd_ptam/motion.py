@@ -1,6 +1,5 @@
-import numpy as np 
+import numpy as np
 import g2o
-
 
 
 class MotionModel(object):
@@ -10,35 +9,31 @@ class MotionModel(object):
         self.timestamp = None
         self.position = np.zeros(3)
         self.orientation = g2o.Quaternion()
-        self.covariance = None    # pose covariance
+        self.covariance = None  # pose covariance
 
-        self.v_linear = np.zeros(3)    # linear velocity
+        self.v_linear = np.zeros(3)  # linear velocity
         self.v_angular_angle = 0
         self.v_angular_axis = np.array([1, 0, 0])
 
         self.initialized = False
-        self.damp = 0.95   # damping factor
+        self.damp = 0.95  # damping factor
 
     def current_pose(self):
         '''
         Get the current camera pose.
         '''
-        return (g2o.Isometry3d(self.orientation, self.position), 
-            self.covariance)
+        return (g2o.Isometry3d(self.orientation, self.position), self.covariance)
 
     def predict_pose(self, timestamp):
         '''
         Predict the next camera pose.
         '''
         if not self.initialized:
-            return (g2o.Isometry3d(self.orientation, self.position), 
-                self.covariance)
+            return (g2o.Isometry3d(self.orientation, self.position), self.covariance)
 
         dt = timestamp - self.timestamp
 
-        delta_angle = g2o.AngleAxis(
-            self.v_angular_angle * dt * self.damp, 
-            self.v_angular_axis)
+        delta_angle = g2o.AngleAxis(self.v_angular_angle * dt * self.damp, self.v_angular_axis)
         delta_orientation = g2o.Quaternion(delta_angle)
 
         position = self.position + self.v_linear * dt * self.damp
@@ -46,8 +41,7 @@ class MotionModel(object):
 
         return (g2o.Isometry3d(orientation, position), self.covariance)
 
-    def update_pose(self, timestamp, 
-            new_position, new_orientation, new_covariance=None):
+    def update_pose(self, timestamp, new_position, new_orientation, new_covariance=None):
         '''
         Update the motion model when given a new camera pose.
         '''
@@ -76,14 +70,14 @@ class MotionModel(object):
 
             self.v_angular_axis = axis
             self.v_angular_angle = angle / dt
- 
+
         self.timestamp = timestamp
         self.position = new_position
         self.orientation = new_orientation
         self.covariance = new_covariance
         self.initialized = True
 
-    def apply_correction(self, correction):     # corr: g2o.Isometry3d or matrix44
+    def apply_correction(self, correction):  # corr: g2o.Isometry3d or matrix44
         '''
         Reset the model given a new camera pose.
         Note: This method will be called when it happens an abrupt change in the pose (LoopClosing)
@@ -97,7 +91,5 @@ class MotionModel(object):
         self.position = current.position()
         self.orientation = current.orientation()
 
-        self.v_linear = (
-            correction.inverse().orientation() * self.v_linear)
-        self.v_angular_axis = (
-            correction.inverse().orientation() * self.v_angular_axis)
+        self.v_linear = (correction.inverse().orientation() * self.v_linear)
+        self.v_angular_axis = (correction.inverse().orientation() * self.v_angular_axis)

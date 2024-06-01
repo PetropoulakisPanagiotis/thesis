@@ -12,7 +12,6 @@ from mapping import MappingThread
 from components import Measurement
 from motion import MotionModel
 from loopclosing import LoopClosing
-
 """
 Three threads:
               - mapping
@@ -24,6 +23,7 @@ Two processed:
               - viewer
 """
 
+
 class Tracking(object):
     def __init__(self, params):
         self.optimizer = BundleAdjustment()
@@ -31,8 +31,7 @@ class Tracking(object):
         self.max_iterations = params.pnp_max_iterations
 
     def refine_pose(self, pose, cam, measurements):
-        assert len(measurements) >= self.min_measurements, (
-            'Not enough points')
+        assert len(measurements) >= self.min_measurements, ('Not enough points')
 
         self.optimizer.clear()
         self.optimizer.add_pose(0, pose, cam, fixed=False)
@@ -46,7 +45,6 @@ class Tracking(object):
         return self.optimizer.get_pose(0)
 
 
-
 class RGBDPTAM(object):
     def __init__(self, params):
         self.params = params
@@ -58,12 +56,12 @@ class RGBDPTAM(object):
 
         self.loop_closing = LoopClosing(self, params)
         self.loop_correction = None
- 
-        self.reference = None        # reference keyframe
-        self.preceding = None        # last keyframe
-        self.current = None          # current frame
-        self.candidates = []         # candidate keyframes
-        self.results = []            # tracking results bool
+
+        self.reference = None  # reference keyframe
+        self.preceding = None  # last keyframe
+        self.current = None  # current frame
+        self.candidates = []  # candidate keyframes
+        self.results = []  # tracking results bool
 
         self.status = defaultdict(bool)
         self.non_keyframes = []
@@ -75,8 +73,7 @@ class RGBDPTAM(object):
 
     def initialize(self, frame):
         mappoints, measurements = frame.cloudify()
-        assert len(mappoints) >= self.params.init_min_points, (
-            'Not enough points to initialize map.')
+        assert len(mappoints) >= self.params.init_min_points, ('Not enough points to initialize map.')
 
         keyframe = frame.to_keyframe()
         keyframe.set_fixed(True)
@@ -90,8 +87,7 @@ class RGBDPTAM(object):
         self.current = keyframe
         self.status['initialized'] = True
 
-        self.motion_model.update_pose(
-            frame.timestamp, frame.position, frame.orientation)
+        self.motion_model.update_pose(frame.timestamp, frame.position, frame.orientation)
 
     def track(self, frame):
         tracking_fail = False
@@ -104,12 +100,10 @@ class RGBDPTAM(object):
 
         # set pose to frame from tracking
         predicted_pose, _ = self.motion_model.predict_pose(frame.timestamp)
-        frame.update_pose(predicted_pose) 
+        frame.update_pose(predicted_pose)
         if self.loop_closing is not None:
             if self.loop_correction is not None:
-                estimated_pose = g2o.Isometry3d(
-                    frame.orientation,
-                    frame.position)
+                estimated_pose = g2o.Isometry3d(frame.orientation, frame.position)
                 estimated_pose = estimated_pose * self.loop_correction
                 frame.update_pose(estimated_pose)
                 self.motion_model.apply_correction(self.loop_correction)
@@ -117,8 +111,7 @@ class RGBDPTAM(object):
 
         # Get local map and also find measurements for current frame #
         local_mappoints = self.filter_points(frame)
-        measurements = frame.match_mappoints(
-            local_mappoints, Measurement.Source.TRACKING)
+        measurements = frame.match_mappoints(local_mappoints, Measurement.Source.TRACKING)
 
         # Measurements -> frame
         # Local        -> local map
@@ -154,16 +147,17 @@ class RGBDPTAM(object):
             tracking_fail = True
 
         remedy = False
-        if self.results[-2:].count(False) == 2: # Two last frames failed
-            if len(self.candidates) > 0 and self.candidates[-1].idx > self.preceding.idx: # Remedy is not yet a keyframe
-                frame = self.candidates[-1] # Get last valid tracked frame
+        if self.results[-2:].count(False) == 2:  # Two last frames failed
+            if len(self.candidates
+                   ) > 0 and self.candidates[-1].idx > self.preceding.idx:  # Remedy is not yet a keyframe
+                frame = self.candidates[-1]  # Get last valid tracked frame
                 remedy = True
             else:
                 tracking_fail = True
                 print('tracking failed!')
 
         # Remedy frame used or tracking succeded and should be keyframe #
-        if remedy or (self.results[-1] and self.should_be_keyframe(frame, measurements)):# or (self.results[-1]):
+        if remedy or (self.results[-1] and self.should_be_keyframe(frame, measurements)):  # or (self.results[-1]):
             keyframe = frame.to_keyframe()
             keyframe.update_reference(self.reference)
             keyframe.update_preceding(self.preceding)
@@ -174,25 +168,22 @@ class RGBDPTAM(object):
 
             self.preceding = keyframe
             print('new keyframe', keyframe.idx)
-        else: # Remedy already used as keyframe
+        else:  # Remedy already used as keyframe
             if tracking_fail is not True:
                 self.non_keyframes.append(frame)
 
         self.set_tracking(False)
 
-
     def filter_points(self, frame):
         # Get local 3D points #
         # local_mappoints = self.graph.get_local_map(self.tracked_map)[0]
-        local_mappoints = self.graph.get_local_map_v2(
-            [self.preceding, self.reference])[0]
+        local_mappoints = self.graph.get_local_map_v2([self.preceding, self.reference])[0]
 
         # If we can project the 3D map points to the current frame #
         can_view = frame.can_view(local_mappoints)
-        print('filter points:', len(local_mappoints), can_view.sum(),
-            len(self.preceding.mappoints()),
-            len(self.reference.mappoints()))
- 
+        print('filter points:', len(local_mappoints), can_view.sum(), len(self.preceding.mappoints()),
+              len(self.reference.mappoints()))
+
         checked = set()
         filtered = []
         for i in np.where(can_view)[0]:
@@ -213,14 +204,12 @@ class RGBDPTAM(object):
 
         return filtered
 
-
     def should_be_keyframe(self, frame, measurements):
         if self.adding_keyframes_stopped():
             return False
 
         n_matches = len(measurements)
         return (n_matches < self.params.min_tracked_points and n_matches > self.params.pnp_min_measurements)
-
 
     def set_loop_correction(self, T):
         self.loop_correction = T
@@ -259,7 +248,7 @@ class RGBDPTAM(object):
         sorted_frames = sorted(all_frames, key=lambda obj: obj.timestamp)
         with open(path, 'w') as file_result:
             for kf in sorted_frames:
-                timestamp = kf.timestamp #1. (room), 
+                timestamp = kf.timestamp  #1. (room),
                 matrix = kf.pose.matrix()[:3]
                 xyz = matrix[:3, 3]
                 r = Rotation.from_matrix(matrix[:3, :3])
@@ -271,7 +260,6 @@ class RGBDPTAM(object):
                 current_result = [str(item) for item in current_result]
                 line = ' '.join(current_result)
                 file_result.write(line + '\n')
-
 
 
 if __name__ == '__main__':
@@ -290,27 +278,26 @@ if __name__ == '__main__':
     from params import Params
     from dataset import TUMRGBDDataset, ICLNUIMDataset, ScanNetDataset
 
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-viz', action='store_true', help='do not visualize')
-    parser.add_argument('--dataset', type=str, default='ICL',
-        help='dataset (TUM/ICL-NUIM)')
-    # parser.add_argument('--path', type=str, help='dataset path', 
+    parser.add_argument('--dataset', type=str, default='ICL', help='dataset (TUM/ICL-NUIM)')
+    # parser.add_argument('--path', type=str, help='dataset path',
     #     default='path/to/your/TUM_RGBD/rgbd_dataset_freiburg1_room')
-    parser.add_argument('--path', type=str, help='dataset path', 
-        default='path/to/your/ICL-NUIM_RGBD/living_room_traj3_frei_png')
+    parser.add_argument('--path', type=str, help='dataset path',
+                        default='path/to/your/ICL-NUIM_RGBD/living_room_traj3_frei_png')
 
-    parser.add_argument('--scene', type=str,
-       #default='scene0084_02') # hm...
-       #default='scene0655_01') # nice
-       default='scene0608_00') # nice
-       #default='scene0164_00') # nice
-       #default='scene0025_02') # nice
-       #default='scene0412_00')
-      # default='scene0095_00')
+    parser.add_argument(
+        '--scene',
+        type=str,
+        #default='scene0084_02') # hm...
+        #default='scene0655_01') # nice
+        default='scene0608_00')  # nice
+    #default='scene0164_00') # nice
+    #default='scene0025_02') # nice
+    #default='scene0412_00')
+    # default='scene0095_00')
 
-    parser.add_argument('--split', type=str,
-        default='valid')
+    parser.add_argument('--split', type=str, default='valid')
     args = parser.parse_args()
 
     if 'tum' in args.dataset.lower():
@@ -328,12 +315,8 @@ if __name__ == '__main__':
         viewer = MapViewer(ptam, params)
 
     height, width = dataset.rgb.shape[:2]
-    cam = Camera(
-        dataset.cam.fx, dataset.cam.fy, dataset.cam.cx, dataset.cam.cy, 
-        width, height, dataset.cam.scale, 
-        params.virtual_baseline, params.depth_near, params.depth_far,
-        params.frustum_near, params.frustum_far)
-
+    cam = Camera(dataset.cam.fx, dataset.cam.fy, dataset.cam.cx, dataset.cam.cy, width, height, dataset.cam.scale,
+                 params.virtual_baseline, params.depth_near, params.depth_far, params.frustum_near, params.frustum_far)
 
     durations = []
     for i in range(len(dataset))[:]:
@@ -345,7 +328,7 @@ if __name__ == '__main__':
             timestamp = dataset.timestamps[i]
 
         time_start = time.time()
-        feature.extract() # Detect keypoints and descriptors of image
+        feature.extract()  # Detect keypoints and descriptors of image
 
         frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp)
         if not ptam.is_initialized():

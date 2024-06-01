@@ -11,16 +11,14 @@ from collections import defaultdict
 from covisibility import GraphKeyFrame
 from covisibility import GraphMapPoint
 from covisibility import GraphMeasurement
-
-
-
 """
 Camera intrinsics
 """
+
+
 class Camera(object):
-    def __init__(self, fx, fy, cx, cy, width, height, 
-            scale, baseline, depth_near, depth_far, 
-            frustum_near, frustum_far):
+    def __init__(self, fx, fy, cx, cy, width, height, scale, baseline, depth_near, depth_far, frustum_near,
+                 frustum_far):
         self.fx = fx
         self.fy = fy
         self.cx = cx
@@ -29,26 +27,27 @@ class Camera(object):
         self.baseline = baseline
         self.bf = fx * baseline
 
-        self.intrinsic = np.array([
-            [fx, 0, cx], 
-            [0, fy, cy], 
-            [0, 0, 1]])
+        self.intrinsic = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
 
-        self.depth_near = depth_near     # 0.1
-        self.depth_far = depth_far       # 10
-        self.frustum_near = frustum_near # 0.1
-        self.frustum_far = frustum_far   # 50
+        self.depth_near = depth_near  # 0.1
+        self.depth_far = depth_far  # 10
+        self.frustum_near = frustum_near  # 0.1
+        self.frustum_far = frustum_far  # 50
 
         self.width = width
         self.height = height
 
+
 """
 ScaleAware: canonical, scales + uncertainties
 """
+
+
 class ScaleAwareFrame(object):
-    def __init__(self, idx, canonical=None, canonical_uncertainty=None, scales=None, scales_uncertainty=None, pixel_to_scale_map=None):
+    def __init__(self, idx, canonical=None, canonical_uncertainty=None, scales=None, scales_uncertainty=None,
+                 pixel_to_scale_map=None):
         self.idx = idx
-        self.canonical = canonical                          # 'image'
+        self.canonical = canonical  # 'image'
         if canonical is not None:
             self.height, self.width = canonical.shape[:2]
         else:
@@ -56,32 +55,33 @@ class ScaleAwareFrame(object):
 
         self.canonical_uncertainty = canonical_uncertainty  # 'image'
 
-        self.scales = scales                                # list
-        self.scales_uncertainty = scales_uncertainty        # list
-        self.pixel_to_scale_map = pixel_to_scale_map        # 'image'
+        self.scales = scales  # list
+        self.scales_uncertainty = scales_uncertainty  # list
+        self.pixel_to_scale_map = pixel_to_scale_map  # 'image'
+
 
 """
 Frame:
        image, pose, cam, timestamp, projection
        feature: image, keypoints, desc
 """
+
+
 class Frame(object):
-    def __init__(self, idx, pose, feature, cam, timestamp=None, 
-            pose_covariance=np.identity(6)):
+    def __init__(self, idx, pose, feature, cam, timestamp=None, pose_covariance=np.identity(6)):
         self.idx = idx
-        self.pose = pose    # g2o.Isometry3d
+        self.pose = pose  # g2o.Isometry3d
         self.feature = feature
         self.cam = cam
         self.timestamp = timestamp
         self.image = feature.image
 
-        self.orientation = pose.orientation() # From camera to world
-        self.position = pose.position() # From camera to world 
+        self.orientation = pose.orientation()  # From camera to world
+        self.position = pose.position()  # From camera to world
         self.pose_covariance = pose_covariance
 
-        self.transform_matrix = pose.inverse().matrix()[:3] # Shape: (3, 4)
-        self.projection_matrix = (
-            self.cam.intrinsic.dot(self.transform_matrix))  # From world frame to image
+        self.transform_matrix = pose.inverse().matrix()[:3]  # Shape: (3, 4)
+        self.projection_matrix = (self.cam.intrinsic.dot(self.transform_matrix))  # From world frame to image
 
     def can_view(self, points, margin=10):
         # Frustum Culling (batch version)
@@ -90,13 +90,10 @@ class Frame(object):
         if depth.max() > 20:
             exit()
         return np.logical_and.reduce([
-            depth >= self.cam.frustum_near,
-            depth <= self.cam.frustum_far,
-            u >= -margin,
-            u <= self.cam.width + margin,
-            v >= -margin,
-            v <= self.cam.height + margin])
- 
+            depth >= self.cam.frustum_near, depth <= self.cam.frustum_far, u >= -margin, u <= self.cam.width + margin, v
+            >= -margin, v <= self.cam.height + margin
+        ])
+
     def update_pose(self, pose):
         if isinstance(pose, g2o.SE3Quat):
             self.pose = g2o.Isometry3d(pose.orientation(), pose.position())
@@ -106,10 +103,9 @@ class Frame(object):
         self.position = self.pose.position()
 
         self.transform_matrix = self.pose.inverse().matrix()[:3]
-        self.projection_matrix = (
-            self.cam.intrinsic.dot(self.transform_matrix))
+        self.projection_matrix = (self.cam.intrinsic.dot(self.transform_matrix))
 
-    def transform(self, points): 
+    def transform(self, points):
         '''
         Transform points from world coordinates frame to camera frame.
         Args:
@@ -123,7 +119,7 @@ class Frame(object):
             t = self.transform_matrix[:3, 3:]
         return R.dot(points) + t
 
-    def project(self, points): 
+    def project(self, points):
         '''
         Project points from camera frame to image's pixel coordinates.
         Args:
@@ -164,7 +160,6 @@ class Frame(object):
         return self.feature.get_unmatched_keypoints()
 
 
-
 def depth_to_3d(depth, coords, cam):
     coords = np.array(coords, dtype=int)
     ix = coords[:, 0]
@@ -181,23 +176,21 @@ def depth_to_3d(depth, coords, cam):
 Frame +  depth
 rgb is FRAME
 """
+
+
 class RGBDFrame(Frame, ScaleAwareFrame):
-    def __init__(self, idx, pose, feature, depth, cam, timestamp=None, 
-            pose_covariance=np.identity(6),
-            canonical=None,
-            canonical_uncertainty=None,
-            scales=None,
-            scales_uncertainty=None,
-            pixel_to_scale_map=None):
+    def __init__(self, idx, pose, feature, depth, cam, timestamp=None, pose_covariance=np.identity(6), canonical=None,
+                 canonical_uncertainty=None, scales=None, scales_uncertainty=None, pixel_to_scale_map=None):
 
         super().__init__(idx, pose, feature, cam, timestamp, pose_covariance)
         self.rgb = Frame(idx, pose, feature, cam, timestamp, pose_covariance)
-        self.scale_aware_frame = ScaleAwareFrame(idx, canonical, canonical_uncertainty, scales, scales_uncertainty, pixel_to_scale_map)
+        self.scale_aware_frame = ScaleAwareFrame(idx, canonical, canonical_uncertainty, scales, scales_uncertainty,
+                                                 pixel_to_scale_map)
         self.depth = depth
 
     def virtual_stereo(self, px):
         x, y = int(px[0]), int(px[1])
-        if not (0 <= x <= self.cam.width-1 and 0 <= y <= self.cam.height-1):
+        if not (0 <= x <= self.cam.width - 1 and 0 <= y <= self.cam.height - 1):
             return None
 
         depth = self.depth[y, x] / self.cam.scale
@@ -213,7 +206,7 @@ class RGBDFrame(Frame, ScaleAwareFrame):
 
     def find_matches(self, source, points, descriptors):
         # Find matches and get measurements
-        # Source: type like TRACKING - enum 
+        # Source: type like TRACKING - enum
         matches = self.rgb.find_matches(points, descriptors)
         measurements = []
         for i, j in matches:
@@ -230,17 +223,13 @@ class RGBDFrame(Frame, ScaleAwareFrame):
                 scale_id_measurement = self.scale_aware_frame.pixel_to_scale_map[xy[1], xy[0]]
 
             if kp2 is not None:
-                measurement = Measurement(
-                    Measurement.Type.STEREO,
-                    source,
-                    [self.rgb.get_keypoint(j), kp2],
-                    [self.rgb.get_descriptor(j)] * 2, canonical_measurement, covariance_canonical_measurement, scale_id_measurement)
-            else: # Typically when depth is 0 for this camera
-                measurement = Measurement(
-                    Measurement.Type.LEFT,
-                    source,
-                    [self.rgb.get_keypoint(j)],
-                    [self.rgb.get_descriptor(j)], canonical_measurement, covariance_canonical_measurement, scale_id_measurement)
+                measurement = Measurement(Measurement.Type.STEREO, source, [self.rgb.get_keypoint(j), kp2],
+                                          [self.rgb.get_descriptor(j)] * 2, canonical_measurement,
+                                          covariance_canonical_measurement, scale_id_measurement)
+            else:  # Typically when depth is 0 for this camera
+                measurement = Measurement(Measurement.Type.LEFT, source, [self.rgb.get_keypoint(j)],
+                                          [self.rgb.get_descriptor(j)], canonical_measurement,
+                                          covariance_canonical_measurement, scale_id_measurement)
             measurements.append((i, measurement))
             self.rgb.set_matched(j)
 
@@ -275,7 +264,7 @@ class RGBDFrame(Frame, ScaleAwareFrame):
         Rt = self.pose.matrix()[:3]
         R = Rt[:, :3]
         t = Rt[:, 3:]
-        points = (R.dot(pts.T) + t).T   # world frame
+        points = (R.dot(pts.T) + t).T  # world frame
 
         mappoints = []
         measurements = []
@@ -305,11 +294,9 @@ class RGBDFrame(Frame, ScaleAwareFrame):
 
             # Triangulation aka virtual stereo #
             mappoint = MapPoint(point, normal, desps[i], color)
-            measurement = Measurement(
-                Measurement.Type.STEREO,
-                Measurement.Source.TRIANGULATION,
-                [kps[i], kp2],
-                [desps[i], desps[i]], canonical_measurement, covariance_canonical_measurement, scale_id_measurement)
+            measurement = Measurement(Measurement.Type.STEREO, Measurement.Source.TRIANGULATION, [kps[i], kp2],
+                                      [desps[i], desps[i]], canonical_measurement, covariance_canonical_measurement,
+                                      scale_id_measurement)
 
             measurement.mappoint = mappoint
 
@@ -349,10 +336,7 @@ class RGBDFrame(Frame, ScaleAwareFrame):
         return np.logical_and(parallel, can_view)
 
     def to_keyframe(self):
-        return KeyFrame(
-            self.idx, self.pose,
-            self.feature, self.depth,
-            self.cam, self.timestamp, self.pose_covariance)
+        return KeyFrame(self.idx, self.pose, self.feature, self.depth, self.cam, self.timestamp, self.pose_covariance)
 
 
 """
@@ -360,6 +344,8 @@ GraphKeyFrame
 Frame +  depth
 rgb is FRAME
 """
+
+
 class KeyFrame(GraphKeyFrame, RGBDFrame):
     _id = 0
     _id_lock = Lock()
@@ -371,9 +357,9 @@ class KeyFrame(GraphKeyFrame, RGBDFrame):
             self.id = KeyFrame._id
             KeyFrame._id += 1
 
-        self.reference_keyframe = None   # Frame with most matches 
-        self.reference_constraint = None # From the reference to this frame
-        self.preceding_keyframe = None   # Previous keyframe
+        self.reference_keyframe = None  # Frame with most matches
+        self.reference_constraint = None  # From the reference to this frame
+        self.preceding_keyframe = None  # Previous keyframe
         self.preceding_constraint = None
         self.loop_keyframe = None
         self.loop_constraint = None
@@ -382,14 +368,12 @@ class KeyFrame(GraphKeyFrame, RGBDFrame):
     def update_reference(self, reference=None):
         if reference is not None:
             self.reference_keyframe = reference
-        self.reference_constraint = (
-            self.reference_keyframe.pose.inverse() * self.pose)
+        self.reference_constraint = (self.reference_keyframe.pose.inverse() * self.pose)
 
     def update_preceding(self, preceding=None):
         if preceding is not None:
             self.preceding_keyframe = preceding
-        self.preceding_constraint = (
-            self.preceding_keyframe.pose.inverse() * self.pose)
+        self.preceding_constraint = (self.preceding_keyframe.pose.inverse() * self.pose)
 
     def set_loop(self, keyframe, constraint):
         self.loop_keyframe = keyframe
@@ -406,9 +390,7 @@ class MapPoint(GraphMapPoint):
     _id = 0
     _id_lock = Lock()
 
-    def __init__(self, position, normal, descriptor, 
-            color=np.zeros(3), 
-            covariance=np.identity(3) * 1e-4):
+    def __init__(self, position, normal, descriptor, color=np.zeros(3), covariance=np.identity(3) * 1e-4):
         super().__init__()
 
         with MapPoint._id_lock:
@@ -421,7 +403,7 @@ class MapPoint(GraphMapPoint):
         self.covariance = covariance
         self.color = color
 
-        self.count = defaultdict(int) # TODO: see puprose this
+        self.count = defaultdict(int)  # TODO: see puprose this
 
     def update_position(self, position):
         self.position = position
@@ -438,12 +420,9 @@ class MapPoint(GraphMapPoint):
     # TODO: check this #
     def is_bad(self):
         with self._lock:
-            status =  (
-                self.count['meas'] == 0
-                or (self.count['outlier'] > 20
-                    and self.count['outlier'] > self.count['inlier'])
-                or (self.count['proj'] > 50
-                    and self.count['proj'] > self.count['meas'] * 50))
+            status = (self.count['meas'] == 0
+                      or (self.count['outlier'] > 20 and self.count['outlier'] > self.count['inlier'])
+                      or (self.count['proj'] > 50 and self.count['proj'] > self.count['meas'] * 50))
             return status
 
     def increase_outlier_count(self):
@@ -464,24 +443,23 @@ class MapPoint(GraphMapPoint):
             self.count['meas'] += 1
 
 
-
 class Measurement(GraphMeasurement):
 
     Source = Enum('Measurement.Source', ['TRIANGULATION', 'TRACKING', 'REFIND'])
     Type = Enum('Measurement.Type', ['STEREO', 'LEFT', 'RIGHT'])
 
-    def __init__(self, type, source, keypoints, descriptors, canonical_measurement=1, covariance_canonical_measurement=np.identity(1), scale_id_measurement=0):
+    def __init__(self, type, source, keypoints, descriptors, canonical_measurement=1,
+                 covariance_canonical_measurement=np.identity(1), scale_id_measurement=0):
         super().__init__()
 
         self.type = type
         self.source = source
-        self.keypoints = keypoints # List: can be left, right
+        self.keypoints = keypoints  # List: can be left, right
         self.descriptors = descriptors
         self.xy = np.array(self.keypoints[0].pt)
 
         if self.is_stereo():
-            self.xyx = np.array([
-                *keypoints[0].pt, keypoints[1].pt[0]])
+            self.xyx = np.array([*keypoints[0].pt, keypoints[1].pt[0]])
 
         self.triangulation = (source == self.Source.TRIANGULATION)
 

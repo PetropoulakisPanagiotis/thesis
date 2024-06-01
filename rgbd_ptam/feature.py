@@ -6,19 +6,19 @@ from numbers import Number
 
 from threading import Thread, Lock
 from queue import Queue
-
-
 """
 Image + features 
 """
+
+
 class ImageFeature(object):
     def __init__(self, image, params):
         # TODO: pyramid representation
-        self.image = image 
+        self.image = image
         self.height, self.width = image.shape[:2]
 
-        self.keypoints = []      # list of cv2.KeyPoint
-        self.descriptors = []    # numpy.ndarray
+        self.keypoints = []  # list of cv2.KeyPoint
+        self.descriptors = []  # numpy.ndarray
 
         self.detector = params.feature_detector
         self.extractor = params.descriptor_extractor
@@ -26,15 +26,13 @@ class ImageFeature(object):
 
         self.cell_size = params.matching_cell_size
         self.matching_distance = params.matching_distance
-        self.neighborhood = (
-            params.matching_cell_size * params.matching_neighborhood)
+        self.neighborhood = (params.matching_cell_size * params.matching_neighborhood)
 
         self._lock = Lock()
 
     def extract(self):
         self.keypoints = self.detector.detect(self.image)
-        self.keypoints, self.descriptors = self.extractor.compute(
-            self.image, self.keypoints)
+        self.keypoints, self.descriptors = self.extractor.compute(self.image, self.keypoints)
 
         self.unmatched = np.ones(len(self.keypoints), dtype=bool)
 
@@ -44,7 +42,8 @@ class ImageFeature(object):
         else:
             image = self.image
         img = cv2.drawKeypoints(image, self.keypoints, None, flags=0)
-        cv2.imshow(name, img);cv2.waitKey(delay)
+        cv2.imshow(name, img)
+        cv2.waitKey(delay)
 
     def find_matches(self, predictions, descriptors):
         matches = dict()
@@ -57,7 +56,7 @@ class ImageFeature(object):
             pt2 = self.keypoints[train_idx].pt
             dx = pt1[0] - pt2[0]
             dy = pt1[1] - pt2[1]
-            if np.sqrt(dx*dx + dy*dy) > self.neighborhood:
+            if np.sqrt(dx * dx + dy * dy) > self.neighborhood:
                 continue
 
             matches[train_idx] = query_idx
@@ -72,17 +71,14 @@ class ImageFeature(object):
             if len(unmatched_descriptors) == 0:
                 return []
 
-            lookup = dict(zip(
-                range(len(unmatched_descriptors)),
-                np.where(self.unmatched)[0]))
+            lookup = dict(zip(range(len(unmatched_descriptors)), np.where(self.unmatched)[0]))
 
-        matches = self.matcher.match(
-            np.array(descriptors), unmatched_descriptors)
+        matches = self.matcher.match(np.array(descriptors), unmatched_descriptors)
         return [(m, m.queryIdx, m.trainIdx) for m in matches]
-   
+
     def direct_match(self, *args, **kwargs):
         return direct_match(self.matcher, *args, **kwargs)
-        
+
     def get_keypoint(self, i):
         return self.keypoints[i]
 
@@ -90,8 +86,8 @@ class ImageFeature(object):
         return self.descriptors[i]
 
     def get_color(self, pt):
-        x = int(np.clip(pt[0], 0, self.width-1))
-        y = int(np.clip(pt[1], 0, self.height-1))
+        x = int(np.clip(pt[0], 0, self.width - 1))
+        y = int(np.clip(pt[1], 0, self.height - 1))
         color = self.image[y, x]
         return color[::-1] / 255.
 
@@ -119,8 +115,7 @@ def direct_match(matcher, desps1, desps2, matching_distance=30, ratio=0.7):
 
     # Two matches for each desps1 #
     for (m, n) in matcher.knnMatch(np.array(desps1), np.array(desps2), k=2):
-        if m.distance < min(
-            matching_distance, n.distance * ratio, distances[m.trainIdx]):
+        if m.distance < min(matching_distance, n.distance * ratio, distances[m.trainIdx]):
             matches[m.trainIdx] = m.queryIdx
             distances[m.trainIdx] = m.distance
 
