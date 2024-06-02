@@ -186,7 +186,7 @@ class RGBDFrame(Frame, ScaleAwareFrame):
         self.rgb = Frame(idx, pose, feature, cam, timestamp, pose_covariance)
         self.scale_aware_frame = None
         if canonical is not None:
-            self.scale_aware_frame = ScaleAwareFrame(idx, canonical, canonical_uncertainty, scales, scales_uncertainty,
+            self.scale_aware_frame = ScaleAwareFrame(idx, canonical / cam.scale, canonical_uncertainty, scales, scales_uncertainty,
                                                      pixel_to_scale_map)
         self.depth = depth
 
@@ -338,7 +338,12 @@ class RGBDFrame(Frame, ScaleAwareFrame):
         return np.logical_and(parallel, can_view)
 
     def to_keyframe(self):
-        return KeyFrame(self.idx, self.pose, self.feature, self.depth, self.cam, self.timestamp, self.pose_covariance)
+        if self.scale_aware_frame is not None:
+            return KeyFrame(self.idx, self.pose, self.feature, self.depth, self.cam, self.timestamp, self.pose_covariance, 
+                            self.scale_aware_frame.canonical, self.scale_aware_frame.canonical_uncertainty, self.scale_aware_frame.scales,
+                            self.scale_aware_frame.scales_uncertainty, self.scale_aware_frame.pixel_to_scale_map)
+        else:
+            return KeyFrame(self.idx, self.pose, self.feature, self.depth, self.cam, self.timestamp, self.pose_covariance)
 
 
 """

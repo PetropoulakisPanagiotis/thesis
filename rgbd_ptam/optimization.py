@@ -278,6 +278,86 @@ class LocalBA(object):
         return self.optimizer.optimize(max_iterations)
 
 
+class LocalBAScaleAware(object):
+    def __init__(self, ):
+        self.optimizer = BundleAdjustmentScaleAware()
+        self.measurements = []  # Measurements, can be both from optimized non-optimzed pose frames
+        self.keyframes = []  # Frames that their pose is optimized
+        self.mappoints = set()  # Only add 3D points that belong to frames that their pose is optimized
+
+        # threshold for confidence interval of 95%
+        self.huber_threshold = 5.991
+
+    def set_data(self, adjust_keyframes, fixed_keyframes):
+        self.clear()  # Empty buffers
+        # Note: for edge_id, we add the id of the self.measurements list #
+
+        for kf in adjust_keyframes:
+            # Pose id: scale_offset + 2*id
+            self.optimizer.add_pose(kf.id, kf.pose, kf.cam, fixed=False)
+            self.keyframes.append(kf)
+
+            for m in kf.measurements():
+                pt = m.mappoint
+
+                # Add 3D point: this point can be visible in many keyframes                  #
+                # But this 3D point can not be matched with many 2D points on the same frame #
+                if pt not in self.mappoints:
+                    self.optimizer.add_point(pt.id, pt.position)
+                    self.mappoints.add(pt)
+
+                # Add pose - 2D measurement constraint alogn with 3D point #
+                edge_id = len(self.measurements)
+                self.optimizer.add_edge(edge_id, pt.id, kf.id, m)
+                self.measurements.append(m)
+
+        for kf in fixed_keyframes:
+            self.optimizer.add_pose(kf.id, kf.pose, kf.cam, fixed=True)
+
+            # Local 3D points can be visible to frames outside the window #
+            # Add these pose contraints                                   #
+            for m in kf.measurements():
+                if m.mappoint in self.mappoints:
+                    edge_id = len(self.measurements)
+                    self.optimizer.add_edge(edge_id, m.mappoint.id, kf.id, m)
+                    self.measurements.append(m)
+
+    def update_points(self):
+        for mappoint in self.mappoints:
+            mappoint.update_position(self.optimizer.get_point(mappoint.id))
+
+    def update_poses(self):
+        for keyframe in self.keyframes:
+            keyframe.update_pose(self.optimizer.get_pose(keyframe.id))
+            # Update pose constraints                #
+            # From current to reference or preceding #
+            keyframe.update_reference()
+            keyframe.update_preceding()
+
+    def update_scales(self):
+        for keyframe in self.keyframes:
+            pass
+
+    def get_bad_measurements(self):
+        bad_measurements = []
+        for edge in self.optimizer.active_edges():
+            if edge.chi2() > self.huber_threshold:
+                bad_measurements.append(self.measurements[edge.id()])
+        return bad_measurements
+
+    def clear(self):
+        self.optimizer.clear()
+        self.keyframes.clear()
+        self.mappoints.clear()
+        self.measurements.clear()
+
+    def abort(self):
+        self.optimizer.abort()
+
+    def optimize(self, max_iterations):
+        return self.optimizer.optimize(max_iterations)
+
+
 class PoseGraphOptimization(g2o.SparseOptimizer):
     def __init__(self):
         super().__init__()

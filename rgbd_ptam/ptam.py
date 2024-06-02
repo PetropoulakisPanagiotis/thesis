@@ -45,8 +45,10 @@ class Tracking(object):
             for ii, scale in enumerate(scale_aware_frame.scales):
                 # Scale Id: ii
                 self.optimizer.add_scale(ii, scale, fixed=True)
+
                 # Edge Id: ii
-                self.optimizer.add_scale_edge(ii, ii, scale)
+                self.optimizer.add_scale_edge(ii, ii, scale,
+                                              information=np.identity(1) * 1./scale_aware_frame.scales_uncertainty[ii])
 
             # BA with one pose #
             for ii, m in enumerate(measurements):
@@ -56,7 +58,8 @@ class Tracking(object):
                 self.optimizer.add_camera_edge(ii, ii, 0, m.xy)
 
                 # Edge Id: scale_offset + 2*ii + 1
-                self.optimizer.add_depth_scale_consistency_edge(ii, ii, 0, m.scale_id_measurement, m.canonical_measurement)
+                self.optimizer.add_depth_scale_consistency_edge(ii, ii, 0, m.scale_id_measurement, m.canonical_measurement,
+                                                                information=np.identity(1) * 1./m.covariance_canonical_measurement)
         else:
             self.optimizer.add_pose(0, pose, cam, fixed=False)
             # BA with one pose #
@@ -359,7 +362,7 @@ if __name__ == '__main__':
             scales, scales_uncertainty, _ = dataset.scale[i]
             frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp, canonical=dataset.canonical[i],
                               canonical_uncertainty=dataset.canonical_uncertainty[i], scales=scales, 
-                              scales_uncertainty=scales, pixel_to_scale_map=dataset.pixel_to_scale_map[i])
+                              scales_uncertainty=scales_uncertainty, pixel_to_scale_map=dataset.pixel_to_scale_map[i])
         else:
             frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp)
 

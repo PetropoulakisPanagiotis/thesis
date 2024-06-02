@@ -11,7 +11,7 @@ from multiprocessing import Process, Queue
 
 
 class ScaleReader(object):
-    def __init__(self, ids, timestamps=None, max_var=50.0, min_var=1e-4):
+    def __init__(self, ids, timestamps=None, min_var=1e-4, max_var=50):
         self.ids = ids
         self.timestamps = timestamps
         self.max_var = max_var
@@ -21,8 +21,8 @@ class ScaleReader(object):
         scale, scale_unc, scale_type = [], [], []
         with open(path, 'r') as json_file:
             data = json.load(json_file)
-            scale = data['scale']
-            scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), self.min_var, self.max_var).tolist()
+            scale = data['scale'] # This is a list
+            scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), a_min=self.min_var, a_max=self.max_var).tolist()
             scale_type = data['scale_type']
 
         return scale, scale_unc, scale_type
@@ -48,7 +48,7 @@ class ScaleReader(object):
 
 
 class UncertaintyReader(object):
-    def __init__(self, ids, timestamps=None, max_var=50.0, min_var=1e-4):
+    def __init__(self, ids, timestamps=None, min_var=1e-4, max_var=50):
         self.ids = ids
         self.timestamps = timestamps
         self.max_var = max_var
