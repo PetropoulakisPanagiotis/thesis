@@ -94,6 +94,7 @@ class Mapping(object):
         self.optimizer.update_points()
         if self.args.scale_aware:
             self.optimizer.update_scales()
+
         if completed:
             self.remove_measurements(self.optimizer.get_bad_measurements())
 
