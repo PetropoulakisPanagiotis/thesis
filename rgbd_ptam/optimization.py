@@ -78,8 +78,8 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         edge.set_information(information)
 
         edge.set_id(self.scale_offset + 2 * edge_id)
-        edge.set_vertex(0, self.vertex(point_id))
-        edge.set_vertex(1, self.vertex(pose_id))
+        edge.set_vertex(0, self.vertex(self.scale_offset + 2*point_id + 1))
+        edge.set_vertex(1, self.vertex(self.scale_offset + 2*pose_id))
         kernel = g2o.RobustKernelHuber(self.delta)
         edge.set_robust_kernel(kernel)
         super().add_edge(edge)
@@ -94,21 +94,24 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         # 0 Cam
         # 1 3D point
         # 2 scale
-        edge.set_vertex(0, self.vertex(pose_id))
-        edge.set_vertex(1, self.vertex(point_id))
+        edge.set_vertex(0, self.vertex(self.scale_offset + 2*pose_id))
+        edge.set_vertex(1, self.vertex(self.scale_offset + 2*point_id+1))
         edge.set_vertex(2, self.vertex(scale_id))
         kernel = g2o.RobustKernelHuber(self.delta)
         edge.set_robust_kernel(kernel)
         super().add_edge(edge)
 
     def get_pose(self, id):
-        return self.vertex(self.offset + id * 2).estimate()
+        return self.vertex(self.scale_offset + id * 2).estimate()
 
     def get_point(self, id):
-        return self.vertex(self.offset + id * 2 + 1).estimate()
+        return self.vertex(self.scale_offset + id * 2 + 1).estimate()
 
     def get_scale(self, id):
         return self.vertex(id).estimate()
+
+    def get_scale_offset(self):
+        return self.scale_offset
 
     def abort(self):
         self.aborted = True

@@ -59,8 +59,8 @@ def convet_scannet_to_tum(path, output_file):
 #directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0412_00/'
 #directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0025_02/'
 #directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0164_00/'
-directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0608_00/'
-#directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0655_01/'
+#directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0608_00/'
+directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0655_01/'
 #directory = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/scene0084_02/'
 
 # Output text file

@@ -28,31 +28,35 @@ class Tracking(object):
     def __init__(self, params, args):
         self.params = params
         self.args = args
-        self.optimizer = BundleAdjustment() #if not args.scale_aware else BundleAdjustmentScaleAware()
+        self.optimizer = BundleAdjustment() if not args.scale_aware else BundleAdjustmentScaleAware()
         self.min_measurements = params.pnp_min_measurements
         self.max_iterations = params.pnp_max_iterations
 
-    def refine_pose(self, pose, cam, measurements, scales=None):
+    def refine_pose(self, pose, cam, measurements, scale_aware_frame=None):
         assert len(measurements) >= self.min_measurements, ('Not enough points')
 
         self.optimizer.clear()
 
-        # offset etc???? etc 
-        if False and self.args.scale_aware:
+        if self.args.scale_aware:
+            # Pose Id: scale_offset + 2*id
             self.optimizer.add_pose(0, pose, cam, fixed=False)
 
-            # Scales #
-            for i in range(scales):
-                self.optimizer.add_scale(i, scales[i])
-                self.optimizer.add_scale_edge(0, i, scales[i])
+            # Scales: edge and vertex #
+            for ii, scale in enumerate(scale_aware_frame.scales):
+                # Scale Id: ii
+                self.optimizer.add_scale(ii, scale, fixed=True)
+                # Edge Id: ii
+                self.optimizer.add_scale_edge(ii, ii, scale)
 
             # BA with one pose #
-            for i, m in enumerate(measurements):
-                self.optimizer.add_point(i, m.mappoint.position, fixed=True)
-                self.optimizer.add_camera_edge(0, i, 0, m)
+            for ii, m in enumerate(measurements):
+                # Point Id: scale_offset + 2*ii + 1
+                self.optimizer.add_point(ii, m.mappoint.position, fixed=True)
+                # Edge Id: scale_offset + 2*ii
+                self.optimizer.add_camera_edge(ii, ii, 0, m.xy)
 
-                self.optimizer.add_depth_scale_consistency_edge(0, i, 0, m.scale_id, m.canonical)
-
+                # Edge Id: scale_offset + 2*ii + 1
+                self.optimizer.add_depth_scale_consistency_edge(ii, ii, 0, m.scale_id_measurement, m.canonical_measurement)
         else:
             self.optimizer.add_pose(0, pose, cam, fixed=False)
             # BA with one pose #
@@ -151,7 +155,8 @@ class RGBDPTAM(object):
             self.reference = self.graph.get_reference_frame(tracked_map)
 
             # BA only 1 pose #
-            pose = self.tracker.refine_pose(frame.pose, frame.cam, measurements)
+            pose = self.tracker.refine_pose(frame.pose, frame.cam, measurements,
+                                            frame.scale_aware_frame)
 
             frame.update_pose(pose)
             self.motion_model.update_pose(frame.timestamp, pose.position(), pose.orientation())

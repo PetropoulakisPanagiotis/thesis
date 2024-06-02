@@ -184,8 +184,10 @@ class RGBDFrame(Frame, ScaleAwareFrame):
 
         super().__init__(idx, pose, feature, cam, timestamp, pose_covariance)
         self.rgb = Frame(idx, pose, feature, cam, timestamp, pose_covariance)
-        self.scale_aware_frame = ScaleAwareFrame(idx, canonical, canonical_uncertainty, scales, scales_uncertainty,
-                                                 pixel_to_scale_map)
+        self.scale_aware_frame = None
+        if canonical is not None:
+            self.scale_aware_frame = ScaleAwareFrame(idx, canonical, canonical_uncertainty, scales, scales_uncertainty,
+                                                     pixel_to_scale_map)
         self.depth = depth
 
     def virtual_stereo(self, px):
@@ -217,7 +219,7 @@ class RGBDFrame(Frame, ScaleAwareFrame):
             canonical_measurement = None
             covariance_canonical_measurement = None
             scale_id_measurement = None
-            if self.scale_aware_frame.canonical is not None:
+            if self.scale_aware_frame is not None:
                 canonical_measurement = self.scale_aware_frame.canonical[xy[1], xy[0]]
                 covariance_canonical_measurement = self.scale_aware_frame.canonical_uncertainty[xy[1], xy[0]]
                 scale_id_measurement = self.scale_aware_frame.pixel_to_scale_map[xy[1], xy[0]]
@@ -287,7 +289,7 @@ class RGBDFrame(Frame, ScaleAwareFrame):
             canonical_measurement = None
             covariance_canonical_measurement = None
             scale_id_measurement = None
-            if self.scale_aware_frame.canonical is not None:
+            if self.scale_aware_frame is not None:
                 canonical_measurement = self.scale_aware_frame.canonical[xy[1], xy[0]]
                 covariance_canonical_measurement = self.scale_aware_frame.canonical_uncertainty[xy[1], xy[0]]
                 scale_id_measurement = self.scale_aware_frame.pixel_to_scale_map[xy[1], xy[0]]
