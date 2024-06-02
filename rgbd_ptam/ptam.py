@@ -77,7 +77,7 @@ class RGBDPTAM(object):
         self.args = args
 
         self.graph = CovisibilityGraph()
-        self.mapping = MappingThread(self.graph, params)
+        self.mapping = MappingThread(self.graph, params, args)
         self.tracker = Tracking(params, args)
         self.motion_model = MotionModel(params)
 

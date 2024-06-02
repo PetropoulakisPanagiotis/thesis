@@ -281,9 +281,10 @@ class LocalBA(object):
 class LocalBAScaleAware(object):
     def __init__(self, ):
         self.optimizer = BundleAdjustmentScaleAware()
-        self.measurements = []  # Measurements, can be both from optimized non-optimzed pose frames
-        self.keyframes = []  # Frames that their pose is optimized
+        self.measurements = {}  # Measurements, can be both from optimized non-optimzed pose frames
+        self.keyframes = []     # Frames that their pose is optimized
         self.mappoints = set()  # Only add 3D points that belong to frames that their pose is optimized
+        self.scales_start = []  # Each frame has a scale, save indexes for easy mapping 
 
         # threshold for confidence interval of 95%
         self.huber_threshold = 5.991
@@ -308,8 +309,8 @@ class LocalBAScaleAware(object):
 
                 # Add pose - 2D measurement constraint alogn with 3D point #
                 edge_id = len(self.measurements)
-                self.optimizer.add_edge(edge_id, pt.id, kf.id, m)
-                self.measurements.append(m)
+                self.optimizer.add_camera_edge(edge_id, pt.id, kf.id, m.xy)
+                self.measurements[2*edge_id + self.optimizer.scale_offset] = m
 
         for kf in fixed_keyframes:
             self.optimizer.add_pose(kf.id, kf.pose, kf.cam, fixed=True)
@@ -319,8 +320,8 @@ class LocalBAScaleAware(object):
             for m in kf.measurements():
                 if m.mappoint in self.mappoints:
                     edge_id = len(self.measurements)
-                    self.optimizer.add_edge(edge_id, m.mappoint.id, kf.id, m)
-                    self.measurements.append(m)
+                    self.optimizer.add_camera_edge(edge_id, m.mappoint.id, kf.id, m.xy)
+                    self.measurements[2*edge_id + self.optimizer.scale_offset] = m
 
     def update_points(self):
         for mappoint in self.mappoints:
@@ -341,8 +342,9 @@ class LocalBAScaleAware(object):
     def get_bad_measurements(self):
         bad_measurements = []
         for edge in self.optimizer.active_edges():
-            if edge.chi2() > self.huber_threshold:
-                bad_measurements.append(self.measurements[edge.id()])
+            if isinstance(edge, g2o.EdgeCustomCamera):
+                if edge.chi2() > self.huber_threshold:
+                    bad_measurements.append(self.measurements[edge.id()])
         return bad_measurements
 
     def clear(self):

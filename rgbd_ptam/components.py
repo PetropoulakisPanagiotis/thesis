@@ -313,6 +313,10 @@ class RGBDFrame(Frame, ScaleAwareFrame):
         super().update_pose(pose)
         self.rgb.update_pose(pose)
 
+    def update_scale(self, scales: list):
+        if self.scale_aware_frame is not None:
+            self.scale_aware_frame.scales = scales
+
     def can_view(self, mappoints):  # batch version
         points = []
         point_normals = []

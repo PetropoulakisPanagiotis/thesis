@@ -8,7 +8,7 @@ import time
 from itertools import chain
 from collections import defaultdict
 
-from optimization import LocalBA
+from optimization import LocalBA, LocalBAScaleAware
 from components import Measurement
 """
 Map used in MappingThread - is-a
@@ -16,12 +16,12 @@ Map used in MappingThread - is-a
 
 
 class Mapping(object):
-    def __init__(self, graph, params):
+    def __init__(self, graph, params, args):
         self.graph = graph
         self.params = params
+        self.args = args
         self.local_keyframes = []
-
-        self.optimizer = LocalBA()
+        self.optimizer = LocalBA() if not args.scale_aware else LocalBAScaleAware()
 
     # The same logic is applied maintenance function  #
     # This base method is not called at MappingThread #
@@ -160,8 +160,8 @@ class Mapping(object):
 
 
 class MappingThread(Mapping):
-    def __init__(self, graph, params):
-        super().__init__(graph, params)
+    def __init__(self, graph, params, args):
+        super().__init__(graph, params, args)
 
         self._requests_cv = Condition()
         self._requests = [False, False]  # requests: [LOCKWINDOW_REQUEST, PROCESS_REQUEST]
