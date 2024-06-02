@@ -284,7 +284,7 @@ class LocalBAScaleAware(object):
         self.measurements = {}  # Measurements, can be both from optimized non-optimzed pose frames
         self.keyframes = []     # Frames that their pose is optimized
         self.mappoints = set()  # Only add 3D points that belong to frames that their pose is optimized
-        self.scales_start = []  # Each frame has a scale, save indexes for easy mapping 
+        self.scales_start = [0]  # Each frame has a scale, save indexes for easy mapping 
 
         # threshold for confidence interval of 95%
         self.huber_threshold = 5.991
@@ -292,12 +292,19 @@ class LocalBAScaleAware(object):
     def set_data(self, adjust_keyframes, fixed_keyframes):
         self.clear()  # Empty buffers
         # Note: for edge_id, we add the id of the self.measurements list #
-
         for kf in adjust_keyframes:
             # Pose id: scale_offset + 2*id
             self.optimizer.add_pose(kf.id, kf.pose, kf.cam, fixed=False)
             self.keyframes.append(kf)
+            # Add scales #
+            for ii, scale in enumerate(kf.scale_aware_frame.scales):
+                # Scale Id: ii + scale_start
+                self.optimizer.add_scale(self.scales_start[-1] + ii, scale, fixed=False)
+                # Edge Id: ii + scale_start
+                self.optimizer.add_scale_edge(self.scales_start[-1] + ii, self.scales_start[-1] + ii, scale,
+                                              information=np.identity(1) * 1./kf.scale_aware_frame.scales_uncertainty[ii])
 
+            self.scales_start.append(self.scales_start[-1] + len(kf.scale_aware_frame.scales))
             for m in kf.measurements():
                 pt = m.mappoint
 
@@ -314,6 +321,15 @@ class LocalBAScaleAware(object):
 
         for kf in fixed_keyframes:
             self.optimizer.add_pose(kf.id, kf.pose, kf.cam, fixed=True)
+            # Add scales #
+            for ii, scale in enumerate(kf.scale_aware_frame.scales):
+                # Scale Id: ii + scale_start
+                self.optimizer.add_scale(self.scales_start[-1] + ii, scale, fixed=True)
+                # Edge Id: ii + scale_start
+                self.optimizer.add_scale_edge(self.scales_start[-1] + ii, self.scales_start[-1] + ii, scale,
+                                              information=np.identity(1) * 1./kf.scale_aware_frame.scales_uncertainty[ii])
+
+            self.scales_start.append(self.scales_start[-1] + len(kf.scale_aware_frame.scales))
 
             # Local 3D points can be visible to frames outside the window #
             # Add these pose contraints                                   #
@@ -336,9 +352,12 @@ class LocalBAScaleAware(object):
             keyframe.update_preceding()
 
     def update_scales(self):
-        for keyframe in self.keyframes:
-            pass
-
+        for ii, keyframe in enumerate(self.keyframes):
+            scales = []
+            for jj in range(len(keyframe.scale_aware_frame.scales)):
+                scale = self.optimizer.get_scale(self.scales_start[ii] + jj)
+                scales.append(scale)
+            keyframe.update_scale(scales)
     def get_bad_measurements(self):
         bad_measurements = []
         for edge in self.optimizer.active_edges():
@@ -352,6 +371,7 @@ class LocalBAScaleAware(object):
         self.keyframes.clear()
         self.mappoints.clear()
         self.measurements.clear()
+        self.scales_start = [0]
 
     def abort(self):
         self.optimizer.abort()

@@ -92,6 +92,8 @@ class Mapping(object):
         completed = self.optimizer.optimize(self.params.ba_max_iterations)
         self.optimizer.update_poses()
         self.optimizer.update_points()
+        if self.args.scale_aware:
+            self.optimizer.update_scales()
         if completed:
             self.remove_measurements(self.optimizer.get_bad_measurements())
 
