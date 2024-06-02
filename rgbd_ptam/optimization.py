@@ -291,6 +291,7 @@ class LocalBAScaleAware(object):
 
     def set_data(self, adjust_keyframes, fixed_keyframes):
         self.clear()  # Empty buffers
+
         # Note: for edge_id, we add the id of the self.measurements list #
         for kf in adjust_keyframes:
             # Pose id: scale_offset + 2*id
@@ -304,7 +305,6 @@ class LocalBAScaleAware(object):
                 self.optimizer.add_scale_edge(self.scales_start[-1] + ii, self.scales_start[-1] + ii, scale,
                                               information=np.identity(1) * 1./kf.scale_aware_frame.scales_uncertainty[ii])
 
-            self.scales_start.append(self.scales_start[-1] + len(kf.scale_aware_frame.scales))
             for m in kf.measurements():
                 pt = m.mappoint
 
@@ -318,6 +318,12 @@ class LocalBAScaleAware(object):
                 edge_id = len(self.measurements)
                 self.optimizer.add_camera_edge(edge_id, pt.id, kf.id, m.xy)
                 self.measurements[2*edge_id + self.optimizer.scale_offset] = m
+
+                # Edge Id: scale_offset + 2*ii + 1
+                self.optimizer.add_depth_scale_consistency_edge(ii, ii, kf.id, m.scale_id_measurement, m.canonical_measurement,
+                                                                information=np.identity(1) * 1./m.covariance_canonical_measurement)
+
+            self.scales_start.append(self.scales_start[-1] + len(kf.scale_aware_frame.scales))
 
         for kf in fixed_keyframes:
             self.optimizer.add_pose(kf.id, kf.pose, kf.cam, fixed=True)
