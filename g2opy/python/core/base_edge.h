@@ -21,10 +21,10 @@ void templatedBaseEdge(py::module & m, const std::string & suffix) {
     py::class_<CLS, OptimizableGraph::Edge>(m, ("BaseEdge" + suffix).c_str())
         //.def(py::init<>())
         .def("chi2", &CLS::chi2)
-        //.def("error_data", (double* (CLS::*) ()) &CLS::errorData)                                                           // -> data*
+        .def("error_data", (double* (CLS::*) ()) &CLS::errorData)                                                           // -> data*
         .def("error", (ErrorVector& (CLS::*) ()) &CLS::error)                                                           // -> ErrorVector
 
-        //.def("information_data", (double* (CLS::*) ()) &CLS::informationData)                                                           // -> data*
+        .def("information_data", (double* (CLS::*) ()) &CLS::informationData)                                                           // -> data*
         .def("information", (InformationType& (CLS::*) ()) &CLS::information)                                                           // -> InformationType
         .def("set_information", &CLS::setInformation,
                 "information"_a,
@@ -53,10 +53,10 @@ void templatedDynamicBaseEdge(py::module & m, const std::string & suffix) {
 
     py::class_<CLS, OptimizableGraph::Edge>(m, ("DynamicBaseEdge" + suffix).c_str())
         .def("chi2", &CLS::chi2)
-        //.def("error_data", (double* (CLS::*) ()) &CLS::errorData)                                                           // -> data*
+        .def("error_data", (double* (CLS::*) ()) &CLS::errorData)                                                           // -> data*
         .def("error", (ErrorVector& (CLS::*) ()) &CLS::error)                                                           // -> ErrorVector
 
-        //.def("information_data", (double* (CLS::*) ()) &CLS::informationData)                                                           // -> data*
+        .def("information_data", (double* (CLS::*) ()) &CLS::informationData)                                                           // -> data*
         .def("information", (InformationType& (CLS::*) ()) &CLS::information)                                                           // -> InformationType
         .def("set_information", &CLS::setInformation,
                 "information"_a,
