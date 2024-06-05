@@ -252,7 +252,7 @@ class ScanNetMeta:
         549     # all labels in the dataset -> Benchmark200 with mapping 549 -> tsv ids
     )
     SEMANTIC_N_CLASSES = (
-        20,     # subset of nyuv2 classes -> Benchmark with mapping 20 -> 40
+        40, #nyuv2 classes
     )
 
     # ScanNet benchmark uses a subset of 20 classes from the original 40

@@ -388,7 +388,7 @@ def get_out_path_dict(
 
             #dirs of semantic img
             for n_class in ScanNetMeta.SEMANTIC_N_CLASSES:
-                if n_class != 20:
+                if n_class != 40:
                     continue
                 # add non colored dir
                 out_paths[f'sem_{mode}_{n_class}_dir'] = os.path.join(
@@ -724,7 +724,7 @@ def parse_scene(
         sem_zip = NICRImageZip(sem_path, blacklist)
 
         for n_class in ScanNetMeta.SEMANTIC_N_CLASSES:
-            if n_class != 20:
+            if n_class != 40:
                 continue
             # add non colored export
             sem_zip.add_export(

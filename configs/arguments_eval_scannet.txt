@@ -8,7 +8,8 @@
 
 --data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
 --gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
---filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/debug.txt
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train_debug.txt
+
 --min_depth_eval 1e-3
 --max_depth_eval 10
 --eigen_crop
@@ -19,10 +20,12 @@
 --exp_name eval
 --log_directory /usr/stud/petp/code/thesis/tmp/
 --padding 0
+--d3vo
+--d3vo_c
 
 --bin_num 40
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
 
---checkpoint_path /usr/stud/petp/code/thesis/tmp/segu-6/nyu/model-16800-best_silog_13.79530
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_sem_1/nyu/model-85-best_unc_d3vo_2.43455

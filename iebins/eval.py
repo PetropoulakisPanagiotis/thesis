@@ -142,7 +142,7 @@ def eval_func(model, dataloader_eval):
                     sigma_m = s**2 * sigma_c + c**2 * sigma_s
                     sigma_m = sigma_m.unsqueeze(0)
                 # Fair comparison segmentation - instances: use eval_per_class.sh script   
-                if True:
+                if False:
                     if args.pick_class != 0:    
                         non_class = torch.nonzero(labels[0] != args.pick_class)
                         if non_class.shape[0] == 63:
@@ -164,6 +164,7 @@ def eval_func(model, dataloader_eval):
                     gt_depth = (gt_depth * mask)
             else:
                 pred_depth = pred_depths_r_list[-1]
+
             # Tensorboard            
             if args.d3vo:
                 tb_visualization_d3vo(writer, global_step=step, args=args, current_loss_d3vo=None, current_lr=None, var_sum=None, var_cnt=None, \

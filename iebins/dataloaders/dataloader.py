@@ -1,6 +1,8 @@
 import json
 
 from PIL import Image
+from scipy.io import loadmat
+import numpy as np
 
 import torch
 from torch.utils.data import DataLoader
@@ -19,12 +21,15 @@ class DataLoaderCustom(object):
             self.num_instances = 63 # Max instances in one image
 
         if args.dataset == 'scannet':
+            mapping_40_to_13 = loadmat('/usr/stud/petp/storage/user/petp/datasets/bts/utils/class13Mapping.mat')['classMapping13'][0][0]
+            self.mapping_40_to_13 = np.concatenate([[0], mapping_40_to_13[0][0]])
+            
             self.semantic_classes = ('void','bed', 'books','ceiling', 'chair','floor', 'furniture', 'objects', 'picture', 'sofa', 'table', 'tv', 'wall', 'window')
             self.num_semantic_classes = len(self.semantic_classes)
             self.num_instances = 20 # Max instances in one image
 
         if mode == 'train':
-            self.training_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation))
+            self.training_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation, self.mapping_40_to_13))
 
             if args.distributed:
                 self.train_sampler = torch.utils.data.distributed.DistributedSampler(self.training_samples)
@@ -39,7 +44,7 @@ class DataLoaderCustom(object):
 
         elif mode == 'online_eval':
             
-            self.testing_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation))
+            self.testing_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation, self.mapping_40_to_13))
             if args.distributed:
                 # self.eval_sampler = torch.utils.data.distributed.DistributedSampler(self.testing_samples, shuffle=False)
                 self.eval_sampler = DistributedSamplerNoEvenlyDivisible(self.testing_samples, shuffle=False)
@@ -53,14 +58,14 @@ class DataLoaderCustom(object):
                                    sampler=self.eval_sampler)
         
         elif mode == 'test':
-            self.testing_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation))
+            self.testing_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation, self.mapping_40_to_13))
             self.data = DataLoader(self.testing_samples, 1, shuffle=False, num_workers=1)
 
         else:
             print('mode should be one of \'train, test, online_eval\'. Got {}'.format(mode))
 
 
-def preprocessing_transforms(mode, segmentation):
+def preprocessing_transforms(mode, segmentation, classes_mapping=None):
     return transforms.Compose([
-        ToTensorCustom(mode=mode, segmentation=segmentation)
+        ToTensorCustom(mode=mode, segmentation=segmentation, classes_mapping=classes_mapping)
     ])

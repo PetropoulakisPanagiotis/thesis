@@ -1,0 +1,28 @@
+--model_name iebins_nyu
+--encoder tiny07
+--dataset scannet
+--input_height 480
+--input_width 640
+
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scene0655_01.txt
+
+--min_depth_test 1e-3
+--max_depth_test 10
+
+--update_block 1
+--loss_type 1
+--segmentation
+--virtual_depth_variation 0
+
+--bin_num 40
+--min_depth 0
+--max_depth 1
+--max_tree_depth 1
+--bins_scale 50
+--d3vo
+--d3vo_c
+
+--save_dir /usr/stud/petp/storage/user/petp/datasets/predictions/
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_sem_1/nyu/model-85-best_unc_d3vo_2.43455

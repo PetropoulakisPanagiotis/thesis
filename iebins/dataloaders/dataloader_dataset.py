@@ -19,6 +19,7 @@ class DatasetPreprocess(Dataset):
         self.args = args
 
         if self.args.dataset == 'scannet':
+
             if mode == 'train':
                 with open(args.filenames_file, 'r') as f:
                     self.filenames = f.read().splitlines()
@@ -326,11 +327,12 @@ class DatasetPreprocess(Dataset):
 
 
 class ToTensorCustom(object):
-    def __init__(self, mode, segmentation):
+    def __init__(self, mode, segmentation, classes_mapping=None):
         self.mode = mode
         self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         self.max_instances = 63 
         self.segmentation = segmentation
+        self.classes_mapping = classes_mapping # mapp original segmentation map to a smaller subset of classes
 
     def __call__(self, sample_dataset):
 
@@ -423,7 +425,7 @@ class ToTensorCustom(object):
             result_dict['instances_areas'] = instances_areas
 
         elif dataset == 'scannet' and self.segmentation:
-            seg_map, instances_map, boxes, instances_labels = load_image_annotations_scannet(sample['dataset_path'], sample['filename'])
+            seg_map, instances_map, boxes, instances_labels = load_image_annotations_scannet(sample['dataset_path'], sample['filename'], mapping_40_to_13=self.classes_mapping)
 
             segmentation_map = torch.from_numpy(seg_map)
             
@@ -512,7 +514,7 @@ def load_image_annotations_nyu(json_file_path):
            np.asarray(areas_instances, dtype=np.int32), num_semantic_classes
 
 
-def load_image_annotations_scannet(dataset_path, filename, num_classes=14):
+def load_image_annotations_scannet(dataset_path, filename, mapping_40_to_13, num_classes=14):
 
         # Extrinsics #
         extr_path = dataset_path + "extrinsics/" + filename + ".json"
@@ -528,20 +530,13 @@ def load_image_annotations_scannet(dataset_path, filename, num_classes=14):
         seg_map, instances_map, boxes = None, None, None
         if 'test/' not in dataset_path:
             # Segmentation #
-            seg_path = dataset_path + "semantic_refined_13/"+ filename + ".png"
+            seg_path = dataset_path + "semantic_refined_40/"+ filename + ".png"
             seg_map_original = cv2.imread(seg_path, cv2.IMREAD_UNCHANGED)
+       
+            seg_map_original = mapping_40_to_13[seg_map_original] # + null of course so 14 
 
             # (class, h, w) #
             seg_map = create_one_hot_mask_classes_np(seg_map_original, num_classes)
-            """
-            segmentation_colored = np.zeros((seg_map.shape[0], seg_map.shape[1], 3), dtype=np.uint8)
-            for class_idx, color in self.color_mappings.items():
-                segmentation_colored[seg_map == class_idx] = color
-                print(class_idx)
-            cv2.imshow('Segmentation Map Colored', segmentation_colored)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-            """
 
             # Instances #
             inst_path = dataset_path + "instance_refined/" + filename + ".png"
@@ -556,7 +551,7 @@ def create_one_hot_mask_classes_np(segmentation_map, num_classes):
     # segmentation_map: (h, w)
     # (classes, h, w)
     one_hot_mask = np.zeros((num_classes, *segmentation_map.shape), dtype=np.float32)
-    
+
     """
     data = custom_cmap_instances(segmentation_map / np.max(segmentation_map))  
     data = data[:, :] * 255
@@ -564,7 +559,7 @@ def create_one_hot_mask_classes_np(segmentation_map, num_classes):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     """
-
+    
     # Set the corresponding class index to 1
     for class_idx in range(num_classes):
         one_hot_mask[class_idx] = (segmentation_map == class_idx).astype(np.float32)
