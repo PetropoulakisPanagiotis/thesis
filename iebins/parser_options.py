@@ -42,7 +42,7 @@ train_parser.add_argument('--instances',                 dest='instances',    he
 train_parser.add_argument('--roi_align',                 type=int,   help='use roi align', default='0')
 train_parser.add_argument('--roi_align_size',            type=int,   help='size of roi align', default='32')
 train_parser.add_argument('--bins_scale',                type=int,   help='Bins for scale', default='100')
-train_parser.add_argument('--virtual_depth_variation',    type=int,   help='0 for scale/shift, for 1 for scale regression and 2 for scale with bins', default='0')
+train_parser.add_argument('--virtual_depth_variation',    type=int,   help='0 for scale/shift, for 1 for scale regression and 2 for scale with bins', default='1')
 
 # Log and save
 train_parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
@@ -122,7 +122,7 @@ eval_parser.add_argument('--padding_instances',         type=int,            hel
 eval_parser.add_argument('--d3vo',                      help='d3vo uncertainty variation', action='store_true')
 eval_parser.add_argument('--d3vo_c',                    help='d3vo uncertainty variation canonical', action='store_true')
 eval_parser.add_argument('--bins_scale',                type=int,   help='Bins for scale', default='100')
-eval_parser.add_argument('--virtual_depth_variation',   type=int,   help='0 for scale/shift, for 1 for scale regression and 2 for scale with bins', default='0')
+eval_parser.add_argument('--virtual_depth_variation',   type=int,   help='0 for scale/shift, for 1 for scale regression and 2 for scale with bins', default='1')
 eval_parser.add_argument('--roi_align',                 type=int,   help='use roi align', default='0')
 eval_parser.add_argument('--roi_align_size',            type=int,   help='size of roi align', default='32')
 
@@ -174,7 +174,7 @@ test_parser.add_argument('--padding_instances',         type=int,            hel
 test_parser.add_argument('--d3vo',                      help='d3vo uncertainty variation', action='store_true')
 test_parser.add_argument('--d3vo_c',                    help='d3vo uncertainty variation canonical', action='store_true')
 test_parser.add_argument('--bins_scale',                type=int,   help='Bins for scale', default='100')
-test_parser.add_argument('--virtual_depth_variation',   type=int,   help='0 for scale/shift, for 1 for scale regression and 2 for scale with bins', default='0')
+test_parser.add_argument('--virtual_depth_variation',   type=int,   help='0 for scale/shift, for 1 for scale regression and 2 for scale with bins', default='1')
 test_parser.add_argument('--roi_align',                 type=int,   help='use roi align', default='0')
 test_parser.add_argument('--roi_align_size',            type=int,   help='size of roi align', default='32')
 

@@ -120,7 +120,42 @@ def predict(model, dataloader_eval) -> None:
 
         cv2.imwrite(args.save_dir + 'depth/' + filename, map_float_data_to_int(pred_depth, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
         if args.instances:
-            pass
+            # Scale #
+            scale = result['pred_scale_instances_list'][-1].cpu().numpy()[0].tolist()
+            scale_data = {'scale': scale, 'scale_type': 'instancesse'}
+            scale_idx = [i for i in range(len(scale))]            
+            
+            scale_idx_tensor = torch.tensor(scale_idx, dtype=torch.int16).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).to(device=instances.device)
+          
+            scale_map = torch.sum((instances * scale_idx_tensor), dim=1).to(torch.int16).squeeze(0)
+            cv2.imwrite(args.save_dir + 'scale_map/' + filename, scale_map.cpu().numpy(), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+
+            valid_scales = torch.unique(scale_map).cpu().numpy().tolist()
+            scale_data['valid'] = [1 if scale_idx_item in valid_scales else 0 for scale_idx_item in scale_idx]
+
+            # Canonical #    
+            canonical = torch.sum((instances * result["pred_depths_instances_rc_list"][-1]), dim=1)
+            canonical = canonical.cpu().numpy().squeeze()
+            
+            cv2.imwrite(args.save_dir + 'canonical/' + filename, map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])    
+
+            # Uncertainty canonical and scale #
+            if args.d3vo:
+                if args.d3vo_c:
+                    canonical_unc = result["unc_d3vo_c"].squeeze(0).squeeze(0)              
+                else:
+                    canonical_unc = result["uncertainty_maps_list"].squeeze(0).squeeze(0) ** 2            
+                
+                scale_unc = result["unc_d3vo"].squeeze(0).cpu().numpy().tolist()
+                scale_data['scale_uncertainty'] = scale_unc
+
+                canonical_unc = canonical_unc.cpu().numpy()    
+            
+                np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
+   
+            with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:           
+                json.dump(scale_data, file, indent=4)
+
         elif args.segmentation:
             # Scale #
             scale = result['pred_scale_list'][-1].cpu().numpy()[0].tolist()

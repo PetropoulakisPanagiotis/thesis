@@ -306,12 +306,12 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
         for i in range(num_semantic_classes):       
             self.p_heads.append(PHead(128 + 1, 128, bin_num=bin_num+1))
             
-            if self.virtual_depth_variation == 0:
-                self.s_heads.append(SSHead(128 + 1, num_out=2))                
-            elif self.virtual_depth_variation == 1:
-                self.s_heads.append(SSHead(128 + 1, num_out=1))                
-            elif self.virtual_depth_variation == 2:
-                self.s_heads.append(SHead(128 + 1, num_bins=self.bins_scale+1))                
+            #if self.virtual_depth_variation == 0:
+            self.s_heads.append(SSHead(128 + 1, num_out=2))                
+            #elif self.virtual_depth_variation == 1:
+            #    self.s_heads.append(SSHead(128 + 1, num_out=1))                
+            #elif self.virtual_depth_variation == 2:
+            #    self.s_heads.append(SHead(128 + 1, num_bins=self.bins_scale+1))                
 
     def forward(self, depth, context, input_feature_map, bin_num, min_depth, max_depth, masks):
         pred_depths_r_list = []    # Metric 
@@ -383,15 +383,15 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
         pred_depths_rc_list.append(depth_rc)
         pred_scale_shift = torch.cat(pred_scale_shift, dim=1) 
         
-        if self.virtual_depth_variation == 0:
-            pred_scale_list.append(pred_scale_shift[:, ::2])  # b, scale
-            pred_shift_list.append(pred_scale_shift[:, 1::2]) # b, shift
-        elif self.virtual_depth_variation == 1:
-            pred_scale_list.append(pred_scale_shift)
-        elif self.virtual_depth_variation == 2:
-            uncertainty_maps_scale_list.append(uncertainty_map_scale)
-            pred_depths_scale_c_list.append(c_map_scale)
-            pred_scale_list.append(pred_scale_shift)
+        #if self.virtual_depth_variation == 0:
+        pred_scale_list.append(pred_scale_shift[:, ::2])  # b, scale
+        pred_shift_list.append(pred_scale_shift[:, 1::2]) # b, shift
+        #elif self.virtual_depth_variation == 1:
+        #    pred_scale_list.append(pred_scale_shift)
+        #elif self.virtual_depth_variation == 2:
+        #    uncertainty_maps_scale_list.append(uncertainty_map_scale)
+        #    pred_depths_scale_c_list.append(c_map_scale)
+        #    pred_scale_list.append(pred_scale_shift)
 
           
         # Metric

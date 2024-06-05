@@ -194,7 +194,6 @@ def main_worker(gpu, ngpus_per_node, args):
             if args.instances:
                 pred_depths_instances_rc_list = result["pred_depths_instances_rc_list"]
                 pred_depths_instances_r_list = result["pred_depths_instances_r_list"]
-
                 pred_scale_instances_list = result["pred_scale_instances_list"]
                 pred_shift_instances_list = result["pred_shift_instances_list"]
             else:              
@@ -227,27 +226,29 @@ def main_worker(gpu, ngpus_per_node, args):
             # Train only uncertainty decoder, most of the weights are frozen #
             if args.d3vo:
                 if args.d3vo_c:
-                    sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1], unc_d3vo_c, pred_scale_list[-1], unc_d3vo, args)
+                    if not args.instances:
+                        sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1], unc_d3vo_c, pred_scale_list[-1], unc_d3vo, args)
+                    else:
+                        sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_instances_rc_list[-1], unc_d3vo_c, pred_scale_instances_list[-1], unc_d3vo, args)
                 else:
                     # uncertainty of canonical is std --> convert to variance
                     sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1], uncertainty_maps_list[-1] ** 2, pred_scale_list[-1], unc_d3vo, args)
 
-                if args.segmentation:
+                if args.instances:
+                    sigma_metric = torch.sum((sigma_metric * instances), dim=1).unsqueeze(1)
+                    pred_d = torch.sum((pred_depths_instances_rc_list[-1] * instances), dim=1).unsqueeze(1)
+                elif args.segmentation:
                     sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).unsqueeze(1)
                     pred_d = torch.sum((pred_depths_rc_list[-1] * segmentation_map), dim=1).unsqueeze(1)
-                elif args.instances:
-                    pass
                 else:
                     pred_d = pred_depths_r_list[-1]
-
+                
                 loss = d3vo_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))
                 current_loss_d3vo = loss
             else: # Depth loss #
                 for curr_tree_depth in range(args.max_tree_depth):
                     if args.instances:
                         pred_d = torch.sum((pred_depths_instances_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
-                        instances_gt_mask = torch.sum(instances, dim=1).unsqueeze(1).to(torch.bool)
-                        mask = mask * instances_gt_mask 
                     elif args.segmentation:
                         pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * segmentation_map), dim=1).unsqueeze(1)
                     else:

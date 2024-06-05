@@ -70,7 +70,7 @@ def get_instances_masks(labels_map, instances_map):
     H, W = labels_map.shape
 
     min_instance_area = 0.0025 * H * W
-    offset = 2
+    offset = 0
 
     for ii in range(N):
         tmp = np.logical_and(labels_map == pairs[ii, 0], instances_map == pairs[ii, 1])

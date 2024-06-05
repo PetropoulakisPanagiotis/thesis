@@ -14,18 +14,19 @@
 --max_depth_eval 10
 --eigen_crop
 
---update_block 1
+--update_block 2
 --segmentation
+--instances
 --loss_type 1
+--virtual_depth_variation 1
+--var 1
 --exp_name eval
 --log_directory /usr/stud/petp/code/thesis/tmp/
 --padding 0
---d3vo
---d3vo_c
 
 --bin_num 40
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
 
---checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_sem_1/nyu/model-85-best_unc_d3vo_2.43455
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_ins_1/nyu/model-5-best_silog_54.88268

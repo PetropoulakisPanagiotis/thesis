@@ -1,6 +1,7 @@
 --mode train
+--retrain
 --pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
---checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_sem_1/nyu/model-35-best_silog_9.99336
+--checkpoint_path /usr/stud/petp/code/saved_models/nyu_T.pth
 
 --dataset scannet
 --data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
@@ -21,7 +22,7 @@
 --input_width 640
 
 --batch_size 2
---num_epochs 100
+--num_epochs 150
 --learning_rate 2e-4
 --weight_decay 1e-2
 --adam_eps 1e-3
@@ -32,12 +33,12 @@
 
 --eigen_crop
 
---exp_name scannet_sem_1
---update_block 1
+--exp_name scannet_ins_1
+--update_block 2
 --segmentation
---virtual_depth_variation 0
---d3vo
---d3vo_c
+--instances
+--var 1
+--virtual_depth_variation 1
 
 --loss_type 1
 --bin_num 40

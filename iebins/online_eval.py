@@ -59,15 +59,21 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
             
             if args.d3vo:
                 if args.d3vo_c:
-                    sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1], result["unc_d3vo_c"], result["pred_scale_list"][-1], result["unc_d3vo"], args)
+                    if not args.instances:
+                        sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1], result["unc_d3vo_c"], result["pred_scale_list"][-1], result["unc_d3vo"], args)
+                    else:
+                        sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_instances_rc_list"][-1], result["unc_d3vo_c"], result["pred_scale_instances_list"][-1], result["unc_d3vo"], args)
                 else:
                     # uncertainty of canonical is std --> convert to variance
                     sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1], result["uncertainty_maps_list"][-1] ** 2, result["pred_scale_list"][-1], result["unc_d3vo"], args)
-                if args.segmentation:
+                
+                if args.instances:
+                    sigma_metric = torch.sum((sigma_metric * instances), dim=1).squeeze(0).cpu().numpy()
+                elif args.segmentation:
                     sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).squeeze(0).cpu().numpy()
                 else:
                     sigma_metric = sigma_metric.squeeze(0).squeeze(0).cpu().numpy()
-                
+            
             # Mask gt_depth #
             if args.instances:
                 mask = torch.sum(instances, dim=1).squeeze(0).to(torch.bool).cpu()
