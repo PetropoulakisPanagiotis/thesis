@@ -119,14 +119,26 @@ def predict(model, dataloader_eval) -> None:
         normalization_const_depth = 1e3
 
         cv2.imwrite(args.save_dir + 'depth/' + filename, map_float_data_to_int(pred_depth, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
-        if args.segmentation:
+        if args.instances:
+            pass
+        elif args.segmentation:
             # Scale #
-            scale = result['pred_scale_list'][-1].cpu().numpy()
-            exit()
-            scale_data = {'scale': [scale], 'scale_type': 'single'}            
+            scale = result['pred_scale_list'][-1].cpu().numpy()[0].tolist()
+            scale_data = {'scale': scale, 'scale_type': 'segmentation'}
+            scale_idx = [i for i in range(len(scale))]            
+            
+            scale_idx_tensor = torch.tensor(scale_idx, dtype=torch.int16).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).to(device=segmentation_map.device)
+          
+            scale_map = torch.sum((segmentation_map * scale_idx_tensor), dim=1).to(torch.int16).squeeze(0)
+            cv2.imwrite(args.save_dir + 'scale_map/' + filename, scale_map.cpu().numpy(), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+
+            valid_scales = torch.unique(scale_map).cpu().numpy().tolist()
+            scale_data['valid'] = [1 if scale_idx_item in valid_scales else 0 for scale_idx_item in scale_idx]
 
             # Canonical #    
-            canonical = result['pred_depths_rc_list'][-1].cpu().numpy().squeeze()
+            canonical = torch.sum((segmentation_map * result["pred_depths_rc_list"][-1]), dim=1)
+            canonical = canonical.cpu().numpy().squeeze()
+            
             cv2.imwrite(args.save_dir + 'canonical/' + filename, map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])    
 
             # Uncertainty canonical and scale #
@@ -135,29 +147,29 @@ def predict(model, dataloader_eval) -> None:
                     canonical_unc = result["unc_d3vo_c"].squeeze(0).squeeze(0)              
                 else:
                     canonical_unc = result["uncertainty_maps_list"].squeeze(0).squeeze(0) ** 2            
-
-                scale_unc = float(result["unc_d3vo"].squeeze(0).cpu().numpy().squeeze())
-                scale_data['scale_uncertainty'] = [scale_unc]
+                
+                scale_unc = result["unc_d3vo"].squeeze(0).cpu().numpy().tolist()
+                scale_data['scale_uncertainty'] = scale_unc
 
                 canonical_unc = canonical_unc.cpu().numpy()    
             
-                # Ids of scales -> one scale, hence 0 idx #
-                cv2.imwrite(args.save_dir + 'scale_map/' + filename, np.zeros_like(canonical), [cv2.IMWRITE_PNG_COMPRESSION, 9])
-
                 np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
    
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:           
                 json.dump(scale_data, file, indent=4)
-        elif args.instances:
-            pass
+    
+
         else: # Single scale 
             # Scale #
             scale = float(result['pred_scale_list'][-1].cpu().numpy().squeeze())
-            scale_data = {'scale': [scale], 'scale_type': 'single'}            
-
+            scale_data = {'scale': [scale], 'scale_type': 'single', 'valid': [1]}            
+   
             # Canonical #    
             canonical = result['pred_depths_rc_list'][-1].cpu().numpy().squeeze()
             cv2.imwrite(args.save_dir + 'canonical/' + filename, map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])    
+
+            # Ids of scales -> one scale, hence 0 idx #
+            cv2.imwrite(args.save_dir + 'scale_map/' + filename, np.zeros_like(canonical), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
             # Uncertainty canonical and scale #
             if args.d3vo:
@@ -170,15 +182,13 @@ def predict(model, dataloader_eval) -> None:
                 scale_data['scale_uncertainty'] = [scale_unc]
 
                 canonical_unc = canonical_unc.cpu().numpy()    
-            
-                # Ids of scales -> one scale, hence 0 idx #
-                cv2.imwrite(args.save_dir + 'scale_map/' + filename, np.zeros_like(canonical), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+
 
                 np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
-   
+ 
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:           
                 json.dump(scale_data, file, indent=4)
- 
+            
         if False:
             gt_depth[gt_depth < args.min_depth_test] = args.min_depth_test
             gt_depth[gt_depth > args.max_depth_test] = args.max_depth_test
@@ -241,6 +251,12 @@ def main():
     ngpus_per_node = torch.cuda.device_count()
 
     args.save_dir += args.filenames_file_eval.split('/')[-1].split('.')[0] + '/'
+    if args.instances:
+        args.save_dir += 'instances/'
+    elif args.segmentation:
+        args.save_dir += 'segmentation/'
+    else:
+        args.save_dir += 'single/'
 
     print('Save dir: ', args.save_dir)
     os.makedirs(args.save_dir, exist_ok=True)

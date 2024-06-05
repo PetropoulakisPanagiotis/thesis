@@ -377,7 +377,7 @@ class D3VOHead(nn.Module):
     def forward(self, x):
         x = F.relu(self.pool(self.conv1(x)))
         x = torch.flatten(x, 1)
-        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc1(x)).clamp(min=1e-4)
 
         return x 
 
@@ -392,5 +392,6 @@ class UncertaintyHead(nn.Module):
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
         
     def forward(self, x):
-        x = F.relu(F.relu(self.conv1(x)))
+        x = F.relu(self.conv1(x)).clamp(min=1e-4)
+
         return x 
