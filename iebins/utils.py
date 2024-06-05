@@ -385,4 +385,4 @@ def find_indexes_valid_instances(labels):
     """
     1-dim
     """
-    return torch.nonzero(labels != 0).squeeze()
+    return torch.nonzero(labels != -1).squeeze()

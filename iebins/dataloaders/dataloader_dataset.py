@@ -391,7 +391,7 @@ class ToTensorCustom(object):
             # Padd to create even batch
             instances_masks = torch.stack([torch.from_numpy(arr.astype(np.float32)) for arr in sample['instances_masks']])
             num_zeros_needed = self.max_instances - instances_masks.shape[0]
-            zero_tensors = [torch.zeros(1, *instances_masks.shape[1:], dtype=torch.int32) for _ in range(num_zeros_needed)]
+            zero_tensors = [-1 * torch.ones(1, *instances_masks.shape[1:], dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_masks = torch.cat([instances_masks] + zero_tensors, dim=0)
 
             """
@@ -407,8 +407,8 @@ class ToTensorCustom(object):
             """
 
             instances_labels = torch.from_numpy(sample['instances_labels'])
-            zero_tensors = [torch.zeros(1, dtype=torch.int32) for _ in range(num_zeros_needed)]
-            instances_labels = torch.cat([instances_labels] + zero_tensors, dim=0)
+            minus_tensors = [-1 * torch.ones(1, dtype=torch.int32) for _ in range(num_zeros_needed)]
+            instances_labels = torch.cat([instances_labels] + minus_tensors, dim=0)
 
             instances_bbox = torch.stack([torch.from_numpy(arr) for arr in sample['instances_bbox']])
             zero_tensors = [torch.zeros((1, 4), dtype=torch.int32) for _ in range(num_zeros_needed)]
@@ -567,23 +567,24 @@ def create_one_hot_mask_classes_np(segmentation_map, num_classes):
     return one_hot_mask
 
 
-def create_instance_masks_and_boxes_scannet_np(seg_map, instance_map, max_instances=20):
+def create_instance_masks_and_boxes_scannet_np(seg_map, instance_map, max_instances=25):
         unique_ids = np.unique(instance_map)
         masks = []
         boxes = []
-        offset = 2
+        offset = 0
         labels = []
-        
+
+        null_class_mask = np.uint8(instance_map == 0)
         # Iterate over the unique instance IDs
         for instance_id in unique_ids:
             if instance_id == 0:  # Skip background
                 continue
 
             instance_mask = np.uint8(instance_map == instance_id)
-
             instance_class = seg_map[np.where(instance_mask)][0]
             # Do not include void instances 
             if instance_class == 0:
+                null_class_mask = np.logical_or(null_class_mask, instance_mask)
                 continue
 
             masks.append(instance_mask)
@@ -606,11 +607,34 @@ def create_instance_masks_and_boxes_scannet_np(seg_map, instance_map, max_instan
             cv2.destroyAllWindows()
             """
 
+        # Null class at the beginning #
+        masks.insert(0, null_class_mask)
+        labels.insert(0, 0)
+        
+        #for t in masks: # Full coverage of image test
+        #    null_class_mask = np.uint8(np.logical_or(t, null_class_mask))
+        
+        ys, xs = np.where(null_class_mask)
+        xmin = max(np.min(xs) - offset, 0)
+        xmax = min(np.max(xs) + offset, null_class_mask.shape[1] - 1)
+        ymin = max(np.min(ys) - offset, 0)
+        ymax = min(np.max(ys) + offset, null_class_mask.shape[0] - 1)
+        boxes.insert(0, np.asarray([xmin, ymin, xmax, ymax]))
+
+        """
+        null_class_mask[null_class_mask == True] = [255]
+        null_class_mask = cv2.cvtColor(null_class_mask, cv2.COLOR_GRAY2BGR)
+        cv2.rectangle(null_class_mask, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+        cv2.imshow("Null", null_class_mask)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        """
+
         # Append zero masks and boxes for remaining instances if needed #
         num_remaining = max_instances - len(masks)
         for _ in range(num_remaining):
             masks.append(np.zeros_like(instance_map, dtype=np.uint8))
             boxes.append(np.asarray([0, 0, 0, 0]))
-            labels.append(0)
-
+            labels.append(-1)
+        
         return masks, boxes, np.array(labels)

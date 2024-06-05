@@ -107,9 +107,7 @@ class ROISelectScale(nn.Module):
         self.fc1 = nn.Linear((70*70) + 4, num_out) # Scale and shift 
  
     def forward(self, x, boxes, labels):
-
         boxes_valid_normalized_projected, num_valid_boxes = get_valid_normalized_projected_boxes(x, boxes, labels, self.downsampling)
-
         out = self.pool(F.relu(self.conv1(x)))
 
         out = torch.flatten(out, 1)

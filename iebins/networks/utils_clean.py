@@ -164,7 +164,7 @@ def get_valid_boxes_idx(boxes, labels):
         boxes_reshaped = boxes.view(b * num_instances, 4)
 
         labels_reshaped = labels.view(b * num_instances, 1)
-        boxes_valid_idx = torch.nonzero(labels_reshaped != 0)
+        boxes_valid_idx = torch.nonzero(labels_reshaped != -1)
 
     return boxes_valid_idx
 
@@ -175,7 +175,7 @@ def get_valid_boxes(boxes, labels):
         boxes_reshaped = boxes.view(b * num_instances, 4)
 
         labels_reshaped = labels.view(b * num_instances, 1)
-        boxes_valid_idx = torch.nonzero(labels_reshaped != 0)
+        boxes_valid_idx = torch.nonzero(labels_reshaped != -1)
 
         boxes_valid = boxes_reshaped[boxes_valid_idx[:, 0]]
         num_valid_boxes, _ = boxes_valid.shape
@@ -201,7 +201,7 @@ def get_valid_num_instances_per_batch(boxes, labels):
 
         boxes_valid, num_valid_boxes = get_valid_boxes(boxes, labels)
 
-        instances_per_batch = torch.nonzero(labels != 0)
+        instances_per_batch = torch.nonzero(labels != -1)
         instances_per_batch = torch.bincount(instances_per_batch[:, 0])
     
 
@@ -261,9 +261,9 @@ def roi_select_features_canonical_shared(feature_map, boxes, labels, downsamplin
         batch_size, num_max_instances = boxes.shape[0:2]
         height, width = feature_map.size(-2), feature_map.size(-1)
 
-        feature_maps_final = torch.zeros((batch_size, num_semantic_classes-1, feature_map.shape[1], height, width)).to(labels.device)
+        feature_maps_final = torch.zeros((batch_size, num_semantic_classes, feature_map.shape[1], height, width)).to(labels.device)
         
-        for class_i in range(num_semantic_classes - 1):
+        for class_i in range(num_semantic_classes):
             instances_per_batch = torch.nonzero(labels == class_i)
             instances_per_batch = torch.bincount(instances_per_batch[:, 0])
 
@@ -377,14 +377,12 @@ def pick_predictions_instances_scale_shift(prediction_scale_shift, labels):
 
     batch_size, labels_max_size = labels.shape[0:2]
 
-    # Prediction --> num_classes - 1 does not include null #
     with torch.no_grad():
         labels_reshaped = labels.view(batch_size*labels_max_size)
         labels_valid_idx = torch.nonzero(labels_reshaped != 0)
         labels_valid_num = labels_valid_idx.shape[0]
 
         labels_valid = labels_reshaped[labels_valid_idx[:,0]]
-        labels_valid -= 1 
 
     pred_scale = prediction_scale_shift[:, ::2]
     pred_shift = prediction_scale_shift[:, 1::2]
@@ -408,15 +406,13 @@ def pick_predictions_instances_scale_shift(prediction_scale_shift, labels):
 def pick_predictions_instances_canonical(prediction, labels): 
     batch_size, labels_max_size = labels.shape[0:2]
     h, w = prediction.shape[2:]
-
-    # Prediction --> num_classes - 1 does not include null #
+    
     with torch.no_grad():
         labels_reshaped = labels.view(batch_size*labels_max_size)
         labels_valid_idx = torch.nonzero(labels_reshaped != 0)
         labels_valid_num = labels_valid_idx.shape[0]
 
         labels_valid = labels_reshaped[labels_valid_idx[:,0]]
-        labels_valid -= 1 
 
     canonical = prediction[torch.arange(labels_valid_num), labels_valid].unsqueeze(1)
 
@@ -444,8 +440,7 @@ def pick_predictions_instances_canonical_shared_class(prediction, labels):
 
     # Pick the correct canonical class for the instances #
     with torch.no_grad():
-        labels_fast = torch.where(labels == 0, 1, labels) 
-        labels_fast -= 1
+        labels_fast = torch.where(labels == -1, 1, labels) 
         labels_fast = labels_fast.view(batch_size*num_max_instances)
     
     prediction = prediction[torch.arange(batch_size*num_max_instances), labels_fast]

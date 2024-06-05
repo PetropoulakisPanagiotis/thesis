@@ -613,11 +613,11 @@ class UniformInstancesSharedCanonical(nn.Module):
      
 
         if self.virtual_depth_variation == 0:
-            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_out=2*(self.num_semantic_classes-1)) # Do not include null 
+            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_out=2*(self.num_semantic_classes))
         elif self.virtual_depth_variation == 1:
-            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_out=self.num_semantic_classes-1) # Do not include null 
+            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_out=self.num_semantic_classes)
         elif self.virtual_depth_variation == 2:
-            self.instances_scale_and_shift = ROISelectScaleBins(128, downsampling=4, num_semantic_classes= self.num_semantic_classes - 1, num_bins=self.bins_scale) # Do not include null 
+            self.instances_scale_and_shift = ROISelectScaleBins(128, downsampling=4, num_semantic_classes= self.num_semantic_classes, num_bins=self.bins_scale)
  
         self.instances_canonical = ROISelectSharedCanonicalUniform(128, bin_num=bin_num+1) 
 
@@ -636,25 +636,25 @@ class UniformInstancesSharedCanonical(nn.Module):
             self.instances_canonical = ROISelectSharedCanonicalHugeUniform(128, bin_num=bin_num+1)       
         if var == 3:
             if self.virtual_depth_variation == 0:
-                self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_out=2*(self.num_semantic_classes-1)) # Do not include null 
+                self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_out=2*(self.num_semantic_classes)) 
             elif self.virtual_depth_variation == 1:
-                self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_out=self.num_semantic_classes-1) # Do not include null 
+                self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_out=self.num_semantic_classes) 
             elif self.virtual_depth_variation == 2:
-                self.instances_scale_and_shift = ROISelectScaleBigBins(128, downsampling=4, num_semantic_classes= self.num_semantic_classes - 1, num_bins=self.bins_scale) # Do not include null 
+                self.instances_scale_and_shift = ROISelectScaleBigBins(128, downsampling=4, num_semantic_classes= self.num_semantic_classes, num_bins=self.bins_scale)
         if var == 4:
             if self.virtual_depth_variation == 0:
-                self.instances_scale_and_shift = ROISelectScaleHuge(128, downsampling=4, num_out=2*(self.num_semantic_classes-1)) # Do not include null 
+                self.instances_scale_and_shift = ROISelectScaleHuge(128, downsampling=4, num_out=2*(self.num_semantic_classes)) 
             elif self.virtual_depth_variation == 1:
-                self.instances_scale_and_shift = ROISelectScaleHuge(128, downsampling=4, num_out=self.num_semantic_classes-1) # Do not include null 
+                self.instances_scale_and_shift = ROISelectScaleHuge(128, downsampling=4, num_out=self.num_semantic_classes) 
             elif self.virtual_depth_variation == 2:
-                self.instances_scale_and_shift = ROISelectScaleHugeBins(128, downsampling=4, num_semantic_classes= self.num_semantic_classes - 1, num_bins=self.bins_scale) # Do not include null 
+                self.instances_scale_and_shift = ROISelectScaleHugeBins(128, downsampling=4, num_semantic_classes= self.num_semantic_classes, num_bins=self.bins_scale) 
         if var == 5:
             if self.virtual_depth_variation == 0:
-                self.instances_scale_and_shift = ROISelectScaleSmall(128, downsampling=4, num_out=2*(self.num_semantic_classes-1)) # Do not include null 
+                self.instances_scale_and_shift = ROISelectScaleSmall(128, downsampling=4, num_out=2*(self.num_semantic_classes))  
             elif self.virtual_depth_variation == 1:
-                self.instances_scale_and_shift = ROISelectScaleSmall(128, downsampling=4, num_out=self.num_semantic_classes-1) # Do not include null 
+                self.instances_scale_and_shift = ROISelectScaleSmall(128, downsampling=4, num_out=self.num_semantic_classes) 
             elif self.virtual_depth_variation == 2:
-                self.instances_scale_and_shift = ROISelectScaleSmallBins(128, downsampling=4, num_semantic_classes= self.num_semantic_classes - 1, num_bins=self.bins_scale) # Do not include null 
+                self.instances_scale_and_shift = ROISelectScaleSmallBins(128, downsampling=4, num_semantic_classes= self.num_semantic_classes, num_bins=self.bins_scale) 
 
         self.relu = nn.ReLU(inplace=True)
 
@@ -723,7 +723,7 @@ class UniformInstancesSharedCanonical(nn.Module):
         canonical_full = torch.zeros((batch_size*max_instances_size, 1, h, w)).to(depth_instances_rc.device)
         
         valid_boxes = labels.view(batch_size * max_instances_size, 1)
-        valid_boxes = torch.nonzero(valid_boxes != 0)
+        valid_boxes = torch.nonzero(valid_boxes != -1)
 
         canonical_full[valid_boxes[:,0]] = depth_instances_rc
         depth_instances_rc = canonical_full.view(batch_size, max_instances_size, h, w)
@@ -773,40 +773,40 @@ class RegressionInstances(nn.Module):
         padding_global = padding_instances
         
   
-        self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-        self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes-1)      
+        self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+        self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes)      
 
         # Pick variation # 
         if var == 1:
-            self.instances_scale_and_shift = ROISelectScaleA(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes-1)       
+            self.instances_scale_and_shift = ROISelectScaleA(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+            self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes)       
         if var == 2:
-            self.instances_scale_and_shift = ROISelectScaleB(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes-1)       
+            self.instances_scale_and_shift = ROISelectScaleB(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+            self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes)       
         if var == 3:
-            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalA(128, num_semantic_classes=self.num_semantic_classes-1)   
+            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+            self.instances_canonical = ROISelectCanonicalA(128, num_semantic_classes=self.num_semantic_classes)   
         if var == 4:
-            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalB(128, num_semantic_classes=self.num_semantic_classes-1)   
+            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+            self.instances_canonical = ROISelectCanonicalB(128, num_semantic_classes=self.num_semantic_classes)   
         if var == 5:
-            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalC(128, num_semantic_classes=self.num_semantic_classes-1)   
+            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+            self.instances_canonical = ROISelectCanonicalC(128, num_semantic_classes=self.num_semantic_classes)   
         if var == 6:
-            self.instances_scale_and_shift = ROISelectScaleB(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalC(128, num_semantic_classes=self.num_semantic_classes-1)          
+            self.instances_scale_and_shift = ROISelectScaleB(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+            self.instances_canonical = ROISelectCanonicalC(128, num_semantic_classes=self.num_semantic_classes)          
         if var == 7:
-            self.instances_scale_and_shift = ROISelectScaleA(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalC(128, num_semantic_classes=self.num_semantic_classes-1) 
+            self.instances_scale_and_shift = ROISelectScaleA(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+            self.instances_canonical = ROISelectCanonicalC(128, num_semantic_classes=self.num_semantic_classes) 
         if var == 8:
-            self.instances_scale_and_shift = ROISelectScaleC(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes-1) 
+            self.instances_scale_and_shift = ROISelectScaleC(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+            self.instances_canonical = ROISelectCanonical(128, 4, num_semantic_classes=self.num_semantic_classes) 
         if var == 9:
-            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalD(128, num_semantic_classes=self.num_semantic_classes-1) 
+            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+            self.instances_canonical = ROISelectCanonicalD(128, num_semantic_classes=self.num_semantic_classes) 
         if var == 10:
-            self.instances_scale_and_shift = ROISelectScaleC(128, downsampling=4, num_semantic_classes=self.num_semantic_classes-1)
-            self.instances_canonical = ROISelectCanonicalD(128, num_semantic_classes=self.num_semantic_classes-1)
+            self.instances_scale_and_shift = ROISelectScaleC(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+            self.instances_canonical = ROISelectCanonicalD(128, num_semantic_classes=self.num_semantic_classes)
 
         self.relu = nn.ReLU(inplace=True)
 
@@ -864,7 +864,7 @@ class RegressionInstancesSharedCanonical(nn.Module):
         self.padding_instances = padding_instances
         padding_global = padding_instances
       
-        self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_out=2*(self.num_semantic_classes-1))
+        self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_out=2*(self.num_semantic_classes))
         self.instances_canonical = ROISelectSharedCanonical(128, num_semantic_classes=1)       
         
         # Pick variation #      
@@ -873,11 +873,11 @@ class RegressionInstancesSharedCanonical(nn.Module):
         if var == 2:
             self.instances_canonical = ROISelectSharedCanonicalHuge(128, num_semantic_classes=1)       
         if var == 3:
-            self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_out=2*(self.num_semantic_classes-1))
+            self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_out=2*(self.num_semantic_classes))
         if var == 4:
-            self.instances_scale_and_shift = ROISelectScaleHuge(128, downsampling=4, num_out=2*(self.num_semantic_classes-1))
+            self.instances_scale_and_shift = ROISelectScaleHuge(128, downsampling=4, num_out=2*(self.num_semantic_classes))
         if var == 5:
-            self.instances_scale_and_shift = ROISelectScaleSmall(128, downsampling=4, num_out=2*(self.num_semantic_classes-1))
+            self.instances_scale_and_shift = ROISelectScaleSmall(128, downsampling=4, num_out=2*(self.num_semantic_classes))
 
         self.relu = nn.ReLU(inplace=True)
 
@@ -951,14 +951,14 @@ class RegressionInstancesSharedCanonicalClass(nn.Module):
         self.padding_instances = padding_instances
         padding_global = padding_instances
       
-        self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_out=2*(self.num_semantic_classes-1))
-        self.instances_canonical = ROISelectCanonicalSharedClass(128, num_semantic_classes=self.num_semantic_classes-1)
+        self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_out=2*(self.num_semantic_classes))
+        self.instances_canonical = ROISelectCanonicalSharedClass(128, num_semantic_classes=self.num_semantic_classes)
         
         # Pick variation #      
         if var == 1 or var == 3:
-            self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_out=2*(self.num_semantic_classes-1))
+            self.instances_scale_and_shift = ROISelectScaleBig(128, downsampling=4, num_out=2*(self.num_semantic_classes))
         if var == 2 or var == 3:
-            self.instances_canonical = ROISelectCanonicalSharedClassBig(128, num_semantic_classes=self.num_semantic_classes-1)
+            self.instances_canonical = ROISelectCanonicalSharedClassBig(128, num_semantic_classes=self.num_semantic_classes)
         
         self.relu = nn.ReLU(inplace=True)
     
@@ -1060,15 +1060,15 @@ class RegressionInstancesSharedCanonicalModuleScale(nn.Module):
         instances_shift = torch.zeros((batch_size*num_max_instances, 1)).to(labels.device)
 
         # Pass class-specific feature maps to appropriate scale head # 
-        for i in range(self.num_semantic_classes-1):
+        for i in range(self.num_semantic_classes):
             with torch.no_grad():
-                valid_boxes_class = torch.nonzero(labels_reshaped == i + 1)
+                valid_boxes_class = torch.nonzero(labels_reshaped == i)
 
                 if valid_boxes_class.shape[0] == 0:
                     continue
 
-            input_feature_map_instances_roi = roi_select_features_module(input_feature_map, boxes, labels, i+1)   
-            scale_shift = self.instances_scale_and_shift[i](input_feature_map_instances_roi, boxes, labels, i+1)
+            input_feature_map_instances_roi = roi_select_features_module(input_feature_map, boxes, labels, i)   
+            scale_shift = self.instances_scale_and_shift[i](input_feature_map_instances_roi, boxes, labels, i)
             
             instances_scale[valid_boxes_class[:, 0]] = scale_shift[:, ::2]
             instances_shift[valid_boxes_class[:, 0]] = scale_shift[:, 1::2]
@@ -1083,7 +1083,7 @@ class RegressionInstancesSharedCanonicalModuleScale(nn.Module):
         instances_canonical = self.instances_canonical(input_feature_map, boxes, labels)
          
         # Copy the shared canonical to all instances #
-        valid_boxes = torch.nonzero(labels_reshaped != 0)
+        valid_boxes = torch.nonzero(labels_reshaped != -1)
         canonical_full = torch.zeros((batch_size*num_max_instances, 1, h, w)).to(instances_canonical.device)
         
         canonical_full[valid_boxes[:,0]] = instances_canonical 
@@ -1160,21 +1160,21 @@ class RegressionInstancesModule(nn.Module):
         canonical_full = torch.zeros((batch_size*num_max_instances, 1, h, w)).to(labels.device)
  
         # Pass class-specific feature maps to appropriate scale and canonical heads # 
-        for i in range(self.num_semantic_classes-1):
+        for i in range(self.num_semantic_classes):
             with torch.no_grad():
-                valid_boxes_class = torch.nonzero(labels_reshaped == i + 1)
+                valid_boxes_class = torch.nonzero(labels_reshaped == i)
 
                 if valid_boxes_class.shape[0] == 0:
                     continue
 
             # Scale/Shift #
-            input_feature_map_instances_roi = roi_select_features_module(input_feature_map, boxes, labels, i+1)   
-            scale_shift = self.instances_scale_and_shift[i](input_feature_map_instances_roi, boxes, labels, i+1)
+            input_feature_map_instances_roi = roi_select_features_module(input_feature_map, boxes, labels, i)   
+            scale_shift = self.instances_scale_and_shift[i](input_feature_map_instances_roi, boxes, labels, i)
             instances_scale[valid_boxes_class[:, 0]] = scale_shift[:, ::2]
             instances_shift[valid_boxes_class[:, 0]] = scale_shift[:, 1::2]
 
             # Canonical #
-            instances_canonical = self.instances_canonical[i](input_feature_map_instances_roi, boxes, labels, i+1)
+            instances_canonical = self.instances_canonical[i](input_feature_map_instances_roi, boxes, labels, i)
             canonical_full[valid_boxes_class[:, 0]] = instances_canonical
 
         # Scale/Shift #

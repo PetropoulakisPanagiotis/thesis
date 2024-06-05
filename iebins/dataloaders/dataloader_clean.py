@@ -21,7 +21,7 @@ class DataLoaderCustom(object):
         if args.dataset == 'scannet':
             self.semantic_classes = ('void','bed', 'books','ceiling', 'chair','floor', 'furniture', 'objects', 'picture', 'sofa', 'table', 'tv', 'wall', 'window')
             self.num_semantic_classes = len(self.semantic_classes)
-            self.num_instances = 20 # Max instances in one image
+            self.num_instances = 25 # Max instances in one image
 
         if mode == 'train':
             self.training_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation))
