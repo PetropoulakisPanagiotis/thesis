@@ -566,8 +566,7 @@ def create_one_hot_mask_classes_np(segmentation_map, num_classes):
         
     return one_hot_mask
 
-
-def create_instance_masks_and_boxes_scannet_np(seg_map, instance_map, max_instances=25):
+def create_instance_masks_and_boxes_scannet_np(seg_map, instance_map, max_instances=65):
         unique_ids = np.unique(instance_map)
         masks = []
         boxes = []
@@ -608,18 +607,18 @@ def create_instance_masks_and_boxes_scannet_np(seg_map, instance_map, max_instan
             """
 
         # Null class at the beginning #
-        masks.insert(0, null_class_mask)
-        labels.insert(0, 0)
-        
-        #for t in masks: # Full coverage of image test
-        #    null_class_mask = np.uint8(np.logical_or(t, null_class_mask))
-        
-        ys, xs = np.where(null_class_mask)
-        xmin = max(np.min(xs) - offset, 0)
-        xmax = min(np.max(xs) + offset, null_class_mask.shape[1] - 1)
-        ymin = max(np.min(ys) - offset, 0)
-        ymax = min(np.max(ys) + offset, null_class_mask.shape[0] - 1)
-        boxes.insert(0, np.asarray([xmin, ymin, xmax, ymax]))
+        if not np.all(null_class_mask == 0):
+            masks.insert(0, null_class_mask)
+            labels.insert(0, 0)
+            
+            #for t in masks: # Full coverage of image test
+            #    null_class_mask = np.uint8(np.logical_or(t, null_class_mask))
+            ys, xs = np.where(null_class_mask)
+            xmin = max(np.min(xs) - offset, 0)
+            xmax = min(np.max(xs) + offset, null_class_mask.shape[1] - 1)
+            ymin = max(np.min(ys) - offset, 0)
+            ymax = min(np.max(ys) + offset, null_class_mask.shape[0] - 1)
+            boxes.insert(0, np.asarray([xmin, ymin, xmax, ymax]))
 
         """
         null_class_mask[null_class_mask == True] = [255]

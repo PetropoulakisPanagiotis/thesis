@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name="shift-ins-3"
-#SBATCH --nodelist=node[14]
+#SBATCH --job-name="scannet-sem-unc-1"
+#SBATCH --nodelist=node[15]
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:2,VRAM:48G
 #SBATCH --mem=24G
 #SBATCH --time=50:00:00
 #SBATCH --mail-type=NONE
-#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-shift-ins-3-%j.out
-#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-shift-ins-3-%j.out
-srun python /usr/stud/petp/code/thesis/iebins/train.py /usr/stud/petp/code/thesis/configs/shift_ins_3.txt
+#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-scannet-sem-unc-1-%j.out
+#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-scannet-sem-unc-1-%j.out
+srun python /usr/stud/petp/code/thesis/iebins/train.py /usr/stud/petp/code/thesis/configs/scannet_sem_unc_1.txt
 
 # SBATCH --nodelist=node[12,14,15,16,17,18]
 # SBATCH --nodelist=node[11,12,13,16,17,18]

@@ -15,6 +15,7 @@ from utils_clean import DistributedSamplerNoEvenlyDivisible
 
 class DataLoaderCustom(object):
     def __init__(self, args, mode):
+        self.mapping=None
         if args.dataset == 'nyu':
             self.semantic_classes = json.load(open(args.data_path.split('train')[0] + 'labels.json', 'r'))
             self.num_semantic_classes = len(self.semantic_classes)
@@ -22,14 +23,14 @@ class DataLoaderCustom(object):
 
         if args.dataset == 'scannet':
             mapping_40_to_13 = loadmat('/usr/stud/petp/storage/user/petp/datasets/bts/utils/class13Mapping.mat')['classMapping13'][0][0]
-            self.mapping_40_to_13 = np.concatenate([[0], mapping_40_to_13[0][0]])
+            self.mapping = np.concatenate([[0], mapping_40_to_13[0][0]])
             
             self.semantic_classes = ('void','bed', 'books','ceiling', 'chair','floor', 'furniture', 'objects', 'picture', 'sofa', 'table', 'tv', 'wall', 'window')
             self.num_semantic_classes = len(self.semantic_classes)
-            self.num_instances = 25 # Max instances in one image
+            self.num_instances = 65 # Max instances in one image
 
         if mode == 'train':
-            self.training_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation, self.mapping_40_to_13))
+            self.training_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation, self.mapping))
 
             if args.distributed:
                 self.train_sampler = torch.utils.data.distributed.DistributedSampler(self.training_samples)
@@ -44,7 +45,7 @@ class DataLoaderCustom(object):
 
         elif mode == 'online_eval':
             
-            self.testing_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation, self.mapping_40_to_13))
+            self.testing_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation, self.mapping))
             if args.distributed:
                 # self.eval_sampler = torch.utils.data.distributed.DistributedSampler(self.testing_samples, shuffle=False)
                 self.eval_sampler = DistributedSamplerNoEvenlyDivisible(self.testing_samples, shuffle=False)
@@ -58,7 +59,7 @@ class DataLoaderCustom(object):
                                    sampler=self.eval_sampler)
         
         elif mode == 'test':
-            self.testing_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation, self.mapping_40_to_13))
+            self.testing_samples = DatasetPreprocess(args, mode, transform=preprocessing_transforms(mode, args.segmentation, self.mapping))
             self.data = DataLoader(self.testing_samples, 1, shuffle=False, num_workers=1)
 
         else:

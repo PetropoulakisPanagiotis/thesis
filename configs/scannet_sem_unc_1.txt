@@ -1,19 +1,19 @@
 --mode train
 --pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
---checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_sem_1/nyu/model-35-best_silog_9.99336
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_sem_1/nyu/best
 
 --dataset scannet
 --data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
 --gt_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
---filenames_file /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train_debug.txt
+--filenames_file /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train_every_100th.txt
 
 --do_online_eval
 --log_freq 5
 --eval_freq 5
 --log_directory /usr/stud/petp/code/thesis/tmp/
---data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
---gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
---filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train_debug.txt
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid_every_500th.txt
 --min_depth_eval 1e-3
 --max_depth_eval 10
 
@@ -32,10 +32,10 @@
 
 --eigen_crop
 
---exp_name scannet_sem_1
+--exp_name scannet_sem_unc_1
 --update_block 1
 --segmentation
---virtual_depth_variation 0
+--virtual_depth_variation 1
 --d3vo
 --d3vo_c
 
