@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+import json
 import time
 from itertools import chain
 from collections import defaultdict
@@ -45,10 +46,6 @@ class Tracking(object):
             for ii, scale in enumerate(scale_aware_frame.scales):
                 # Scale Id: ii
                 self.optimizer.add_scale(ii, scale, fixed=True)
-
-                # Edge Id: ii
-                self.optimizer.add_scale_edge(ii, ii, scale,
-                                              information=np.identity(1) * 1./scale_aware_frame.scales_uncertainty[ii])
 
             # BA with one pose #
             for ii, m in enumerate(measurements):
@@ -272,7 +269,7 @@ class RGBDPTAM(object):
     def save_results(self, path: str):
         self.non_keyframes.extend(self.mapping.graph.keyframes())
         all_frames = self.non_keyframes
-        #all_frames = self.mapping.graph.keyframes()
+        all_frames = self.mapping.graph.keyframes()
         sorted_frames = sorted(all_frames, key=lambda obj: obj.timestamp)
         with open(path, 'w') as file_result:
             for kf in sorted_frames:
@@ -288,6 +285,16 @@ class RGBDPTAM(object):
                 current_result = [str(item) for item in current_result]
                 line = ' '.join(current_result)
                 file_result.write(line + '\n')
+
+        # Save optimized scale #
+        if self.args.scale_aware:
+            for keyframe in self.mapping.graph.keyframes():
+                scale_data = {'scale': keyframe.scale_aware_frame.scales, 'scale_type': args.optimization_type, 'scale_uncertainty': keyframe.scale_aware_frame.scales_uncertainty.tolist()}
+                path = args.out_path + args.optimization_type + '/optimized_scale/' + str(f'{int(keyframe.rgb.timestamp):05}' + '.json')
+                with open(path, 'w') as file:
+                    json.dump(scale_data, file, indent=4)
+
+        print("Results saved!\n")
 
 
 if __name__ == '__main__':
@@ -315,6 +322,8 @@ if __name__ == '__main__':
                         default='path/to/your/ICL-NUIM_RGBD/living_room_traj3_frei_png')
 
     parser.add_argument('--scale_aware', action='store_true', default=False, help='Scale-Aware slam enable')
+    parser.add_argument('--optimization_type', type=str, default='global', help='Scale-Aware variation')
+    parser.add_argument('--out_path', type=str, default='./results/', help='Folder to save results')
     parser.add_argument(
         '--scene',
         type=str,
@@ -334,10 +343,18 @@ if __name__ == '__main__':
     elif 'icl' in args.dataset.lower():
         dataset = ICLNUIMDataset(args.path)
     elif 'scannet' in args.dataset.lower():
-        dataset = ScanNetDataset(args.path, args.scene, args.split, args.scale_aware)
+        dataset = ScanNetDataset(args.path, args.scene, args.split, args.scale_aware, args.optimization_type)
 
     params = Params()
     ptam = RGBDPTAM(params, args)
+
+    if not os.path.exists(args.out_path):
+        os.makedirs(args.out_path)
+
+    if args.scale_aware:
+        scale_path = args.out_path + args.optimization_type + '/optimized_scale/'
+        if not os.path.exists(scale_path):
+            os.makedirs(scale_path)
 
     if not args.no_viz:
         from viewer import MapViewer
@@ -355,7 +372,6 @@ if __name__ == '__main__':
             timestamp = i / 20.
         else:
             timestamp = dataset.timestamps[i]
-
         time_start = time.time()
         feature.extract()  # Detect keypoints and descriptors of image
         if args.scale_aware:
@@ -383,11 +399,7 @@ if __name__ == '__main__':
     print('num keyframes', len(ptam.graph.keyframes()))
     print('average time', np.mean(durations))
 
-    out_path = "./results/"
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
-
-    ptam.save_results(out_path + 'slam_result.txt')
+    ptam.save_results(args.out_path + 'slam_result.txt')
 
     ptam.stop()
     if not args.no_viz:
