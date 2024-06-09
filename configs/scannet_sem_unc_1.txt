@@ -8,8 +8,8 @@
 --filenames_file /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train_every_100th.txt
 
 --do_online_eval
---log_freq 5
---eval_freq 5
+--log_freq 400
+--eval_freq 1000
 --log_directory /usr/stud/petp/code/thesis/tmp/
 --data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
 --gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
@@ -20,7 +20,7 @@
 --input_height 480
 --input_width 640
 
---batch_size 2
+--batch_size 8
 --num_epochs 100
 --learning_rate 2e-4
 --weight_decay 1e-2

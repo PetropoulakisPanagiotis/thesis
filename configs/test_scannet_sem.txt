@@ -25,4 +25,4 @@
 --d3vo_c
 
 --save_dir /usr/stud/petp/storage/user/petp/datasets/predictions/
---checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_sem_1/nyu/model-85-best_unc_d3vo_2.43455
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_sem_unc_1/nyu/best
