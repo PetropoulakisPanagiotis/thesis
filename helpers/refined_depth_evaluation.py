@@ -1,4 +1,5 @@
 import cv2
+from tqdm import tqdm
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -36,7 +37,7 @@ def compute_errors(gt, pred, var=None):
 
 # Define the dataset class
 class MyDataset(Dataset):
-    def __init__(self, original_data_path, refined_data_path):
+    def __init__(self, true_depth_path, original_data_path, refined_data_path):
         self.original_data_path = original_data_path
         self.refined_data_path = refined_data_path
 
@@ -44,19 +45,19 @@ class MyDataset(Dataset):
         self.scale_map_folder = os.path.join(self.original_data_path, 'scale_map/')
         self.canonical_folder = os.path.join(original_data_path, 'canonical/')
         self.depth_folder = os.path.join(original_data_path, 'depth/')
+        self.true_depth_folder = true_depth_path
 
         self.optimized_scale = sorted([f for f in os.listdir(self.optimized_scale_folder) if f.endswith('.json')])
+        self.size_dataset = len(self.optimized_scale)
 
         self.canonical = [f for f in os.listdir(self.canonical_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
         self.depth = [f for f in os.listdir(self.depth_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
         self.scale_map = [f for f in os.listdir(self.scale_map_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
 
-        for scale in self.optimized_scale:
-            if scale.split('.')[0] + '.png' not in self.canonical:
-                print(scale)
+        self.true_depth = [f for f in os.listdir(self.true_depth_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
 
-        assert len(self.optimized_scale) == len(self.depth) and len(self.optimized_scale) == len(self.depth) \
-               and len(self.optimized_scale) == len(self.scale_map)
+        assert self.size_dataset == len(self.depth) and self.size_dataset == len(self.depth) \
+               and self.size_dataset == len(self.scale_map) and self.size_dataset == len(self.true_depth)
 
     def __getitem__(self, index):
 
@@ -82,14 +83,18 @@ class MyDataset(Dataset):
         depth = cv2.imread(depth_file, -1) / 1000 
         depth = torch.Tensor(depth).type(torch.float32)
 
+        true_depth_file = os.path.join(self.true_depth_folder, self.true_depth[index])
+        true_depth = cv2.imread(true_depth_file, -1) / 1000 
+        true_depth = torch.Tensor(true_depth).type(torch.float32)
+
         # Calculated refined depth #
         depth_refined = canonical * torch.take(scale, scale_map.flatten()).view(canonical.shape)
 
-        data = {"depth": depth, "depth_refined": depth_refined}
+        data = {"true_depth": true_depth, "depth": depth, "depth_refined": depth_refined}
         return data
 
     def __len__(self):
-        return len(self.optimized_scale)
+        return self.size_dataset
 
 if __name__ == '__main__':
 
@@ -97,12 +102,45 @@ if __name__ == '__main__':
     max_depth = 10
 
     # Define the data loader
-    dataset = MyDataset(original_data_path='/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/network_predictions/scene0655_01/segmentation', \
+    dataset = MyDataset(true_depth_path='/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/depth/scene0655_01', original_data_path='/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/network_predictions/scene0655_01/segmentation', \
                         refined_data_path='/home/petropoulakis/Desktop/thesis/code/thesis/rgbd_ptam/results/segmentation')
-    data_loader = torch.utils.data.DataLoader(dataset, batch_size=8, shuffle=False)
+    data_loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
+
+    errors_network = np.zeros(9)
+    errors_refined = np.zeros(9)
 
     # Iterate over the data in a loop
-    for i, batch in enumerate(data_loader):
+    for i, batch in tqdm(enumerate(data_loader), total=len(dataset)):
         # Do something with the batch (e.g., pass it to a model)
-        print(batch)
-        exit()
+        true_depth = batch["true_depth"].cpu().numpy()
+        depth = batch["depth"].cpu().numpy()
+        depth_refined = batch["depth_refined"].cpu().numpy()
+
+
+        true_depth = true_depth.flatten()
+        true_depth[np.isinf(true_depth)] = min_depth
+        true_depth[np.isnan(true_depth)] = max_depth
+
+        depth = depth.flatten()
+        depth[np.isinf(depth)] = min_depth
+        depth[np.isnan(depth)] = max_depth
+        depth[depth < min_depth] = min_depth
+        depth[depth > max_depth] = max_depth
+
+        depth_refined = depth_refined.flatten()
+        depth_refined[depth_refined < min_depth] = min_depth
+        depth_refined[depth_refined > max_depth] = max_depth
+        depth_refined[np.isinf(depth_refined)] = min_depth
+        depth_refined[np.isnan(depth_refined)] = max_depth
+
+        valid_depth = np.logical_and(true_depth >= min_depth, true_depth <= max_depth)
+
+        errors_network = errors_network + np.asarray(compute_errors(true_depth[valid_depth], depth[valid_depth]))
+        errors_refined = errors_refined + np.asarray(compute_errors(true_depth[valid_depth], depth_refined[valid_depth]))
+
+    errors_network /= len(dataset)
+    errors_refined /= len(dataset)
+
+    print(errors_network)
+    print(errors_refined)
+
