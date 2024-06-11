@@ -289,7 +289,7 @@ class RGBDPTAM(object):
         # Save optimized scale #
         if self.args.scale_aware:
             for keyframe in self.mapping.graph.keyframes():
-                scale_data = {'scale': keyframe.scale_aware_frame.scales, 'scale_type': args.optimization_type, 'scale_uncertainty': keyframe.scale_aware_frame.scales_uncertainty.tolist()}
+                scale_data = {'scale': keyframe.scale_aware_frame.scales, 'scale_type': args.optimization_type, 'scale_uncertainty': keyframe.scale_aware_frame.scales_uncertainty}
                 path = args.out_path + args.optimization_type + '/optimized_scale/' + str(f'{int(keyframe.rgb.timestamp):05}' + '.json')
                 with open(path, 'w') as file:
                     json.dump(scale_data, file, indent=4)
@@ -328,10 +328,10 @@ if __name__ == '__main__':
         '--scene',
         type=str,
         #default='scene0084_02') # hm...
-        default='scene0655_01') # nice
-        #default='scene0608_00')  # nice
+        #default='scene0655_01') # tested 1)
+        #default='scene0608_00')  # nice -> big 
     #default='scene0164_00') # nice
-    #default='scene0025_02') # nice
+    default='scene0025_02') # tested 2)
     #default='scene0412_00')
     # default='scene0095_00')
 
