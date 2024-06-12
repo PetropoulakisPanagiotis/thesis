@@ -328,10 +328,10 @@ if __name__ == '__main__':
         '--scene',
         type=str,
         #default='scene0084_02') # hm...
-        #default='scene0655_01') # tested 1)
+        default='scene0655_01') # tested 1)
         #default='scene0608_00')  # nice -> big 
     #default='scene0164_00') # nice
-    default='scene0025_02') # tested 2)
+    #default='scene0025_02') # tested 2)
     #default='scene0412_00')
     # default='scene0095_00')
 
