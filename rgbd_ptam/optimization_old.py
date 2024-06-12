@@ -89,7 +89,7 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         edge = g2o.EdgeDepthConsistencyScale()
         edge.set_id(self.scale_offset + 2 * edge_id + 1)
         edge.set_measurement(meas)
-        edge.set_information(information * 0.1)
+        edge.set_information(information)
 
         # 0 Cam
         # 1 3D point
@@ -305,6 +305,7 @@ class LocalBAScaleAware(object):
                 # Edge Id: ii + scale_start
                 self.optimizer.add_scale_edge(self.scales_start[-1] + ii, self.scales_start[-1] + ii, scale,
                                               information=np.identity(1) * 1./kf.scale_aware_frame.scales_uncertainty[ii])
+
             for m in kf.measurements():
                 pt = m.mappoint
 
@@ -320,10 +321,11 @@ class LocalBAScaleAware(object):
                 self.measurements[2*edge_id + self.optimizer.scale_offset] = m
 
                 # Edge Id: scale_offset + 2*ii + 1
-                self.optimizer.add_depth_scale_consistency_edge(edge_id, pt.id, kf.id, self.scales_start[-1] + m.scale_id_measurement, m.canonical_measurement,
+                self.optimizer.add_depth_scale_consistency_edge(ii, ii, kf.id, self.scales_start[-1] + m.scale_id_measurement, m.canonical_measurement,
                                                                 information=np.identity(1) * 1./m.covariance_canonical_measurement)
 
             self.scales_start.append(self.scales_start[-1] + len(kf.scale_aware_frame.scales))
+
         for kf in fixed_keyframes:
             self.optimizer.add_pose(kf.id, kf.pose, kf.cam, fixed=True)
 
@@ -331,6 +333,10 @@ class LocalBAScaleAware(object):
             for ii, scale in enumerate(kf.scale_aware_frame.scales):
                 # Scale Id: ii + scale_start
                 self.optimizer.add_scale(self.scales_start[-1] + ii, scale, fixed=True)
+                # Edge Id: ii + scale_start
+                self.optimizer.add_scale_edge(self.scales_start[-1] + ii, self.scales_start[-1] + ii, scale,
+                                              information=np.identity(1) * 1./kf.scale_aware_frame.scales_uncertainty[ii])
+
 
             # Local 3D points can be visible to frames outside the window #
             # Add these pose contraints                                   #
@@ -339,13 +345,13 @@ class LocalBAScaleAware(object):
                     edge_id = len(self.measurements)
                     self.optimizer.add_camera_edge(edge_id, m.mappoint.id, kf.id, m.xy)
                     self.measurements[2*edge_id + self.optimizer.scale_offset] = m
-                    self.measurements[edge_id] = m
 
                     # Edge Id: scale_offset + 2*ii + 1
-                    self.optimizer.add_depth_scale_consistency_edge(edge_id, m.mappoint.id, kf.id, self.scales_start[-1] + m.scale_id_measurement, m.canonical_measurement,
+                    self.optimizer.add_depth_scale_consistency_edge(ii, ii, kf.id, self.scales_start[-1] + m.scale_id_measurement, m.canonical_measurement,
                                                                     information=np.identity(1) * 1./m.covariance_canonical_measurement)
 
             self.scales_start.append(self.scales_start[-1] + len(kf.scale_aware_frame.scales))
+
     def update_points(self):
         for mappoint in self.mappoints:
             mappoint.update_position(self.optimizer.get_point(mappoint.id))
@@ -367,17 +373,11 @@ class LocalBAScaleAware(object):
             keyframe.update_scale(scales)
 
     def get_bad_measurements(self):
-        bad_measurements = set()
+        bad_measurements = []
         for edge in self.optimizer.active_edges():
             if isinstance(edge, g2o.EdgeCustomCamera):
                 if edge.chi2() > self.huber_threshold:
-                    bad_measurements.add(self.measurements[edge.id()])
-
-            if isinstance(edge, g2o.EdgeDepthConsistencyScale):
-                if edge.chi2() > self.huber_threshold:
-                    bad_measurements.add(self.measurements[edge.id() - 1])
-        bad_measurements = list(bad_measurements)
-        len(bad_measurements)
+                    bad_measurements.append(self.measurements[edge.id()])
         return bad_measurements
 
     def clear(self):

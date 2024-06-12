@@ -55,7 +55,7 @@ class MyDataset(Dataset):
         self.scale_map = [f for f in os.listdir(self.scale_map_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
 
         self.true_depth = [f for f in os.listdir(self.true_depth_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
-
+        print(self.size_dataset)
         assert self.size_dataset == len(self.depth) and self.size_dataset == len(self.depth) \
                and self.size_dataset == len(self.scale_map) and self.size_dataset == len(self.true_depth)
 
