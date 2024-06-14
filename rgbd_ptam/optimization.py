@@ -89,7 +89,7 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         edge = g2o.EdgeDepthConsistencyScale()
         edge.set_id(self.scale_offset + 2 * edge_id + 1)
         edge.set_measurement(meas)
-        edge.set_information(information * 0.1)
+        edge.set_information(information)
 
         # 0 Cam
         # 1 3D point
@@ -165,10 +165,10 @@ class BundleAdjustment(g2o.SparseOptimizer):
         super().add_vertex(v_p)
 
     def add_edge(self, id, point_id, pose_id, meas):
-        if meas.is_stereo():
-            edge = self.stereo_edge(meas.xyx)
-        elif meas.is_left():
-            edge = self.mono_edge(meas.xy)
+        #if meas.is_stereo():
+        #    edge = self.stereo_edge(meas.xyx)
+        #elif meas.is_left():
+        edge = self.mono_edge(meas.xy)
         edge.set_id(id)
         edge.set_vertex(0, self.vertex(point_id * 2 + 1))
         edge.set_vertex(1, self.vertex(pose_id * 2))
@@ -377,7 +377,6 @@ class LocalBAScaleAware(object):
                 if edge.chi2() > self.huber_threshold:
                     bad_measurements.add(self.measurements[edge.id() - 1])
         bad_measurements = list(bad_measurements)
-        len(bad_measurements)
         return bad_measurements
 
     def clear(self):

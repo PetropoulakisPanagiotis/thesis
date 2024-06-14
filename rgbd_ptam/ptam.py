@@ -78,7 +78,7 @@ class RGBDPTAM(object):
         self.tracker = Tracking(params, args)
         self.motion_model = MotionModel(params)
 
-        self.loop_closing = LoopClosing(self, params)
+        self.loop_closing = None #LoopClosing(self, params)
         self.loop_correction = None
 
         self.reference = None  # reference keyframe
@@ -269,7 +269,7 @@ class RGBDPTAM(object):
     def save_results(self, path: str):
         self.non_keyframes.extend(self.mapping.graph.keyframes())
         all_frames = self.non_keyframes
-        all_frames = self.mapping.graph.keyframes()
+        #all_frames = self.mapping.graph.keyframes()
         sorted_frames = sorted(all_frames, key=lambda obj: obj.timestamp)
         with open(path, 'w') as file_result:
             for kf in sorted_frames:

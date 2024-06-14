@@ -297,7 +297,7 @@ class ScanNetDataset(object):
     cam = namedtuple('camera', 'fx fy cx cy scale')(577.5906635802469, 576.3481987847223, 319.15804639274694,
                                                     241.9392752941744, 1000)
 
-    def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True, optimization_type='global', max_var=50.0, min_var=1e-4, network_depth=True):
+    def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True, optimization_type='global', max_var=50.0, min_var=1e-4, network_depth=True, total=400):
         self.scale_aware = scale_aware
         path = os.path.expanduser(path)
         self.max_var = max_var
@@ -327,6 +327,16 @@ class ScanNetDataset(object):
                 depth_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png' for item in ids]
             else:
                 depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
+
+        if total is not None:
+            rgb_ids = rgb_ids[:total]
+            depth_ids = depth_ids[:total]
+            if self.scale_aware:
+                canonical_ids = canonical_ids[:total]
+                canonical_unc_ids = canonical_unc_ids[:total]
+                pixel_to_scale_map_ids = pixel_to_scale_map_ids[:total]
+                scales_ids = scales_ids[:total]
+
 
         # Read depth #
         self.rgb = ImageReader(rgb_ids, rgb_timestamps)
