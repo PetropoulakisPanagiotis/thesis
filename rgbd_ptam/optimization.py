@@ -57,6 +57,7 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         scale_v = g2o.VertexScale()
         scale_v.set_id(scale_id)
         scale_v.set_estimate(scale)
+        scale_v.set_fixed(fixed)
         super().add_vertex(scale_v)
 
     def add_scale_edge(self, edge_id: int, scale_id: int, meas: float,
