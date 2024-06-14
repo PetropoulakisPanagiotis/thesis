@@ -29,7 +29,7 @@ class Tracking(object):
     def __init__(self, params, args):
         self.params = params
         self.args = args
-        self.optimizer = BundleAdjustment() if not args.scale_aware else BundleAdjustmentScaleAware()
+        self.optimizer = BundleAdjustment(args) if not args.scale_aware else BundleAdjustmentScaleAware(args=args)
         self.min_measurements = params.pnp_min_measurements
         self.max_iterations = params.pnp_max_iterations
 
@@ -54,16 +54,19 @@ class Tracking(object):
                 # Edge Id: scale_offset + 2*ii
                 self.optimizer.add_camera_edge(ii, ii, 0, m.xy)
 
+                information = np.identity(1)
+                if self.args.use_uncertainties:
+                    information *= 1./m.covariance_canonical_measurement
+
                 # Edge Id: scale_offset + 2*ii + 1
                 self.optimizer.add_depth_scale_consistency_edge(ii, ii, 0, m.scale_id_measurement, m.canonical_measurement,
-                                                                information=np.identity(1) * 1./m.covariance_canonical_measurement)
+                                                                information=information)
         else:
             self.optimizer.add_pose(0, pose, cam, fixed=False)
             # BA with one pose #
             for i, m in enumerate(measurements):
                 self.optimizer.add_point(i, m.mappoint.position, fixed=True)
                 self.optimizer.add_edge(0, i, 0, m)
-
         self.optimizer.optimize(self.max_iterations)
         return self.optimizer.get_pose(0)
 
@@ -321,9 +324,23 @@ if __name__ == '__main__':
     parser.add_argument('--path', type=str, help='dataset path',
                         default='path/to/your/ICL-NUIM_RGBD/living_room_traj3_frei_png')
 
-    parser.add_argument('--scale_aware', action='store_true', default=False, help='Scale-Aware slam enable')
-    parser.add_argument('--optimization_type', type=str, default='global', help='Scale-Aware variation')
+    parser.add_argument('--scale_aware', action='store_true', default=False, help='Scale-Aware slam loss enable')
+    parser.add_argument('--optimization_base_type', type=str, default='mono', choices=['mono', 'virtual'], help='Monocular or virtual stereo')
+    parser.add_argument('--use_uncertainties', action='store_true', default=False, help='use uncertainties during optimization') 
+    parser.add_argument('--optimization_type', type=str, default='global', choices=['global', 'segmentation', 'instances'], help='Scale-Aware variation')
     parser.add_argument('--out_path', type=str, default='./results/', help='Folder to save results')
+    parser.add_argument('--total', type=int, default=None, help='Total number of frame')
+
+
+    parser.add_argument('--threshold_camera', type=float, default=5.991, help='Threshold for huber loss camera')
+    parser.add_argument('--weight_camera', type=float, default=1, help='Weight for camera loss')
+
+    parser.add_argument('--threshold_depth_consistency', type=float, default=3.991, help='Threshold for huber loss depth consistency')
+    parser.add_argument('--weight_depth_consistency', type=float, default=0.5, help='Weight for depth consistency loss')
+
+    parser.add_argument('--threshold_scale', type=float, default=5.991, help='Threshold for huber loss scale')
+    parser.add_argument('--weight_scale', type=float, default=2, help='Weight for scale loss')
+
     parser.add_argument(
         '--scene',
         type=str,
@@ -343,7 +360,7 @@ if __name__ == '__main__':
     elif 'icl' in args.dataset.lower():
         dataset = ICLNUIMDataset(args.path)
     elif 'scannet' in args.dataset.lower():
-        dataset = ScanNetDataset(args.path, args.scene, args.split, args.scale_aware, args.optimization_type)
+        dataset = ScanNetDataset(args.path, args.scene, args.split, args.scale_aware, args.optimization_type, total=args.total)
 
     params = Params()
     ptam = RGBDPTAM(params, args)

@@ -21,7 +21,7 @@ class Mapping(object):
         self.params = params
         self.args = args
         self.local_keyframes = []
-        self.optimizer = LocalBA() if not args.scale_aware else LocalBAScaleAware()
+        self.optimizer = LocalBA(args) if not args.scale_aware else LocalBAScaleAware(args)
 
     # The same logic is applied maintenance function  #
     # This base method is not called at MappingThread #

@@ -20,12 +20,12 @@ class Params(object):
         self.frustum_far = 50.0
 
         self.pnp_min_measurements = 30
-        self.pnp_max_iterations = 15  #10 <--- tracking
+        self.pnp_max_iterations = 20  #10 <--- tracking
         self.init_min_points = 30
 
         self.local_window_size = 10  # 10
         self.keyframes_buffer_size = 5
-        self.ba_max_iterations = 10  #10 <--- map
+        self.ba_max_iterations = 15  #10 <--- map
 
         self.min_tracked_points = 150  #150 <--- for keyframe
         self.min_tracked_points_ratio = 0.75  # <-- this is not used

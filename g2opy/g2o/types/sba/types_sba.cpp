@@ -662,11 +662,11 @@ namespace g2o {
 
     // Translation
     dp = -cam.w2n.col(0);  
-    _jacobianOplus[0](0,0) = (-1.0/s) * dp.dot(mask);  // x
+    _jacobianOplus[0](0,0) = (1.0/s) * dp.dot(mask);  // x
     dp = -cam.w2n.col(1);
-    _jacobianOplus[0](0,1) = (-1.0/s) * dp.dot(mask); // y
+    _jacobianOplus[0](0,1) = (1.0/s) * dp.dot(mask); // y
     dp = -cam.w2n.col(2);       
-    _jacobianOplus[0](0,2) = (-1.0/s) * dp.dot(mask); // z
+    _jacobianOplus[0](0,2) = (1.0/s) * dp.dot(mask); // z
 
     // Landmark 
     dp = cam.w2n.col(0);    

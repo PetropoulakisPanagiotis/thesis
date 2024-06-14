@@ -289,18 +289,12 @@ class G2O_TYPES_SBA_API VertexCustomXYZ : public BaseVertex<3, Vector3D>
       double s = s_v->estimate();
      
       // Measurement is canonical depth // 
-      _error[0] = c_p(0) / s - _measurement;
+      _error[0] = c_p(2) / s - _measurement;
     }
 
     // jacobian
     virtual void linearizeOplus();
 };
-
-
-
-
-
-
 
 
 

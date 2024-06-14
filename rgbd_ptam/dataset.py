@@ -297,7 +297,7 @@ class ScanNetDataset(object):
     cam = namedtuple('camera', 'fx fy cx cy scale')(577.5906635802469, 576.3481987847223, 319.15804639274694,
                                                     241.9392752941744, 1000)
 
-    def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True, optimization_type='global', max_var=50.0, min_var=1e-4, network_depth=True, total=400):
+    def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True, optimization_type='global', max_var=50.0, min_var=1e-4, network_depth=True, total=None):
         self.scale_aware = scale_aware
         path = os.path.expanduser(path)
         self.max_var = max_var

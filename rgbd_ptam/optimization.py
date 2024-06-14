@@ -5,8 +5,9 @@ import g2o
 from components import Camera
 
 class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
-    def __init__(self, max_frames=50, max_instances=50):
+    def __init__(self, args, max_frames=50, max_instances=50):
         super().__init__()
+        self.args = args
 
         # Higher confident (better than CHOLMOD, according to
         # paper "3-D Mapping With an RGB-D Camera")
@@ -20,7 +21,6 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         super().add_post_iteration_action(terminate)
 
         # Robust cost Function (Huber function) delta
-        self.delta = np.sqrt(5.991)
         self.aborted = False
 
         self.scale_offset = max_frames * max_instances
@@ -63,11 +63,11 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
                        information: np.ndarray = np.identity(1)) -> None:
         edge = g2o.EdgeScaleNetworkConsistency()
         edge.set_measurement(meas)
-        edge.set_information(information)
+        edge.set_information(information * self.args.weight_scale)
 
         edge.set_id(edge_id)
         edge.set_vertex(0, self.vertex(scale_id))
-        kernel = g2o.RobustKernelHuber(self.delta)
+        kernel = g2o.RobustKernelHuber(np.sqrt(self.args.threshold_scale))
         edge.set_robust_kernel(kernel)
         super().add_edge(edge)
 
@@ -75,12 +75,12 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
                         information: np.ndarray = np.identity(2)) -> None:
         edge = g2o.EdgeCustomCamera()
         edge.set_measurement(meas)
-        edge.set_information(information)
+        edge.set_information(information * self.args.weight_camera)
 
         edge.set_id(self.scale_offset + 2 * edge_id)
         edge.set_vertex(0, self.vertex(self.scale_offset + 2*point_id + 1))
         edge.set_vertex(1, self.vertex(self.scale_offset + 2*pose_id))
-        kernel = g2o.RobustKernelHuber(self.delta)
+        kernel = g2o.RobustKernelHuber(np.sqrt(self.args.threshold_camera))
         edge.set_robust_kernel(kernel)
         super().add_edge(edge)
 
@@ -89,7 +89,7 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         edge = g2o.EdgeDepthConsistencyScale()
         edge.set_id(self.scale_offset + 2 * edge_id + 1)
         edge.set_measurement(meas)
-        edge.set_information(information)
+        edge.set_information(information * self.args.weight_depth_consistency)
 
         # 0 Cam
         # 1 3D point
@@ -97,7 +97,7 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         edge.set_vertex(0, self.vertex(self.scale_offset + 2*pose_id))
         edge.set_vertex(1, self.vertex(self.scale_offset + 2*point_id+1))
         edge.set_vertex(2, self.vertex(scale_id))
-        kernel = g2o.RobustKernelHuber(self.delta)
+        kernel = g2o.RobustKernelHuber(np.sqrt(self.args.threshold_depth_consistency))
         edge.set_robust_kernel(kernel)
         super().add_edge(edge)
 
@@ -118,8 +118,9 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
 
 
 class BundleAdjustment(g2o.SparseOptimizer):
-    def __init__(self, ):
+    def __init__(self, args):
         super().__init__()
+        self.args = args
 
         # Higher confident (better than CHOLMOD, according to
         # paper "3-D Mapping With an RGB-D Camera")
@@ -165,10 +166,10 @@ class BundleAdjustment(g2o.SparseOptimizer):
         super().add_vertex(v_p)
 
     def add_edge(self, id, point_id, pose_id, meas):
-        #if meas.is_stereo():
-        #    edge = self.stereo_edge(meas.xyx)
-        #elif meas.is_left():
-        edge = self.mono_edge(meas.xy)
+        if meas.is_stereo() and self.args.optimization_base_type == 'virtual':
+            edge = self.stereo_edge(meas.xyx)
+        else:
+            edge = self.mono_edge(meas.xy)
         edge.set_id(id)
         edge.set_vertex(0, self.vertex(point_id * 2 + 1))
         edge.set_vertex(1, self.vertex(pose_id * 2))
@@ -204,11 +205,12 @@ For local map
 
 
 class LocalBA(object):
-    def __init__(self, ):
-        self.optimizer = BundleAdjustment()
+    def __init__(self, args):
+        self.optimizer = BundleAdjustment(args)
         self.measurements = []  # Measurements, can be both from optimized non-optimzed pose frames
         self.keyframes = []  # Frames that their pose is optimized
         self.mappoints = set()  # Only add 3D points that belong to frames that their pose is optimized
+        self.args = args
 
         # threshold for confidence interval of 95%
         self.huber_threshold = 5.991
@@ -279,15 +281,14 @@ class LocalBA(object):
 
 
 class LocalBAScaleAware(object):
-    def __init__(self, ):
-        self.optimizer = BundleAdjustmentScaleAware()
+    def __init__(self, args):
+        self.optimizer = BundleAdjustmentScaleAware(args=args)
         self.measurements = {}  # Measurements, can be both from optimized non-optimzed pose frames
         self.keyframes = []     # Frames that their pose is optimized
         self.mappoints = set()  # Only add 3D points that belong to frames that their pose is optimized
         self.scales_start = [0]  # Each frame has a scale, save indexes for easy mapping 
 
-        # threshold for confidence interval of 95%
-        self.huber_threshold = 5.991
+        self.args = args
 
     def set_data(self, adjust_keyframes, fixed_keyframes):
         self.clear()  # Empty buffers
@@ -302,9 +303,13 @@ class LocalBAScaleAware(object):
                 # Scale Id: ii + scale_start
                 self.optimizer.add_scale(self.scales_start[-1] + ii, scale, fixed=False)
 
+                information = np.identity(1)
+                if self.args.use_uncertainties:
+                    information *= 1./kf.scale_aware_frame.scales_uncertainty[ii]
+
                 # Edge Id: ii + scale_start
                 self.optimizer.add_scale_edge(self.scales_start[-1] + ii, self.scales_start[-1] + ii, scale,
-                                              information=np.identity(1) * 1./kf.scale_aware_frame.scales_uncertainty[ii])
+                                              information=information)
             for m in kf.measurements():
                 pt = m.mappoint
 
@@ -319,9 +324,13 @@ class LocalBAScaleAware(object):
                 self.optimizer.add_camera_edge(edge_id, pt.id, kf.id, m.xy)
                 self.measurements[2*edge_id + self.optimizer.scale_offset] = m
 
+                information = np.identity(1)
+                if self.args.use_uncertainties:
+                    information *= 1./m.covariance_canonical_measurement
+
                 # Edge Id: scale_offset + 2*ii + 1
                 self.optimizer.add_depth_scale_consistency_edge(edge_id, pt.id, kf.id, self.scales_start[-1] + m.scale_id_measurement, m.canonical_measurement,
-                                                                information=np.identity(1) * 1./m.covariance_canonical_measurement)
+                                                                information=information)
 
             self.scales_start.append(self.scales_start[-1] + len(kf.scale_aware_frame.scales))
         for kf in fixed_keyframes:
@@ -341,9 +350,13 @@ class LocalBAScaleAware(object):
                     self.measurements[2*edge_id + self.optimizer.scale_offset] = m
                     self.measurements[edge_id] = m
 
+                    information = np.identity(1)
+                    if self.args.use_uncertainties:
+                        information *= 1./m.covariance_canonical_measurement
+
                     # Edge Id: scale_offset + 2*ii + 1
                     self.optimizer.add_depth_scale_consistency_edge(edge_id, m.mappoint.id, kf.id, self.scales_start[-1] + m.scale_id_measurement, m.canonical_measurement,
-                                                                    information=np.identity(1) * 1./m.covariance_canonical_measurement)
+                                                                    information=information)
 
             self.scales_start.append(self.scales_start[-1] + len(kf.scale_aware_frame.scales))
     def update_points(self):
@@ -370,12 +383,13 @@ class LocalBAScaleAware(object):
         bad_measurements = set()
         for edge in self.optimizer.active_edges():
             if isinstance(edge, g2o.EdgeCustomCamera):
-                if edge.chi2() > self.huber_threshold:
+                if edge.chi2() > self.args.threshold_camera:
                     bad_measurements.add(self.measurements[edge.id()])
 
             if isinstance(edge, g2o.EdgeDepthConsistencyScale):
-                if edge.chi2() > self.huber_threshold:
+                if edge.chi2() > self.args.threshold_depth_consistency:
                     bad_measurements.add(self.measurements[edge.id() - 1])
+
         bad_measurements = list(bad_measurements)
         return bad_measurements
 
