@@ -130,11 +130,12 @@ Boxes operations start
 
 
 def normalize_box(box, height=480, width=640):
+    # xmin, ymin, xmax, ymax (w, h, w, h)
     with torch.no_grad():
-        return torch.stack(((box[:, 0] / height).float(), 
-                            (box[:, 1] / width).float(), 
-	                        (box[:, 2] / height).float(), 
-	                        (box[:, 3] / width).float()), dim=1)
+        return torch.stack(((box[:, 0] / width).float(), 
+                            (box[:, 1] / height).float(), 
+	                        (box[:, 2] / width).float(), 
+	                        (box[:, 3] / height).float()), dim=1)
 
 
 def project_box_to_feature_map(box, downsampling, height=480, width=640, padding=0):
@@ -152,8 +153,8 @@ def project_box_to_feature_map(box, downsampling, height=480, width=640, padding
             new_box = torch.stack((
                 (new_box[:, 0] - padding).clamp(min=0).int(), 
                 (new_box[:, 1] - padding).clamp(min=0).int(), 
-                (new_box[:, 2] + padding).clamp(max=height-1).int(), 
-                (new_box[:, 3] + padding).clamp(max=width-1).int()), dim=1)
+                (new_box[:, 2] + padding).clamp(max=width-1).int(), 
+                (new_box[:, 3] + padding).clamp(max=height-1).int()), dim=1)
 
             return new_box 
 
@@ -259,9 +260,9 @@ def roi_select_features_canonical_shared(feature_map, boxes, labels, downsamplin
         batch_size, num_max_instances = boxes.shape[0:2]
         height, width = feature_map.size(-2), feature_map.size(-1)
 
-        feature_maps_final = torch.zeros((batch_size, num_semantic_classes-1, feature_map.shape[1], height, width)).to(labels.device)
+        feature_maps_final = torch.zeros((batch_size, num_semantic_classes, feature_map.shape[1], height, width)).to(labels.device)
         
-        for class_i in range(num_semantic_classes - 1):
+        for class_i in range(num_semantic_classe):
             instances_per_batch = torch.nonzero(labels == class_i)
             instances_per_batch = torch.bincount(instances_per_batch[:, 0])
 
@@ -425,7 +426,7 @@ def pick_predictions_instances_scale(pred_scale, labels):
 
     with torch.no_grad():
         labels_reshaped = labels.view(batch_size*labels_max_size)
-        labels_valid_idx = torch.nonzero(labels_reshaped != 0)
+        labels_valid_idx = torch.nonzero(labels_reshaped != -1)
         labels_valid_num = labels_valid_idx.shape[0]
 
         labels_valid = labels_reshaped[labels_valid_idx[:,0]]
@@ -448,7 +449,7 @@ def pick_predictions_instances_canonical(prediction, labels):
     # Prediction --> num_classes - 1 does not include null #
     with torch.no_grad():
         labels_reshaped = labels.view(batch_size*labels_max_size)
-        labels_valid_idx = torch.nonzero(labels_reshaped != 0)
+        labels_valid_idx = torch.nonzero(labels_reshaped != -1)
         labels_valid_num = labels_valid_idx.shape[0]
 
         labels_valid = labels_reshaped[labels_valid_idx[:,0]]

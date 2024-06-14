@@ -386,38 +386,55 @@ class ToTensorCustom(object):
         result_dict['has_valid_depth'] = sample['has_valid_depth']
 
         if dataset == 'nyu' and self.segmentation:
+            offset = 0
             segmentation_map = torch.from_numpy(sample['segmentation_map'])
             
             # Padd to create even batch
             instances_masks = torch.stack([torch.from_numpy(arr.astype(np.float32)) for arr in sample['instances_masks']])
+            
+            # Add zero class mask #
+            null_mask = (torch.sum(instances_masks, dim=0) == 0).to(dtype=torch.float32).unsqueeze(0)
+            instances_masks = torch.cat((null_mask, instances_masks), dim=0)
+
+            ys, xs = torch.where(null_mask.squeeze(0))
+            xmin = torch.clamp(torch.min(xs) - offset, min=0)
+            ymin = torch.clamp(torch.min(ys) - offset, min=0)
+            xmax = torch.clamp(torch.max(xs) + offset, max=segmentation_map.shape[2] - 1)
+            ymax = torch.clamp(torch.max(ys) + offset, max=segmentation_map.shape[1] - 1)
+            
             num_zeros_needed = self.max_instances - instances_masks.shape[0]
             zero_tensors = [-1 * torch.ones(1, *instances_masks.shape[1:], dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_masks = torch.cat([instances_masks] + zero_tensors, dim=0)
 
-            """
-            img = sample['instances_masks'][0].astype(np.uint8)
-            colored = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-            image_numpy[img == 1] = [255, 255, 255]
-            bbox = sample['instances_bbox'][0]
-            y1, x1, y2, x2 = bbox
-            cv2.rectangle(image_numpy, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.imshow("instance", image_numpy)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-            """
-
-            instances_labels = torch.from_numpy(sample['instances_labels'])
+            # Add also null #
+            instances_labels = torch.from_numpy(np.insert(sample['instances_labels'], 0, [0], axis=0))
             minus_tensors = [-1 * torch.ones(1, dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_labels = torch.cat([instances_labels] + minus_tensors, dim=0)
-
+            
+            # Add also whole image in boxes #
+            sample['instances_bbox'] = np.insert(sample['instances_bbox'], 0, [xmin, ymin, xmax, ymax], axis=0)
             instances_bbox = torch.stack([torch.from_numpy(arr) for arr in sample['instances_bbox']])
             zero_tensors = [torch.zeros((1, 4), dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_bbox = torch.cat([instances_bbox] + zero_tensors, dim=0)
 
+            # Add also whole image in boxes #
+            sample['instances_areas'] = np.insert(sample['instances_areas'], 0, [(xmax - xmin) * (ymax - ymin)], axis=0)
             instances_areas = torch.stack([torch.from_numpy(np.asarray([arr])) for arr in sample['instances_areas']])
             zero_tensors = [torch.zeros((1, 1), dtype=torch.int32) for _ in range(num_zeros_needed)]
             instances_areas = torch.cat([instances_areas] + zero_tensors, dim=0)
 
+            """
+            img = instances_masks[0].cpu().numpy().astype(np.uint8)
+            img[img == 1] = [255]
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            bbox = sample['instances_bbox'][0]
+            x1, y1, x2, y2 = bbox
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.imshow("instance", img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+            """
+    
             result_dict['instances_masks'] = instances_masks
             result_dict['segmentation_map'] = segmentation_map
             result_dict['instances_labels'] = instances_labels
@@ -619,7 +636,7 @@ def create_instance_masks_and_boxes_scannet_np(seg_map, instance_map, max_instan
             ymin = max(np.min(ys) - offset, 0)
             ymax = min(np.max(ys) + offset, null_class_mask.shape[0] - 1)
             boxes.insert(0, np.asarray([xmin, ymin, xmax, ymax]))
-
+      
         """
         null_class_mask[null_class_mask == True] = [255]
         null_class_mask = cv2.cvtColor(null_class_mask, cv2.COLOR_GRAY2BGR)

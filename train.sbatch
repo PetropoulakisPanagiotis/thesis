@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name="shift-ins-3"
-#SBATCH --nodelist=node[14]
+#SBATCH --nodelist=node[15,16]
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:2,VRAM:48G
+#SBATCH --gres=gpu:4,VRAM:48G
 #SBATCH --mem=24G
 #SBATCH --time=50:00:00
 #SBATCH --mail-type=NONE
