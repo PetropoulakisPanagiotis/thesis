@@ -11,7 +11,7 @@ import torch
 from torchvision import transforms
 from torch.utils.data import Dataset
 
-from utils_clean import _is_pil_image, _is_numpy_image, custom_cmap_instances
+from utils import _is_pil_image, _is_numpy_image, custom_cmap_instances
 
 
 class DatasetPreprocess(Dataset):

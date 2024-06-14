@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 
-from networks.NewCRFDepth_clean import NewCRFDepth
+from networks.NewCRFDepth import NewCRFDepth
 from utils import compute_errors, compute_error_uncertainty, sigma_metric_from_canonical_and_scale
 
 

@@ -3,7 +3,7 @@ import random
 import torch
 import cv2
 
-from utils_clean import inv_normalize, find_indexes_valid_instances, colormap
+from utils import inv_normalize, find_indexes_valid_instances, colormap
 
 
 def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, current_loss_unc_decoder, var_sum, var_cnt, num_images, \

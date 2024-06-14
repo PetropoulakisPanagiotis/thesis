@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 import cv2
 
-from .depth_update_clean import padding_global
+from .depth_update import padding_global
 
 
 """
