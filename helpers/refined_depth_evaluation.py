@@ -38,24 +38,35 @@ def compute_errors(gt, pred, var=None):
 # Define the dataset class
 class MyDataset(Dataset):
     def __init__(self, true_depth_path, original_data_path, refined_data_path):
+        self.mask_to_mappoints = True
         self.original_data_path = original_data_path
         self.refined_data_path = refined_data_path
 
         self.optimized_scale_folder = os.path.join(self.refined_data_path, 'optimized_scale/')
+        self.optimized_scale_map_folder = os.path.join(self.refined_data_path, 'optimized_scale/')
+        #self.optimized_depth_folder = os.path.join(self.refined_data_path, 'optimized_scale/')
+
+
         self.scale_map_folder = os.path.join(self.original_data_path, 'scale_map/')
         self.canonical_folder = os.path.join(original_data_path, 'canonical/')
         self.depth_folder = os.path.join(original_data_path, 'depth/')
+
         self.true_depth_folder = true_depth_path
 
         self.optimized_scale = sorted([f for f in os.listdir(self.optimized_scale_folder) if f.endswith('.json')])
+        self.optimized_scale_map = sorted([f for f in os.listdir(self.optimized_scale_map_folder) if f.endswith('scale_map.png')])
+        #self.optimized_depth = sorted([f for f in os.listdir(self.optimized_depth_folder) if f.endswith('depth_map.png')])
+
         self.size_dataset = len(self.optimized_scale)
+        assert self.size_dataset == len(self.optimized_scale_map)# and self.size_dataset == len(self.optimized_depth)
+
 
         self.canonical = [f for f in os.listdir(self.canonical_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
         self.depth = [f for f in os.listdir(self.depth_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
         self.scale_map = [f for f in os.listdir(self.scale_map_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
 
         self.true_depth = [f for f in os.listdir(self.true_depth_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
-        print(self.size_dataset)
+
         assert self.size_dataset == len(self.depth) and self.size_dataset == len(self.depth) \
                and self.size_dataset == len(self.scale_map) and self.size_dataset == len(self.true_depth)
 
@@ -74,6 +85,15 @@ class MyDataset(Dataset):
         scale_map = cv2.imread(scale_map_file, -1)
         scale_map = torch.Tensor(scale_map).type(torch.int64)
 
+        optimized_scale_map_file = os.path.join(self.optimized_scale_map_folder, self.optimized_scale_map[index])
+        optimized_scale_map = cv2.imread(optimized_scale_map_file, - 1)
+        optimized_scale_map = torch.Tensor(optimized_scale_map).type(torch.int64)
+
+        # Optimized depth of mappoints #
+        #optimized_depth_file = os.path.join(self.optimized_depth_folder, self.optimized_depth[index])
+        #optimized_depth = cv2.imread(optimized_depth_file, -1) / 1000 
+        #optimized_depth = torch.Tensor(optimized_depth).type(torch.float32)
+
         # Read canonical and depth #
         canonical_file = os.path.join(self.canonical_folder, self.canonical[index])
         canonical = cv2.imread(canonical_file, -1) / 1000 
@@ -87,9 +107,16 @@ class MyDataset(Dataset):
         true_depth = cv2.imread(true_depth_file, -1) / 1000 
         true_depth = torch.Tensor(true_depth).type(torch.float32)
 
-        # Calculated refined depth #
+        # Select only depth of optimized mappoints #
+        if self.mask_to_mappoints:
+            canonical = canonical * optimized_scale_map
+            depth = depth * optimized_scale_map
+            true_depth = true_depth * optimized_scale_map
+
+        # Calculated refined depth - whole depth map using scale #
         depth_refined = canonical * torch.take(scale, scale_map.flatten()).view(canonical.shape)
 
+        #data = {"true_depth": true_depth, "depth": depth, "depth_refined": depth_refined, "optimized_depth": optimized_depth}
         data = {"true_depth": true_depth, "depth": depth, "depth_refined": depth_refined}
         return data
 
@@ -108,14 +135,15 @@ if __name__ == '__main__':
 
     errors_network = np.zeros(9)
     errors_refined = np.zeros(9)
+    errors_optimized = np.zeros(9)
 
     # Iterate over the data in a loop
     for i, batch in tqdm(enumerate(data_loader), total=len(dataset)):
         # Do something with the batch (e.g., pass it to a model)
         true_depth = batch["true_depth"].cpu().numpy()
         depth = batch["depth"].cpu().numpy()
+        #optimized_depth = batch["optimized_depth"].cpu().numpy()
         depth_refined = batch["depth_refined"].cpu().numpy()
-
 
         true_depth = true_depth.flatten()
         true_depth[np.isinf(true_depth)] = min_depth
@@ -127,6 +155,14 @@ if __name__ == '__main__':
         depth[depth < min_depth] = min_depth
         depth[depth > max_depth] = max_depth
 
+        """
+        optimized_depth = optimized_depth.flatten()
+        optimized_depth[np.isinf(optimized_depth)] = min_depth
+        optimized_depth[np.isnan(optimized_depth)] = max_depth
+        optimized_depth[optimized_depth < min_depth] = min_depth
+        optimized_depth[optimized_depth > max_depth] = max_depth
+        """
+
         depth_refined = depth_refined.flatten()
         depth_refined[depth_refined < min_depth] = min_depth
         depth_refined[depth_refined > max_depth] = max_depth
@@ -137,10 +173,17 @@ if __name__ == '__main__':
 
         errors_network = errors_network + np.asarray(compute_errors(true_depth[valid_depth], depth[valid_depth]))
         errors_refined = errors_refined + np.asarray(compute_errors(true_depth[valid_depth], depth_refined[valid_depth]))
+        #errors_optimized = errors_optimized + np.asarray(compute_errors(true_depth[valid_depth], optimized_depth[valid_depth]))
 
     errors_network /= len(dataset)
     errors_refined /= len(dataset)
+    #errors_optimized /= len(dataset)
 
+    print('Computing errors for {} eval samples'.format(len(dataset)))
+    print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format('silog', 'abs_rel', 'log10', 'rms',
+                                                                                 'sq_rel', 'log_rms', 'd1', 'd2',
+                                                                                 'd3'))
     print(errors_network)
     print(errors_refined)
+    #print(errors_optimized)
 

@@ -43,9 +43,10 @@ class Tracking(object):
             self.optimizer.add_pose(0, pose, cam, fixed=False)
 
             # Scales: edge and vertex #
-            for ii, scale in enumerate(scale_aware_frame.scales):
-                # Scale Id: ii
-                self.optimizer.add_scale(ii, scale, fixed=True)
+            for ii, (scale, scale_valid) in enumerate(zip(scale_aware_frame.scales, scale_aware_frame.scales_valid)):
+                if scale_valid == 1:
+                    # Scale Id: ii
+                    self.optimizer.add_scale(ii, scale, fixed=True)
 
             # BA with one pose #
             for ii, m in enumerate(measurements):
@@ -291,14 +292,29 @@ class RGBDPTAM(object):
 
         # Save optimized scale #
         if self.args.scale_aware:
+            total_mappoints = 0
             for keyframe in self.mapping.graph.keyframes():
                 scale_data = {'scale': keyframe.scale_aware_frame.scales, 'scale_type': args.optimization_type, 'scale_uncertainty': keyframe.scale_aware_frame.scales_uncertainty}
-                path = args.out_path + args.optimization_type + '/optimized_scale/' + str(f'{int(keyframe.rgb.timestamp):05}' + '.json')
+                path = args.out_path + args.optimization_type + '/optimized_scale/' + str(f'{int(keyframe.rgb.timestamp):05}') + '.json'
                 with open(path, 'w') as file:
                     json.dump(scale_data, file, indent=4)
 
-        print("Results saved!\n")
+                path_scale_map = args.out_path + args.optimization_type + '/optimized_scale/' + str(f'{int(keyframe.rgb.timestamp):05}') + '_scale_map.png'
+                path_depth_map = args.out_path + args.optimization_type + '/optimized_scale/' + str(f'{int(keyframe.rgb.timestamp):05}') + '_depth_map.png'
+                scale_map = np.zeros((keyframe.rgb.image.shape[:2]))
+                depth_map = np.zeros((keyframe.rgb.image.shape[:2]))
 
+                total_mappoints += len(keyframe.measurements())
+                for m in keyframe.measurements():
+                    xy = [int(item) for item in m.xy]
+                    scale_map[xy[1], xy[0]] = 1
+                    depth_map[xy[1], xy[0]] = keyframe.transform(m.mappoint.position)[2] / 1000 
+                cv2.imwrite(path_scale_map, scale_map, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+                cv2.imwrite(path_depth_map, depth_map, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+
+        print("Results saved!\n")
+        print("Total mappoints: ", total_mappoints)
+        print("Total keyframes: ", len(self.mapping.graph.keyframes()))
 
 if __name__ == '__main__':
     import cv2
@@ -392,10 +408,10 @@ if __name__ == '__main__':
         time_start = time.time()
         feature.extract()  # Detect keypoints and descriptors of image
         if args.scale_aware:
-            scales, scales_uncertainty, _ = dataset.scale[i]
+            scales, scales_uncertainty, _, scales_valid = dataset.scale[i]
             frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp, canonical=dataset.canonical[i],
                               canonical_uncertainty=dataset.canonical_uncertainty[i], scales=scales, 
-                              scales_uncertainty=scales_uncertainty, pixel_to_scale_map=dataset.pixel_to_scale_map[i])
+                              scales_uncertainty=scales_uncertainty, pixel_to_scale_map=dataset.pixel_to_scale_map[i], scales_valid=scales_valid)
         else:
             frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp)
 

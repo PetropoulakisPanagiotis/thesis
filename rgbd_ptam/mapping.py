@@ -307,20 +307,3 @@ class MappingThread(Mapping):
 
     def interrupt_ba(self):
         self.optimizer.abort()
-
-    def save_results(self, file_path: str):
-        with open(file_path, 'w') as file_result:
-            for kf in self.graph.keyframes():
-                timestamp = kf.timestamp
-                matrix = kf.pose.matrix()[:3]
-                xyz = matrix[:3, 3]
-                r = Rotation.from_matrix(matrix[:3, :3])
-                q = r.as_quat().tolist()
-
-                current_result = [timestamp]
-                current_result.extend(xyz)
-                current_result.extend(q)
-                current_result = [str(item) for item in current_result]
-
-                line = ' '.join(current_result)
-                file_result.write(line + '\n')

@@ -45,7 +45,7 @@ ScaleAware: canonical, scales + uncertainties
 
 class ScaleAwareFrame(object):
     def __init__(self, idx, canonical=None, canonical_uncertainty=None, scales=None, scales_uncertainty=None,
-                 pixel_to_scale_map=None):
+                 pixel_to_scale_map=None, scales_valid=None):
         self.idx = idx
         self.canonical = canonical  # 'image'
         if canonical is not None:
@@ -58,7 +58,7 @@ class ScaleAwareFrame(object):
         self.scales = scales  # list
         self.scales_uncertainty = scales_uncertainty  # list
         self.pixel_to_scale_map = pixel_to_scale_map  # 'image'
-
+        self.scales_valid = scales_valid # valid scale list 0 or 1
 
 """
 Frame:
@@ -180,14 +180,14 @@ rgb is FRAME
 
 class RGBDFrame(Frame, ScaleAwareFrame):
     def __init__(self, idx, pose, feature, depth, cam, timestamp=None, pose_covariance=np.identity(6), canonical=None,
-                 canonical_uncertainty=None, scales=None, scales_uncertainty=None, pixel_to_scale_map=None):
+                 canonical_uncertainty=None, scales=None, scales_uncertainty=None, pixel_to_scale_map=None, scales_valid=None):
 
         super().__init__(idx, pose, feature, cam, timestamp, pose_covariance)
         self.rgb = Frame(idx, pose, feature, cam, timestamp, pose_covariance)
         self.scale_aware_frame = None
         if canonical is not None:
             self.scale_aware_frame = ScaleAwareFrame(idx, canonical / cam.scale, canonical_uncertainty, scales, scales_uncertainty,
-                                                     pixel_to_scale_map)
+                                                     pixel_to_scale_map, scales_valid)
         self.depth = depth
 
     def virtual_stereo(self, px):
@@ -315,7 +315,9 @@ class RGBDFrame(Frame, ScaleAwareFrame):
 
     def update_scale(self, scales: list):
         if self.scale_aware_frame is not None:
-            self.scale_aware_frame.scales = scales
+            for ii, (scale, scale_valid) in enumerate(zip(scales, self.scale_aware_frame.scales_valid)):
+                if scale_valid == 1:
+                    self.scale_aware_frame.scales[ii] = scale
 
     def can_view(self, mappoints):  # batch version
         points = []
@@ -345,7 +347,7 @@ class RGBDFrame(Frame, ScaleAwareFrame):
         if self.scale_aware_frame is not None:
             return KeyFrame(self.idx, self.pose, self.feature, self.depth, self.cam, self.timestamp, self.pose_covariance, 
                             self.scale_aware_frame.canonical, self.scale_aware_frame.canonical_uncertainty, self.scale_aware_frame.scales,
-                            self.scale_aware_frame.scales_uncertainty, self.scale_aware_frame.pixel_to_scale_map)
+                            self.scale_aware_frame.scales_uncertainty, self.scale_aware_frame.pixel_to_scale_map, self.scale_aware_frame.scales_valid)
         else:
             return KeyFrame(self.idx, self.pose, self.feature, self.depth, self.cam, self.timestamp, self.pose_covariance)
 

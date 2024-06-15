@@ -28,7 +28,8 @@ class ScaleReader(object):
                 scale = data['scale'] # This is a list
                 scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), a_min=self.min_var, a_max=self.max_var).tolist()
                 scale_type = data['scale_type']
-                self.cache[idx] = (scale, scale_unc, scale_type)
+                scale_valid = data['valid']
+                self.cache[idx] = (scale, scale_unc, scale_type, scale_valid)
 
     def read(self, path):
         scale, scale_unc, scale_type = [], [], []
@@ -37,13 +38,14 @@ class ScaleReader(object):
             scale = data['scale'] # This is a list
             scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), a_min=self.min_var, a_max=self.max_var).tolist()
             scale_type = data['scale_type']
+            scale_valid = data['valid']
 
-        return scale, scale_unc, scale_type
+        return scale, scale_unc, scale_type, scale_valid
 
     def __getitem__(self, idx):
-        scale, scale_unc, scale_type = self.cache[idx]
-        #scale, scale_unc, scale_type = self.read(self.ids[idx])
-        return scale, scale_unc, scale_type
+        scale, scale_unc, scale_type, scale_valid = self.cache[idx]
+        #scale, scale_unc, scale_type, scale_valid = self.read(self.ids[idx])
+        return scale, scale_unc, scale_type, scale_valid
 
     def __len__(self):
         return len(self.ids)
