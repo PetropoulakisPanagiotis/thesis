@@ -28,7 +28,7 @@ class ScaleReader(object):
                 scale = data['scale'] # This is a list
                 scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), a_min=self.min_var, a_max=self.max_var).tolist()
                 scale_type = data['scale_type']
-                scale_valid = data['valid']
+                scale_valid = data['valid'] if not scale_type == 'single' else [1]
                 self.cache[idx] = (scale, scale_unc, scale_type, scale_valid)
 
     def read(self, path):
@@ -38,7 +38,7 @@ class ScaleReader(object):
             scale = data['scale'] # This is a list
             scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), a_min=self.min_var, a_max=self.max_var).tolist()
             scale_type = data['scale_type']
-            scale_valid = data['valid']
+            scale_valid = data['valid'] if not scale_type == 'single' else [1]
 
         return scale, scale_unc, scale_type, scale_valid
 

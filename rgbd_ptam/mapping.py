@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
+import open3d as o3d
 
 from queue import Queue
 from threading import Thread, Lock, Condition
@@ -10,6 +11,9 @@ from collections import defaultdict
 
 from optimization import LocalBA, LocalBAScaleAware
 from components import Measurement
+
+
+
 """
 Map used in MappingThread - is-a
 """
@@ -307,3 +311,19 @@ class MappingThread(Mapping):
 
     def interrupt_ba(self):
         self.optimizer.abort()
+
+
+    def create_map(self, save_file: str):
+        mappoints = list(set(chain(*[kf.mappoints() for kf in self.graph.keyframes()])))
+        print("saving map pcd")
+        print("Total mappoints: ", len(mappoints))
+        points = []
+        colors = []
+        for mappoint in mappoints:
+            points.append(mappoint.position.tolist())
+            colors.append(mappoint.color)
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points)
+        pcd.colors = o3d.utility.Vector3dVector(colors)
+        o3d.io.write_point_cloud(save_file, pcd)

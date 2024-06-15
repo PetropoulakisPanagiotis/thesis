@@ -38,7 +38,8 @@ def compute_errors(gt, pred, var=None):
 # Define the dataset class
 class MyDataset(Dataset):
     def __init__(self, true_depth_path, original_data_path, refined_data_path):
-        self.mask_to_mappoints = True
+        self.mask_to_mappoints = False
+        self.use_original_depth = False
         self.original_data_path = original_data_path
         self.refined_data_path = refined_data_path
 
@@ -48,6 +49,7 @@ class MyDataset(Dataset):
 
 
         self.scale_map_folder = os.path.join(self.original_data_path, 'scale_map/')
+        self.original_scale_folder = os.path.join(self.original_data_path, 'scale/')
         self.canonical_folder = os.path.join(original_data_path, 'canonical/')
         self.depth_folder = os.path.join(original_data_path, 'depth/')
 
@@ -58,17 +60,19 @@ class MyDataset(Dataset):
         #self.optimized_depth = sorted([f for f in os.listdir(self.optimized_depth_folder) if f.endswith('depth_map.png')])
 
         self.size_dataset = len(self.optimized_scale)
-        assert self.size_dataset == len(self.optimized_scale_map)# and self.size_dataset == len(self.optimized_depth)
+        assert self.size_dataset == len(self.optimized_scale_map)#  and self.size_dataset == len(self.optimized_depth)
 
 
-        self.canonical = [f for f in os.listdir(self.canonical_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
-        self.depth = [f for f in os.listdir(self.depth_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
-        self.scale_map = [f for f in os.listdir(self.scale_map_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
+        self.canonical = sorted([f for f in os.listdir(self.canonical_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale])
+        self.depth = sorted([f for f in os.listdir(self.depth_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale])
+        self.scale_map = sorted([f for f in os.listdir(self.scale_map_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale])
+        self.original_scale = sorted([f for f in os.listdir(self.original_scale_folder) if f.endswith('.json') and f.split('.')[0] + '.json' in self.optimized_scale])
 
-        self.true_depth = [f for f in os.listdir(self.true_depth_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale]
+        self.true_depth = sorted([f for f in os.listdir(self.true_depth_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale])
 
         assert self.size_dataset == len(self.depth) and self.size_dataset == len(self.depth) \
-               and self.size_dataset == len(self.scale_map) and self.size_dataset == len(self.true_depth)
+               and self.size_dataset == len(self.scale_map) and self.size_dataset == len(self.true_depth) \
+               and self.size_dataset == len(self.original_scale)
 
     def __getitem__(self, index):
 
@@ -79,6 +83,14 @@ class MyDataset(Dataset):
             scale = data['scale'] # This is a list
 
         scale = torch.Tensor(np.asarray(scale)).type(torch.float32)
+
+        original_scale_file = os.path.join(self.original_scale_folder, self.original_scale[index])
+        # Read optimized scale #
+        with open(original_scale_file) as file:
+            data = json.load(file)
+            original_scale = data['scale'] # This is a list
+
+        original_scale = torch.Tensor(np.asarray(original_scale)).type(torch.float32)
 
         # Read scale map #
         scale_map_file = os.path.join(self.scale_map_folder, self.scale_map[index])
@@ -107,14 +119,16 @@ class MyDataset(Dataset):
         true_depth = cv2.imread(true_depth_file, -1) / 1000 
         true_depth = torch.Tensor(true_depth).type(torch.float32)
 
+        # Calculated refined depth - whole depth map using scale #
+        depth_refined = canonical * torch.take(scale, scale_map.flatten()).view(canonical.shape)
+        if self.use_original_depth == False:
+            depth = canonical * torch.take(original_scale, scale_map.flatten()).view(canonical.shape)
+
         # Select only depth of optimized mappoints #
         if self.mask_to_mappoints:
             canonical = canonical * optimized_scale_map
             depth = depth * optimized_scale_map
             true_depth = true_depth * optimized_scale_map
-
-        # Calculated refined depth - whole depth map using scale #
-        depth_refined = canonical * torch.take(scale, scale_map.flatten()).view(canonical.shape)
 
         #data = {"true_depth": true_depth, "depth": depth, "depth_refined": depth_refined, "optimized_depth": optimized_depth}
         data = {"true_depth": true_depth, "depth": depth, "depth_refined": depth_refined}
@@ -155,13 +169,11 @@ if __name__ == '__main__':
         depth[depth < min_depth] = min_depth
         depth[depth > max_depth] = max_depth
 
-        """
-        optimized_depth = optimized_depth.flatten()
-        optimized_depth[np.isinf(optimized_depth)] = min_depth
-        optimized_depth[np.isnan(optimized_depth)] = max_depth
-        optimized_depth[optimized_depth < min_depth] = min_depth
-        optimized_depth[optimized_depth > max_depth] = max_depth
-        """
+        #optimized_depth = optimized_depth.flatten()
+        #optimized_depth[np.isinf(optimized_depth)] = min_depth
+        #optimized_depth[np.isnan(optimized_depth)] = max_depth
+        #optimized_depth[optimized_depth < min_depth] = min_depth
+        #optimized_depth[optimized_depth > max_depth] = max_depth
 
         depth_refined = depth_refined.flatten()
         depth_refined[depth_refined < min_depth] = min_depth
@@ -186,4 +198,3 @@ if __name__ == '__main__':
     print(errors_network)
     print(errors_refined)
     #print(errors_optimized)
-

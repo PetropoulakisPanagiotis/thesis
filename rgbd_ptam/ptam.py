@@ -300,21 +300,21 @@ class RGBDPTAM(object):
                     json.dump(scale_data, file, indent=4)
 
                 path_scale_map = args.out_path + args.optimization_type + '/optimized_scale/' + str(f'{int(keyframe.rgb.timestamp):05}') + '_scale_map.png'
-                path_depth_map = args.out_path + args.optimization_type + '/optimized_scale/' + str(f'{int(keyframe.rgb.timestamp):05}') + '_depth_map.png'
                 scale_map = np.zeros((keyframe.rgb.image.shape[:2]))
-                depth_map = np.zeros((keyframe.rgb.image.shape[:2]))
+                #depth_map = np.zeros((keyframe.rgb.image.shape[:2]))
+                #path_depth_map = args.out_path + args.optimization_type + '/optimized_scale/' + str(f'{int(keyframe.rgb.timestamp):05}') + '_depth_map.png'
 
                 total_mappoints += len(keyframe.measurements())
                 for m in keyframe.measurements():
                     xy = [int(item) for item in m.xy]
                     scale_map[xy[1], xy[0]] = 1
-                    depth_map[xy[1], xy[0]] = keyframe.transform(m.mappoint.position)[2] / 1000 
-                cv2.imwrite(path_scale_map, scale_map, [cv2.IMWRITE_PNG_COMPRESSION, 9])
-                cv2.imwrite(path_depth_map, depth_map, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+                    #depth_map[xy[1], xy[0]] = keyframe.transform(m.mappoint.position)[2] / 1000 
 
-        print("Results saved!\n")
-        print("Total mappoints: ", total_mappoints)
+                cv2.imwrite(path_scale_map, scale_map, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+                #cv2.imwrite(path_depth_map, depth_map, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+
         print("Total keyframes: ", len(self.mapping.graph.keyframes()))
+        print("Results saved!\n")
 
 if __name__ == '__main__':
     import cv2
@@ -341,12 +341,14 @@ if __name__ == '__main__':
                         default='path/to/your/ICL-NUIM_RGBD/living_room_traj3_frei_png')
 
     parser.add_argument('--scale_aware', action='store_true', default=False, help='Scale-Aware slam loss enable')
+    parser.add_argument('--network_depth', action='store_true', default=False, help='Use ground truth depth or network depth')
     parser.add_argument('--optimization_base_type', type=str, default='mono', choices=['mono', 'virtual'], help='Monocular or virtual stereo')
     parser.add_argument('--use_uncertainties', action='store_true', default=False, help='use uncertainties during optimization') 
     parser.add_argument('--optimization_type', type=str, default='global', choices=['global', 'segmentation', 'instances'], help='Scale-Aware variation')
     parser.add_argument('--out_path', type=str, default='./results/', help='Folder to save results')
     parser.add_argument('--total', type=int, default=None, help='Total number of frame')
 
+    parser.add_argument('--exp_name', type=str, default='exp_1', help='Experiment name')
 
     parser.add_argument('--threshold_camera', type=float, default=5.991, help='Threshold for huber loss camera')
     parser.add_argument('--weight_camera', type=float, default=1, help='Weight for camera loss')
@@ -371,12 +373,14 @@ if __name__ == '__main__':
     parser.add_argument('--split', type=str, default='valid')
     args = parser.parse_args()
 
+    args.out_path += args.exp_name + '/'
+
     if 'tum' in args.dataset.lower():
         dataset = TUMRGBDDataset(args.path)
     elif 'icl' in args.dataset.lower():
         dataset = ICLNUIMDataset(args.path)
     elif 'scannet' in args.dataset.lower():
-        dataset = ScanNetDataset(args.path, args.scene, args.split, args.scale_aware, args.optimization_type, total=args.total)
+        dataset = ScanNetDataset(args.path, args.scene, args.split, args.scale_aware, args.optimization_type, network_depth=args.network_depth, total=args.total)
 
     params = Params()
     ptam = RGBDPTAM(params, args)
@@ -432,7 +436,10 @@ if __name__ == '__main__':
     print('num keyframes', len(ptam.graph.keyframes()))
     print('average time', np.mean(durations))
 
+    print("saving results\n")
     ptam.save_results(args.out_path + 'slam_result.txt')
+
+    ptam.mapping.create_map(args.out_path + 'map.pcd')
 
     ptam.stop()
     if not args.no_viz:
