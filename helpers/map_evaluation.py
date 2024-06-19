@@ -20,6 +20,7 @@ if __name__ == '__main__':
     voxel_grid_1 = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd_1, voxel_size)
     voxel_grid_2 = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd_2, voxel_size)
     voxel_grid_3 = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd_3, voxel_size)
+    # occupancy, esdf, dsdf
 
     print(compute_accuracy(pcd_2, pcd_1))
     print(compute_accuracy(pcd_3, pcd_1))
