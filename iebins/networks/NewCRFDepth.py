@@ -17,7 +17,7 @@ class NewCRFDepth(nn.Module):
                     bin_num=16, update_block=0, loss_type=0, train_decoder=0, \
                     num_semantic_classes=14, num_instances=63, var=0, padding_instances=0, \
                     segmentation_active= False, instances_active=False, roi_align=False, roi_align_size=32, \
-                    bins_scale=50, d3vo=False, d3vo_c=False, virtual_depth_variation=0, upsample_type=0, bins_type=1, bins_type_scale=1, **kwargs):
+                    bins_scale=50, unc_head=False, virtual_depth_variation=0, upsample_type=0, bins_type=1, bins_type_scale=1, **kwargs):
         super().__init__()
         self.freeze_backbone = True
         self.train_decoder = train_decoder  # train the last layer of decoder
@@ -31,6 +31,7 @@ class NewCRFDepth(nn.Module):
         self.max_depth = max_depth
         self.bins_type = bins_type
         self.bins_type_scale = bins_type_scale
+        self.bins_scale = bins_scale
 
         # Instances
         self.segmentation_active = segmentation_active
@@ -44,30 +45,30 @@ class NewCRFDepth(nn.Module):
         self.roi_align = roi_align
         self.roi_align_size = roi_align_size
 
-        # Uncertainty d3vo
-        self.d3vo = d3vo
-        self.d3vo_c = d3vo_c
+        # Uncertainty via additional heads
+        self.unc_head = unc_head
 
         # 0 silog (use relu) or l1
         self.update_block = update_block
         if loss_type == 0:
             self.loss_type = 0
-            print("Using silog loss\n") 
+            print("Using silog loss") 
         else:
             self.loss_type = 1
-            print("Using l1 loss\n") 
+            print("Using l1 loss") 
        
         if self.update_block == 0:
             if self.loss_type != 0:
-                raise ValueError("IEBINS can only be used with silog loss\n")
+                raise ValueError("IEBINS can only be used with silog loss")
             if self.bin_num != 16: 
-                raise ValueError("IEBINS can only be used with 16 bins\n")
+                raise ValueError("IEBINS can only be used with 16 bins")
 
         if self.upsample_type == 1:
-            print("Uncertainty upsampling type: vanilla\n")
+            print("Uncertainty upsampling type: vanilla")
         else:        
-            print("Uncertainty upsampling type: use squre weight of canonical depth\n")
-        print("Number of bins: ", self.bin_num)
+            print("Uncertainty upsampling type: use squre weight of canonical depth")
+        print("Number of bins (canonical): ", self.bin_num)
+        print("Number of bins (scale): ", self.bins_scale)
        
         # Backbone dims
         if version[:-2] == 'base':
@@ -203,7 +204,7 @@ class NewCRFDepth(nn.Module):
         self.project = ProjectionV2(v_dims[0], self.hidden_dim)
 
         # D3VO uncertainty
-        if self.d3vo:
+        if self.unc_head:
             if self.instances_active:
                 num_classes = self.num_instances
             elif self.segmentation_active:
@@ -211,9 +212,8 @@ class NewCRFDepth(nn.Module):
             else:
                 num_classes = 1
 
-            self.d3vo_head = D3VOHead(input_dim=crf_dims[0], num_classes=num_classes)
-            if self.d3vo_c:
-                self.d3vo_head_c = UncertaintyHead(input_dim=crf_dims[0])
+            self.unc_head_s = D3VOHead(input_dim=crf_dims[0], num_classes=num_classes)
+            self.unc_head_c = UncertaintyHead(input_dim=crf_dims[0])
 
         # Initialize layers
         self.init_weights(pretrained=pretrained)
@@ -228,20 +228,20 @@ class NewCRFDepth(nn.Module):
                 param.requires_grad = False
             for param in self.crf2.parameters():
                 param.requires_grad = False
-            if self.train_decoder == 0 or self.d3vo:
+            if self.train_decoder == 0 or self.unc_head:
                 for param in self.crf1.parameters():
                     param.requires_grad = False
             else:
                 print("[Train last layer of decoder (crf1)]")
 
-        if self.d3vo:
+        if self.unc_head:
             for param in self.project.parameters():
                 param.requires_grad = False
 
             for param in self.update.parameters():
                 param.requires_grad = False
 
-    def set_to_eval_d3vo(self):
+    def set_to_eval_unc(self):
         # Set some layers to eval to train the uncertainty decoder
         self.backbone.eval()
         self.psp_module.eval()
@@ -286,10 +286,9 @@ class NewCRFDepth(nn.Module):
         e0 = self.project(e1)  # To hidden_dim
 
         # Uncertainty prediction from the decoder
-        if self.d3vo:
-            unc_d3vo = self.d3vo_head(e0)
-            if self.d3vo_c:
-                unc_d3vo_c = self.d3vo_head_c(e0)
+        if self.unc_head:
+            unc_s = self.unc_head_s(e0)
+            unc_c = self.unc_head_c(e0)
 
         b, c, h, w = e1.shape
 
@@ -328,10 +327,9 @@ class NewCRFDepth(nn.Module):
         # Process result and upsample #
         for i in range(self.max_tree_depth):
             # Uncertainty from the decoder block #
-            if self.d3vo:
-                result["unc_d3vo"] = unc_d3vo
-                if self.d3vo_c:
-                    result["unc_d3vo_c"] = upsample(unc_d3vo_c, scale_factor=4, upsample_type=self.upsample_type,
+            if self.unc_head:
+                result["unc_s"] = unc_s
+                result["unc_c"] = upsample(unc_c, scale_factor=4, upsample_type=self.upsample_type,
                                                     uncertainty=True)
         return result
 

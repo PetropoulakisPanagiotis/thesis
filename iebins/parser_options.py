@@ -92,9 +92,8 @@ train_parser.add_argument('--virtual_depth_variation', type=int,
                           help='0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonica', default='0')
 
 # -> Uncertainty #
-train_parser.add_argument('--d3vo', dest='d3vo', help='predict uncertainty for scale d3vo', action='store_true')
-train_parser.add_argument('--d3vo_c', dest='d3vo_c', help='predict uncertainty for canonical depth with d3vo',
-                          action='store_true')
+train_parser.add_argument('--predict_unc', dest='predict_unc', help='predict uncertainty and estimate loss', action='store_true')
+train_parser.add_argument('--unc_head', dest='unc_head', help='predict uncertainty for scale and canonical using additional heads', action='store_true')
 train_parser.add_argument('--d3vo_original', dest='d3vo_original', help='use original d3vo loss with no beta',
                           action='store_true')
 train_parser.add_argument(
@@ -167,9 +166,8 @@ eval_parser.add_argument('--virtual_depth_variation', type=int,
                           help='0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonica', default='0')
 
 # -> Uncertainty #
-eval_parser.add_argument('--d3vo', dest='d3vo', help='predict uncertainty for scale d3vo', action='store_true')
-eval_parser.add_argument('--d3vo_c', dest='d3vo_c', help='predict uncertainty for canonical depth with d3vo',
-                          action='store_true')
+eval_parser.add_argument('--predict_unc', dest='predict_unc', help='predict uncertainty and estimate loss', action='store_true')
+eval_parser.add_argument('--unc_head', dest='unc_head', help='predict uncertainty for scale and canonical using additional heads', action='store_true')
 eval_parser.add_argument('--d3vo_original', dest='d3vo_original', help='use original d3vo loss with no beta',
                           action='store_true')
 eval_parser.add_argument(
@@ -238,9 +236,8 @@ test_parser.add_argument('--virtual_depth_variation', type=int,
                           help='0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonica', default='0')
 
 # -> Uncertainty #
-test_parser.add_argument('--d3vo', dest='d3vo', help='predict uncertainty for scale d3vo', action='store_true')
-test_parser.add_argument('--d3vo_c', dest='d3vo_c', help='predict uncertainty for canonical depth with d3vo',
-                          action='store_true')
+test_parser.add_argument('--predict_unc', dest='predict_unc', help='predict uncertainty and estimate loss', action='store_true')
+test_parser.add_argument('--unc_head', dest='unc_head', help='predict uncertainty for scale and canonical using additional heads', action='store_true')
 test_parser.add_argument('--d3vo_original', dest='d3vo_original', help='use original d3vo loss with no beta',
                           action='store_true')
 test_parser.add_argument(

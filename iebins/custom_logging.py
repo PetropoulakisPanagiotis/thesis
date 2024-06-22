@@ -128,7 +128,7 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
                                           colormap(torch.log10((pred_depths_rc_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), \
                                           name='magma'), global_step)
 
-    else:
+    else: # Single
         for i in range(num_images):
 
             writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
@@ -142,21 +142,19 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
                                  name='magma'), global_step)
 
             # Canonical
-            if args.update_block == 8 or args.update_block == 1:
+            if args.update_block == 1:
                 for ii in range(max_tree_depth):
                     writer.add_image('depth_canonical_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_rc_list[ii][i, :, :, :].clamp(min=1e-3).data), \
                                      name='magma'), global_step)
 
             # Bins
-            else:
-                if args.update_block == 0 or args.update_block == 3 or args.update_block == 1:
-                    for ii in range(max_tree_depth):
-                        writer.add_image('depth_labels_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].clamp(min=1e-3).data), \
-                                         name='magma'), global_step)
+            for ii in range(max_tree_depth):
+                writer.add_image('depth_labels_est{}/image/{}'.format(ii, i), colormap(torch.log10(pred_depths_c_list[ii][i, :, :, :].clamp(min=1e-3).data), \
+                                 name='magma'), global_step)
 
-                        writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i),
-                                         colormap(uncertainty_maps_list[ii][i, :, :, :].clamp(min=1e-3).data),
-                                         global_step)
+                writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i),
+                                 colormap(uncertainty_maps_list[ii][i, :, :, :].clamp(min=1e-3).data),
+                                 global_step)
 
 
 def tb_visualization_d3vo(writer, global_step, args, current_loss_d3vo, current_lr, var_sum, var_cnt, num_images,

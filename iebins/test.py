@@ -295,6 +295,8 @@ def main():
     args.distributed = False
     ngpus_per_node = torch.cuda.device_count()
 
+    assert args.dataset == 'scannet', "Only scannet support for test.py"
+
     args.save_dir += args.filenames_file_eval.split('/')[-1].split('.')[0] + '/'
     if args.instances:
         args.save_dir += 'instances/'

@@ -121,17 +121,15 @@ def eval_func(model, dataloader_eval):
 
                 mask = torch.sum(instances, dim=1).unsqueeze(0).to(torch.bool).cpu()
                 gt_depth = (gt_depth * mask)
-                #wals = torch.nonzero(labels[0] == 1)
-                #print(result['pred_scale_instances_list'][-1][0, wals])
             elif args.segmentation:
 
                 pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
 
-                if args.d3vo:
-                    sigma_c = torch.sum((segmentation_map * (result["uncertainty_maps_list"][-1]**2)), dim=1)
-                    c = torch.sum((segmentation_map * result["pred_depths_rc_list"][-1]), dim=1)
+                if args.eval_unc:
+                    if args.d3vo:
+                        sigma_c = torch.sum((segmentation_map * (result["uncertainty_maps_list"][-1]**2)), dim=1)
+                        c = torch.sum((segmentation_map * result["pred_depths_rc_list"][-1]), dim=1)
 
-                    if args.d3vo_c:
                         sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
                                                                         result["unc_d3vo_c"],
                                                                         result['pred_scale_list'][-1],
@@ -148,29 +146,21 @@ def eval_func(model, dataloader_eval):
                     s = torch.sum((segmentation_map * result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)), dim=1)
                     sigma_m = s**2 * sigma_c + c**2 * sigma_s
                     sigma_m = sigma_m.unsqueeze(0)
-                # Fair comparison segmentation - instances: use eval_per_class.sh script
-                if False:
-                    if args.pick_class != 0:
-                        non_class = torch.nonzero(labels[0] != args.pick_class)
-                        if non_class.shape[0] == 63:
-                            continue
-                        instances[0, non_class] = torch.zeros_like(instances[0, non_class])
-
-                    if False:
-                        tmp = instances_mask.permute(1, 2, 0)
-                        cv2.imshow("instances_mapped_image", (tmp.cpu().numpy() * 255).astype('uint8'))
-                        cv2.waitKey(0)
-                        cv2.destroyAllWindows()
-
-                    pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
-
-                    mask = torch.sum(instances, dim=1).unsqueeze(0)
-                    pred_depth = pred_depth * mask
-
-                    mask = mask.to(torch.bool).cpu()
-                    gt_depth = (gt_depth * mask)
-            else:
+            else: # Global
                 pred_depth = pred_depths_r_list[-1]
+
+                if args.eval_unc:
+                    if args.d3vo:
+                        sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
+                                                                        result["unc_d3vo_c"],
+                                                                        result['pred_scale_list'][-1],
+                                                                        result["unc_d3vo"], args)
+                    else: # Convert std to variance
+                        sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
+                                                                    result['uncertainty_maps_list'][-1]**2,
+                                                                    result['pred_scale_list'][-1],
+                                                                    result["uncertainty_maps_scale_list"][-1]**2, args)
+
 
             # Tensorboard
             if args.d3vo:
@@ -256,7 +246,7 @@ def eval_func(model, dataloader_eval):
         print(("&{:8.3f}  " * 6).format(*aucs["abs_rel"].tolist() + aucs["rmse"].tolist() + aucs["a1"].tolist()) +
               "\\\\")
 
-        print("Eval uncertainty bins e^2/variance: ", eval_measures[10] / cnt)
+        print("Eval uncertainty bins e^2/variance: ", eval_measures[10].cpu().numpy() / cnt)
         print("SCC: ", scc_total / cnt)
 
     return eval_measures_cpu, unc_error
@@ -274,7 +264,7 @@ def main_worker(args):
                         padding_instances=args.padding_instances, \
                         segmentation_active=args.segmentation,  instances_active=args.instances,\
                         roi_align=args.roi_align, roi_align_size=args.roi_align_size, \
-                        bins_scale=args.bins_scale, d3vo=args.d3vo, d3vo_c=args.d3vo_c, virtual_depth_variation=args.virtual_depth_variation, \
+                        bins_scale=args.bins_scale, d3vo=args.d3vo, virtual_depth_variation=args.virtual_depth_variation, \
                         upsample_type=args.upsample_type, bins_type=args.bins_type, bins_type_scale=args.bins_type_scale)
     model.train()
 

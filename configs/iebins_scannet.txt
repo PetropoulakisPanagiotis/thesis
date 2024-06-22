@@ -1,0 +1,44 @@
+--retrain
+--pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
+--checkpoint_path /usr/stud/petp/code/saved_models/nyu_T.pth
+
+--dataset scannet
+--data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+--gt_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+--filenames_file /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train_debug.txt
+
+--do_online_eval
+--log_freq 10
+--eval_freq 10
+--log_directory /usr/stud/petp/code/thesis/tmp/
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train_debug.txt
+--min_depth_eval 1e-3
+--max_depth_eval 10
+
+--input_height 480
+--input_width 640
+
+--batch_size 2
+--num_epochs 180
+--learning_rate 2e-5
+--weight_decay 1e-2
+--adam_eps 1e-3
+
+--num_threads 1
+--multiprocessing_distributed
+--dist_url tcp://127.0.0.1:2345
+--upsample_type 0
+
+--eigen_crop
+
+--exp_name iebins
+--update_block 0
+
+--loss_type 0
+
+--bin_num 16
+--min_depth 0
+--max_depth 10
+--max_tree_depth 6

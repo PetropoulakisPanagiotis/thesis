@@ -60,7 +60,9 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
 
             pred_depth = pred_depth.cpu().numpy().squeeze()
 
-            if args.d3vo:
+            if args.predict_unc:
+
+                """
                 if args.d3vo_c:
                     if not args.instances:
                         sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1],
@@ -84,7 +86,24 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
                     sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).squeeze(0).cpu().numpy()
                 else:
                     sigma_metric = sigma_metric.squeeze(0).squeeze(0).cpu().numpy()
-
+                """
+                if args.instances:
+                    pass
+                elif args.segmentation:
+                    pass
+                else:
+                    if args.unc_head:
+                        sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1],
+                                                                             result["unc_c"][-1],
+                                                                             result["pred_scale_list"][-1],
+                                                                             result["unc_s"], args)
+                    else:
+                        # uncertainty of canonical is std --> convert to variance
+                        sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1],
+                                                                             result["uncertainty_maps_list"][-1]**2,
+                                                                             result["pred_scale_list"][-1],
+                                                                             result["uncertainty_maps_scale_list"]**2, args)
+                    sigma_metric = sigma_metric.squeeze(0).squeeze(0).cpu().numpy()
             # Mask gt_depth #
             if args.instances:
                 mask = torch.sum(instances, dim=1).squeeze(0).to(torch.bool).cpu()
@@ -117,7 +136,7 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
             eval_measures[:measures_size - 1] += torch.tensor(measures).cuda(device=gpu)
             eval_measures[measures_size - 1] += 1
 
-            if args.d3vo:
+            if args.predict_unc:
                 eval_d3vo_numpy = compute_error_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask],
                                                             sigma_metric[valid_mask], original_d3vo)
                 eval_d3vo += torch.tensor(eval_d3vo_numpy).cuda(device=gpu)
@@ -126,7 +145,7 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
         if args.multiprocessing_distributed:
             # group = dist.new_group([i for i in range(ngpus)])
             dist.all_reduce(tensor=eval_measures, op=dist.ReduceOp.SUM, group=group)
-            if args.d3vo:
+            if args.predict_unc:
                 dist.all_reduce(tensor=eval_d3vo, op=dist.ReduceOp.SUM, group=group)
 
         # Devide by sum for multiprocessing #
@@ -143,11 +162,11 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
 
             print('{:7.4f}'.format(eval_measures_cpu[measures_size - 2]))
 
-            if args.d3vo:
-                eval_d3vo = eval_d3vo.cpu()
+            if args.predict_unc:
+                eval_d3vo = eval_d3vo.cpu().numpy()[0]
                 eval_d3vo /= cnt
-                return eval_measures_cpu, eval_d3vo[0]
-
-            return eval_measures_cpu, None
+                return eval_measures_cpu, eval_d3vo
+            else:
+                return eval_measures_cpu, None
 
         return None, None
