@@ -1,0 +1,27 @@
+--model_name iebins_nyu
+--encoder tiny07
+--dataset nyu
+--input_height 480
+--input_width 640
+
+--data_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
+--filenames_file_eval /usr/stud/petp/code/thesis/data_splits/nyudepthv2_test_files_with_gt.txt
+
+--min_depth_test 1e-3
+--max_depth_test 10
+
+--update_block 18
+--loss_type 1
+--virtual_depth_variation 0
+
+--bin_num 40
+--min_depth 0
+--max_depth 1
+--max_tree_depth 1
+--bins_scale 50
+
+--save_dir /usr/stud/petp/storage/user/petp/datasets/predictions/
+
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/ssu-1/nyu/model-17200-best_silog_13.80928

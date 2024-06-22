@@ -1,0 +1,48 @@
+--mode train
+--pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/scannet_ins_1/nyu/model-25000-best_silog_15.69684
+
+--dataset scannet
+--data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+--gt_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+--filenames_file /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train_every_100th.txt
+
+--do_online_eval
+--log_freq 100
+--eval_freq 500
+--log_directory /usr/stud/petp/code/thesis/tmp/
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid_every_500th.txt
+--min_depth_eval 1e-3
+--max_depth_eval 10
+
+--input_height 480
+--input_width 640
+
+--batch_size 8
+--num_epochs 150
+--learning_rate 1e-4
+--weight_decay 1e-2
+--adam_eps 1e-3
+
+--num_threads 1
+--multiprocessing_distributed
+--dist_url tcp://127.0.0.1:2346
+
+--eigen_crop
+
+--exp_name scannet_ins_unc_1
+--update_block 2
+--segmentation
+--instances
+--var 1
+--virtual_depth_variation 1
+--d3vo
+--d3vo_c
+
+--loss_type 1
+--bin_num 40
+--min_depth 0
+--max_depth 1
+--max_tree_depth 1
