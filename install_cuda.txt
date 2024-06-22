@@ -1,0 +1,51 @@
+sudo apt-get purge nvidia-* && sudo apt-get purge cuda* && sudo apt autoremove 
+
+dpkg -l | grep -i nvidia
+
+
+
+sudo add-apt-repository ppa:graphics-drivers/ppa
+ubuntu-drivers devices
+sudo apt install [driver_name]
+
+https://askubuntu.com/questions/1077061/how-do-i-install-nvidia-and-cuda-drivers-into-ubuntu/1077063#1077063
+sudo apt install nvidia-driver-495
+I don't recommend installing the NVIDIA drivers that come with CUDA as they do not contain the dkms drivers that carry over into new kernel upgrades.
+
+wget https://developer.download.nvidia.com/compute/cuda/11.5.0/local_installers/cuda_11.5.0_495.29.05_linux.run
+sudo sh ./cuda_11.5.0_495.29.05_linux.run
+# set PATH for cuda 11.5 installation
+if [ -d "/usr/local/cuda-11.5/bin/" ]; then
+    export PATH=/usr/local/cuda-11.5/bin${PATH:+:${PATH}}
+    export LD_LIBRARY_PATH=/usr/local/cuda-11.5/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+fi
+echo "deb http://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64 /" | sudo tee /etc/apt/sources.list.d/cuda_learn.list
+sudo apt-key adv --fetch-keys  http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub
+sudo apt update
+sudo apt install libcudnn8
+
+
+
+
+
+https://askubuntu.com/questions/841876/how-to-disable-nouveau-kernel-driver/951892#951892
+rebot 
+
+
+NETWORK installation
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin
+sudo mv cuda-ubuntu2004.pin /etc/apt/preferences.d/cuda-repository-pin-600
+sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/7fa2af80.pub
+sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
+sudo apt-get update
+sudo apt-get -y install cuda
+
+
+bashrc 
+export PATH=/usr/local/cuda-11.3/bin${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-11.3/lib64\
+                 ${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+
+sudo apt install nvidia-cuda-toolkit
+                 
+reboot 

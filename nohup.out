@@ -1,0 +1,4 @@
+./s.sh: line 1: ./tmp_v2/tmp/: Is a directory
+mv: target '/dev/null' is not a directory
+mv: target '/dev/null' is not a directory
+mv: cannot remove 'tmp_v2/tmp': Permission denied
