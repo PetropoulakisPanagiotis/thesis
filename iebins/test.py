@@ -255,7 +255,7 @@ def main_worker(args):
     # Depth model
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type,
-                        num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, \
+                        num_semantic_classes=num_semantic_classes, num_instances=num_instances, \
                         padding_instances=args.padding_instances, \
                         segmentation_active=args.segmentation,  instances_active=args.instances,\
                         roi_align=args.roi_align, roi_align_size=args.roi_align_size, \

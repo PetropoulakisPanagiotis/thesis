@@ -130,7 +130,6 @@ def set_hparams_dict(args, num_semantic_classes):
         "num_semantic_classes": num_semantic_classes,
         "segmentation": args.segmentation,
         "instances": args.instances,
-        "var": args.var,
         "padding_instances": args.padding_instances,
         "roi_align": args.roi_align,
         "roi_align_size": args.roi_align_size,

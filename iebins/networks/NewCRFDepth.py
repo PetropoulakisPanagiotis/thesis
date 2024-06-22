@@ -52,15 +52,23 @@ class NewCRFDepth(nn.Module):
         self.update_block = update_block
         if loss_type == 0:
             self.loss_type = 0
+            print("Using silog loss\n") 
         else:
             self.loss_type = 1
+            print("Using l1 loss\n") 
+       
+        if self.update_block == 0:
+            if self.loss_type != 0:
+                raise ValueError("IEBINS can only be used with silog loss\n")
+            if self.bin_num != 16: 
+                raise ValueError("IEBINS can only be used with 16 bins\n")
 
         if self.upsample_type == 1:
             print("Uncertainty upsampling type: vanilla\n")
         else:        
             print("Uncertainty upsampling type: use squre weight of canonical depth\n")
         print("Number of bins: ", self.bin_num)
-
+       
         # Backbone dims
         if version[:-2] == 'base':
             embed_dim = 128

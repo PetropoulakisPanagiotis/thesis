@@ -1,4 +1,3 @@
---mode train
 --retrain
 --pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
 --checkpoint_path /usr/stud/petp/code/saved_models/nyu_T.pth
@@ -21,7 +20,7 @@
 --input_height 480
 --input_width 640
 
---batch_size 8
+--batch_size 2
 --num_epochs 180
 --learning_rate 2.5e-4
 --weight_decay 1e-2
@@ -35,7 +34,7 @@
 
 --eigen_crop
 
---exp_name ssu-upsample-1
+--exp_name single-scale
 --update_block 1
 --virtual_depth_variation 3
 

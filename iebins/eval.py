@@ -84,8 +84,9 @@ def eval_func(model, dataloader_eval):
                         scales.append(float(scale_s.cpu().numpy()))
             else:
                 result = model(image)
-                for scale in result['pred_scale_list'][-1]:
-                    scales.append(float(scale.cpu().numpy()))
+                if args.update_block != 0:
+                    for scale in result['pred_scale_list'][-1]:
+                        scales.append(float(scale.cpu().numpy()))
 
             if False:
                 debug_result(result, gt_depth)
@@ -189,35 +190,21 @@ def eval_func(model, dataloader_eval):
             if args.d3vo:
                 sigma_m = sigma_m.cpu().numpy().squeeze()
 
-        if args.do_kb_crop:
-            height, width = gt_depth.shape
-            top_margin = int(height - 352)
-            left_margin = int((width - 1216) / 2)
-            pred_depth_uncropped = np.zeros((height, width), dtype=np.float32)
-            pred_depth_uncropped[top_margin:top_margin + 352, left_margin:left_margin + 1216] = pred_depth
-            pred_depth = pred_depth_uncropped
-
         pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
         pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
         pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
         pred_depth[np.isnan(pred_depth)] = args.min_depth_eval
         valid_mask = np.logical_and(gt_depth > args.min_depth_eval, gt_depth < args.max_depth_eval)
 
-        if args.garg_crop or args.eigen_crop:
+        if args.eigen_crop:
             gt_height, gt_width = gt_depth.shape
             eval_mask = np.zeros(valid_mask.shape)
 
             if args.dataset == 'scannet':
                 eval_mask = gt_depth > 0.1
 
-            if args.garg_crop:
-                eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height),
-                          int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
-            elif args.eigen_crop:
-                if args.dataset == 'kitti':
-                    eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
-                              int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
-                elif args.dataset == 'nyu':
+            if args.eigen_crop:
+                if args.dataset == 'nyu':
                     eval_mask[45:471, 41:601] = 1
 
             valid_mask = np.logical_and(valid_mask, eval_mask)
@@ -283,7 +270,7 @@ def main_worker(args):
     # Depth model
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type,
-                        num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, \
+                        num_semantic_classes=num_semantic_classes, num_instances=num_instances, \
                         padding_instances=args.padding_instances, \
                         segmentation_active=args.segmentation,  instances_active=args.instances,\
                         roi_align=args.roi_align, roi_align_size=args.roi_align_size, \
