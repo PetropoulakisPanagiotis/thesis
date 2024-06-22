@@ -30,12 +30,11 @@
 --num_threads 1
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2345
---upsample_type 0
 
 --eigen_crop
 
 --exp_name iebins-1
---update_block 0
+--update_block 3
 
 --loss_type 0
 
