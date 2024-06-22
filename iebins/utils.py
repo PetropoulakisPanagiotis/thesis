@@ -135,7 +135,6 @@ def set_hparams_dict(args, num_semantic_classes):
         "roi_align_size": args.roi_align_size,
         "bins_scale": args.bins_scale,
         "unc_head": args.unc_head,
-        "predict_unc": args.predict_unc,
         "d3vo_original": args.d3vo_original,
         "virtual_depth_variation": args.virtual_depth_variation,
         "upsample_type": args.upsample_type,

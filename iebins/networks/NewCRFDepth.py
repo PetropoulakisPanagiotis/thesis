@@ -328,9 +328,9 @@ class NewCRFDepth(nn.Module):
         for i in range(self.max_tree_depth):
             # Uncertainty from the decoder block #
             if self.unc_head:
-                result["unc_s"] = unc_s
-                result["unc_c"] = upsample(unc_c, scale_factor=4, upsample_type=self.upsample_type,
-                                                    uncertainty=True)
+                result["unc_s"] = [unc_s]
+                result["unc_c"] = [upsample(unc_c, scale_factor=4, upsample_type=self.upsample_type,
+                                                    uncertainty=True)]
         return result
 
 

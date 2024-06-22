@@ -126,7 +126,7 @@ def eval_func(model, dataloader_eval):
                 pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
 
                 if args.eval_unc:
-                    if args.d3vo:
+                    if args.unc_head:
                         sigma_c = torch.sum((segmentation_map * (result["uncertainty_maps_list"][-1]**2)), dim=1)
                         c = torch.sum((segmentation_map * result["pred_depths_rc_list"][-1]), dim=1)
 
@@ -150,7 +150,7 @@ def eval_func(model, dataloader_eval):
                 pred_depth = pred_depths_r_list[-1]
 
                 if args.eval_unc:
-                    if args.d3vo:
+                    if args.unc_head:
                         sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
                                                                         result["unc_d3vo_c"],
                                                                         result['pred_scale_list'][-1],
@@ -163,7 +163,7 @@ def eval_func(model, dataloader_eval):
 
 
             # Tensorboard
-            if args.d3vo:
+            if args.eval_unc:
                 tb_visualization_d3vo(writer, global_step=step, args=args, current_loss_d3vo=None, current_lr=None, var_sum=None, var_cnt=None, \
                                               num_images=1, sigma_metric=sigma_m)
             else:
@@ -177,7 +177,7 @@ def eval_func(model, dataloader_eval):
 
             pred_depth = pred_depth.cpu().numpy().squeeze()
             gt_depth = gt_depth.cpu().numpy().squeeze()
-            if args.d3vo:
+            if args.eval_unc:
                 sigma_m = sigma_m.cpu().numpy().squeeze()
 
         pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
@@ -204,7 +204,7 @@ def eval_func(model, dataloader_eval):
         # For uncertainty #
         unc_error = None
 
-        if args.d3vo:
+        if args.eval_unc:
             measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
             eval_measures[10] += torch.tensor(measures[-1]).cuda()
 
@@ -236,7 +236,7 @@ def eval_func(model, dataloader_eval):
         print('{:7.4f}, '.format(eval_measures_cpu[i]), end='')
     print('{:7.4f}'.format(eval_measures_cpu[8]))
 
-    if args.d3vo:
+    if args.eval_unc:
 
         for m in uncertainty_metrics:
             aucs[m] = np.array(aucs[m]).mean(0)
@@ -264,7 +264,7 @@ def main_worker(args):
                         padding_instances=args.padding_instances, \
                         segmentation_active=args.segmentation,  instances_active=args.instances,\
                         roi_align=args.roi_align, roi_align_size=args.roi_align_size, \
-                        bins_scale=args.bins_scale, d3vo=args.d3vo, virtual_depth_variation=args.virtual_depth_variation, \
+                        bins_scale=args.bins_scale, unc_head=args.unc_head, virtual_depth_variation=args.virtual_depth_variation, \
                         upsample_type=args.upsample_type, bins_type=args.bins_type, bins_type_scale=args.bins_type_scale)
     model.train()
 

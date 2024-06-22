@@ -69,7 +69,7 @@ def main_worker(gpu, ngpus_per_node, args):
                         bins_scale=args.bins_scale, unc_head=args.unc_head, virtual_depth_variation=args.virtual_depth_variation, \
                         upsample_type=args.upsample_type, bins_type=args.bins_type, bins_type_scale=args.bins_type_scale)
     model.train()
-    if args.predict_unc:  # Set some layers to eval to train the uncertainty decoder
+    if args.unc_head:  # Set some layers to eval to train the uncertainty decoder
         model.set_to_eval_unc()
 
     # Print stats #
@@ -103,7 +103,7 @@ def main_worker(gpu, ngpus_per_node, args):
     optimizer = torch.optim.Adam([{'params': model.module.parameters()}], lr=args.learning_rate)
 
     # Load checkpoint and print stats #
-    if args.predict_unc:
+    if args.unc_head:
         load_checkpoint(args.checkpoint_path, args.gpu, args.retrain, model, optimizer)
     else:  # IEBINS load checkpoint - skip some layers
         if 'saved_models' in args.checkpoint_path:  # IEBINS saved models
@@ -210,8 +210,8 @@ def main_worker(gpu, ngpus_per_node, args):
             uncertainty_maps_list = result["uncertainty_maps_list"]
 
             if args.unc_head:  # scale unc
-                unc_s = result["unc_s"]
-                unc_c = result["unc_c"]
+                unc_s = result["unc_s"][-1]
+                unc_c = result["unc_c"][-1]
 
             # gt_depth masking #
             mask = depth_gt > 0.1
@@ -219,7 +219,7 @@ def main_worker(gpu, ngpus_per_node, args):
             #debug_visualize_gt_instances(instances, mask, depth_gt)
 
             # Train only uncertainty decoder, most of the weights are frozen #
-            if args.predict_unc:
+            if args.unc_head:
                 """
                 if not args.instances:
                     sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1], unc_c,
@@ -235,15 +235,9 @@ def main_worker(gpu, ngpus_per_node, args):
                 elif args.segmentation:
                     pass
                 else:
-                    if args.unc_head:
-                        sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1],
-                                                                             unc_c,
-                                                                             pred_scale_list[-1], unc_s, args)
-                    else:
-                        # uncertainty of canonical is std --> convert to variance
-                        sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1],
-                                                                             uncertainty_maps_list[-1]**2,
-                                                                             pred_scale_list[-1], uncertainty_maps_scale_list[-1]**2, args)
+                    sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1],
+                                                                         unc_c,
+                                                                         pred_scale_list[-1], unc_s, args)
 
                 if args.instances:
                     sigma_metric = torch.sum((sigma_metric * instances), dim=1).unsqueeze(1)
@@ -284,7 +278,7 @@ def main_worker(gpu, ngpus_per_node, args):
             # Print stats #
             if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                         and args.rank % ngpus_per_node == 0):
-                if args.predict_unc:
+                if args.unc_head:
                     print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, d3vo_loss: {:.12f}'.format(epoch, \
                            step, steps_per_epoch, global_step, current_lr, loss))
                 else:
@@ -317,7 +311,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 # Tensorboard viz #
                 if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                             and args.rank % ngpus_per_node == 0):
-                    if args.predict_unc:
+                    if args.unc_head:
                         tb_visualization_d3vo(writer, global_step, args, current_loss_d3vo, current_lr, var_sum, var_cnt, \
                                               num_images, sigma_metric)
                     else:
@@ -335,7 +329,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                                        original_d3vo=args.d3vo_original)
 
                 if eval_measures is not None:
-                    if args.predict_unc:
+                    if args.unc_head:
                         if best_unc > unc_error:
 
                             old_best_step = best_eval_steps[9]
@@ -415,11 +409,11 @@ def main_worker(gpu, ngpus_per_node, args):
                     print("Best evals at global step: " + str(global_step))
                     print(best_eval_measures_higher_better.cpu().numpy())
                     print(best_eval_measures_lower_better.cpu().numpy())
-                    if args.predict_unc:
+                    if args.unc_head:
                         print("Best eval for uncertainty decoder: " + str(best_unc))
 
                 model.train()
-                if args.predict_unc:  # Set some layers to eval to train the uncertainty decoder
+                if args.unc_head:  # Set some layers to eval to train the uncertainty decoder
                     model.module.set_to_eval_unc()
                 block_print()
                 enable_print()
@@ -437,7 +431,7 @@ def main_worker(gpu, ngpus_per_node, args):
     print("Training ended with the following best evals: \n")
     print(best_eval_measures_higher_better)
     print(best_eval_measures_lower_better)
-    if args.predict_unc:
+    if args.unc_head:
         print("Best eval for uncertainty decoder: " + str(best_unc))
 
 
