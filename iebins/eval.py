@@ -1,4 +1,5 @@
 import os, sys
+
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 import torch
@@ -18,7 +19,7 @@ from networks.NewCRFDepth import NewCRFDepth
 from parser_options import convert_arg_line_to_args, eval_parser
 from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
 from utils import compute_errors, sigma_metric_from_canonical_and_scale
-from aucs import compute_aucs,  SCC
+from aucs import compute_aucs, SCC
 
 # Parse config file #
 if sys.argv.__len__() == 2:
@@ -37,7 +38,7 @@ def eval_func(model, dataloader_eval):
 
     uncertainty_metrics = ["abs_rel", "rmse", "a1"]
     aucs = {"abs_rel": [], "rmse": [], "a1": []}
-    scc_total = 0 # Spearman correlation coefficient in l1
+    scc_total = 0  # Spearman correlation coefficient in l1
 
     # Uncertainty for metric depth from the decoder #
     eval_measures_unc = torch.zeros(1).cuda()
@@ -46,11 +47,11 @@ def eval_func(model, dataloader_eval):
     num_instances = dataloader_eval.num_instances
 
     writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
-  
-    scales = [] 
+
+    scales = []
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         with torch.no_grad():
-            # Init 
+            # Init
             pred_depths_r_list, pred_depths_rc_list, pred_depths_instances_r_list, \
                 pred_depths_instances_rc_list, pred_depths_c_list, uncertainty_maps_list, \
                 pred_depths_u_list = [], [], [], [], [], [], []
@@ -64,7 +65,7 @@ def eval_func(model, dataloader_eval):
                 instances = torch.autograd.Variable(eval_sample_batched['instances_masks'].cuda())
                 boxes = torch.autograd.Variable(eval_sample_batched['instances_bbox'].cuda())
                 labels = torch.autograd.Variable(eval_sample_batched['instances_labels'].cuda())
-            
+
             has_valid_depth = eval_sample_batched['has_valid_depth']
             if not has_valid_depth:
                 print('Invalid depth. continue.')
@@ -85,11 +86,11 @@ def eval_func(model, dataloader_eval):
                 result = model(image)
                 for scale in result['pred_scale_list'][-1]:
                     scales.append(float(scale.cpu().numpy()))
-            
+
             if False:
                 debug_result(result, gt_depth)
 
-            # Unpack result         
+            # Unpack result
             if args.instances:
                 pred_depths_r_list = result["pred_depths_instances_r_list"]
 
@@ -98,65 +99,70 @@ def eval_func(model, dataloader_eval):
             else:
                 pred_depths_r_list = result["pred_depths_r_list"]
                 # Canonical segmentation/single scale #
-                if args.update_block != 0 and args.update_block != 4 and args.update_block != 3:    
+                if args.update_block != 0 and args.update_block != 4 and args.update_block != 3:
                     pred_depths_rc_list = result["pred_depths_rc_list"]
-            
+
             # Uncertainty bins #
-            if args.update_block == 0 or args.update_block == 3 or args.update_block == 18 \
-               or args.update_block == 1 or args.update_block == 2:
+            if args.update_block == 0 or args.update_block == 3 or args.update_block == 1 \
+               or args.update_block == 18 or args.update_block == 2:
                 pred_depths_c_list = result["pred_depths_c_list"]
                 uncertainty_maps_list = result["uncertainty_maps_list"]
-           
+
             if args.instances:
-                # Fair comparison segmentation - instances: use eval_per_class.sh script   
-                if args.pick_class != 0: 
+                # Fair comparison segmentation - instances: use eval_per_class.sh script
+                if args.pick_class != 0:
                     non_class = torch.nonzero(labels[0] != args.pick_class)
                     if non_class.shape[0] == 63:
                         continue
                     instances[0, non_class] = torch.zeros_like(instances[0, non_class])
-                
+
                 pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
-                
+
                 mask = torch.sum(instances, dim=1).unsqueeze(0).to(torch.bool).cpu()
                 gt_depth = (gt_depth * mask)
                 #wals = torch.nonzero(labels[0] == 1)
-                #print(result['pred_shift_instances_list'][-1][0, wals])
                 #print(result['pred_scale_instances_list'][-1][0, wals])
             elif args.segmentation:
 
                 pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
 
                 if args.d3vo:
-                    sigma_c = torch.sum((segmentation_map * (result["uncertainty_maps_list"][-1] **2)), dim=1)
+                    sigma_c = torch.sum((segmentation_map * (result["uncertainty_maps_list"][-1]**2)), dim=1)
                     c = torch.sum((segmentation_map * result["pred_depths_rc_list"][-1]), dim=1)
-                    
+
                     if args.d3vo_c:
-                        sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1], result["unc_d3vo_c"], result['pred_scale_list'][-1], result["unc_d3vo"], args)
+                        sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
+                                                                        result["unc_d3vo_c"],
+                                                                        result['pred_scale_list'][-1],
+                                                                        result["unc_d3vo"], args)
                         sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
                     else:
                         # uncertainty of canonical is std --> convert to variance
-                        sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1], result['uncertainty_maps_list'][-1] ** 2, result['pred_scale_list'][-1], result["unc_d3vo"], args)
+                        sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
+                                                                        result['uncertainty_maps_list'][-1]**2,
+                                                                        result['pred_scale_list'][-1],
+                                                                        result["unc_d3vo"], args)
                         sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
 
                     s = torch.sum((segmentation_map * result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)), dim=1)
                     sigma_m = s**2 * sigma_c + c**2 * sigma_s
                     sigma_m = sigma_m.unsqueeze(0)
-                # Fair comparison segmentation - instances: use eval_per_class.sh script   
+                # Fair comparison segmentation - instances: use eval_per_class.sh script
                 if False:
-                    if args.pick_class != 0:    
+                    if args.pick_class != 0:
                         non_class = torch.nonzero(labels[0] != args.pick_class)
                         if non_class.shape[0] == 63:
                             continue
                         instances[0, non_class] = torch.zeros_like(instances[0, non_class])
-                    
+
                     if False:
-                        tmp = instances_mask.permute(1,2,0)
+                        tmp = instances_mask.permute(1, 2, 0)
                         cv2.imshow("instances_mapped_image", (tmp.cpu().numpy() * 255).astype('uint8'))
                         cv2.waitKey(0)
                         cv2.destroyAllWindows()
 
                     pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
-                    
+
                     mask = torch.sum(instances, dim=1).unsqueeze(0)
                     pred_depth = pred_depth * mask
 
@@ -165,7 +171,7 @@ def eval_func(model, dataloader_eval):
             else:
                 pred_depth = pred_depths_r_list[-1]
 
-            # Tensorboard            
+            # Tensorboard
             if args.d3vo:
                 tb_visualization_d3vo(writer, global_step=step, args=args, current_loss_d3vo=None, current_lr=None, var_sum=None, var_cnt=None, \
                                               num_images=1, sigma_metric=sigma_m)
@@ -179,10 +185,10 @@ def eval_func(model, dataloader_eval):
                              pred_depths_u_list=pred_depths_u_list, unc_decoder=None, expensive_viz=True)
 
             pred_depth = pred_depth.cpu().numpy().squeeze()
-            gt_depth = gt_depth.cpu().numpy().squeeze()     
+            gt_depth = gt_depth.cpu().numpy().squeeze()
             if args.d3vo:
                 sigma_m = sigma_m.cpu().numpy().squeeze()
-        
+
         if args.do_kb_crop:
             height, width = gt_depth.shape
             top_margin = int(height - 352)
@@ -190,7 +196,7 @@ def eval_func(model, dataloader_eval):
             pred_depth_uncropped = np.zeros((height, width), dtype=np.float32)
             pred_depth_uncropped[top_margin:top_margin + 352, left_margin:left_margin + 1216] = pred_depth
             pred_depth = pred_depth_uncropped
-        
+
         pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
         pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
         pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
@@ -200,22 +206,24 @@ def eval_func(model, dataloader_eval):
         if args.garg_crop or args.eigen_crop:
             gt_height, gt_width = gt_depth.shape
             eval_mask = np.zeros(valid_mask.shape)
-    
+
             if args.dataset == 'scannet':
                 eval_mask = gt_depth > 0.1
-            
+
             if args.garg_crop:
-                eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height), int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
+                eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height),
+                          int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
             elif args.eigen_crop:
                 if args.dataset == 'kitti':
-                    eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height), int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
+                    eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
+                              int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
                 elif args.dataset == 'nyu':
                     eval_mask[45:471, 41:601] = 1
 
             valid_mask = np.logical_and(valid_mask, eval_mask)
             if np.all(gt_depth[valid_mask] == 0) or len(gt_depth[valid_mask]) == 1:
                 continue
-        
+
         # For uncertainty #
         unc_error = None
 
@@ -225,7 +233,7 @@ def eval_func(model, dataloader_eval):
 
             scores = compute_aucs(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
             [aucs[m].append(scores[m]) for m in uncertainty_metrics]
-     
+
             scc_total += SCC(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
 
         else:
@@ -246,8 +254,7 @@ def eval_func(model, dataloader_eval):
     eval_measures_cpu /= cnt
     print('Computing errors for {} eval samples'.format(int(cnt)))
     print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format('silog', 'abs_rel', 'log10', 'rms',
-                                                                                    'sq_rel', 'log_rms', 'd1', 'd2',
-                                                                                    'd3'))
+                                                                                 'sq_rel', 'log_rms', 'd1', 'd2', 'd3'))
     for i in range(8):
         print('{:7.4f}, '.format(eval_measures_cpu[i]), end='')
     print('{:7.4f}'.format(eval_measures_cpu[8]))
@@ -256,30 +263,32 @@ def eval_func(model, dataloader_eval):
 
         for m in uncertainty_metrics:
             aucs[m] = np.array(aucs[m]).mean(0)
-        
+
         print("\n  " + ("{:>8} | " * 6).format("abs_rel", "", "rmse", "", "a1", ""))
         print("  " + ("{:>8} | " * 6).format("AUSE", "AURG", "AUSE", "AURG", "AUSE", "AURG"))
-        print(("&{:8.3f}  " * 6).format(*aucs["abs_rel"].tolist()+aucs["rmse"].tolist()+aucs["a1"].tolist()) + "\\\\")
-        
+        print(("&{:8.3f}  " * 6).format(*aucs["abs_rel"].tolist() + aucs["rmse"].tolist() + aucs["a1"].tolist()) +
+              "\\\\")
+
         print("Eval uncertainty bins e^2/variance: ", eval_measures[10] / cnt)
         print("SCC: ", scc_total / cnt)
-    
+
     return eval_measures_cpu, unc_error
 
 
 def main_worker(args):
-    
+
     dataloader_eval = DataLoaderCustom(args, 'online_eval')
     num_semantic_classes = dataloader_eval.num_semantic_classes
     num_instances = dataloader_eval.num_instances
     # Depth model
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
-                        max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
+                        max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type,
                         num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, \
                         padding_instances=args.padding_instances, \
                         segmentation_active=args.segmentation,  instances_active=args.instances,\
                         roi_align=args.roi_align, roi_align_size=args.roi_align_size, \
-                        bins_scale=args.bins_scale, d3vo=args.d3vo, d3vo_c=args.d3vo_c, virtual_depth_variation=args.virtual_depth_variation)
+                        bins_scale=args.bins_scale, d3vo=args.d3vo, d3vo_c=args.d3vo_c, virtual_depth_variation=args.virtual_depth_variation, \
+                        upsample_type=args.upsample_type, bins_type=args.bins_type, bins_type_scale=args.bins_type_scale)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -313,19 +322,20 @@ def main():
     torch.cuda.empty_cache()
     args.distributed = False
     ngpus_per_node = torch.cuda.device_count()
-    exp_name = args.exp_name  
+    exp_name = args.exp_name
 
-    args.log_directory = os.path.join(args.log_directory,exp_name)  
-    
+    args.log_directory = os.path.join(args.log_directory, exp_name)
+
     command = 'mkdir -p ' + os.path.join(args.log_directory, args.model_name)
     os.system(command)
     print(args.log_directory)
-    
+
     if ngpus_per_node > 1:
         print("This machine has more than 1 gpu. Please set \'CUDA_VISIBLE_DEVICES=0\'")
         return -1
-    
+
     main_worker(args)
+
 
 if __name__ == '__main__':
     main()

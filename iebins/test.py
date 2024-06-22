@@ -1,5 +1,6 @@
 import os, sys
 import json
+
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 import torch
@@ -19,7 +20,7 @@ from networks.NewCRFDepth import NewCRFDepth
 from parser_options import convert_arg_line_to_args, test_parser
 from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
 from utils import compute_errors, sigma_metric_from_canonical_and_scale, colormap, map_float_data_to_int
-from aucs import compute_aucs,  SCC
+from aucs import compute_aucs, SCC
 
 # Parse config file #
 if sys.argv.__len__() == 2:
@@ -42,7 +43,7 @@ def predict(model, dataloader_eval) -> None:
 
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         with torch.no_grad():
-            # Init 
+            # Init
             pred_depths_r_list, pred_depths_rc_list, pred_depths_instances_r_list, \
                 pred_depths_instances_rc_list, pred_depths_c_list, uncertainty_maps_list, \
                 pred_depths_u_list = [], [], [], [], [], [], []
@@ -56,7 +57,7 @@ def predict(model, dataloader_eval) -> None:
                 instances = torch.autograd.Variable(eval_sample_batched['instances_masks'].cuda())
                 boxes = torch.autograd.Variable(eval_sample_batched['instances_bbox'].cuda())
                 labels = torch.autograd.Variable(eval_sample_batched['instances_labels'].cuda())
-            
+
             has_valid_depth = eval_sample_batched['has_valid_depth']
             if not has_valid_depth:
                 print('Invalid depth. continue.')
@@ -69,8 +70,8 @@ def predict(model, dataloader_eval) -> None:
                 result = model(image, masks=segmentation_map)
             else:
                 result = model(image)
-            
-            # Unpack result         
+
+            # Unpack result
             if args.instances:
                 pred_depths_r_list = result["pred_depths_instances_r_list"]
 
@@ -79,25 +80,25 @@ def predict(model, dataloader_eval) -> None:
             else:
                 pred_depths_r_list = result["pred_depths_r_list"]
                 # Canonical segmentation/single scale #
-                if args.update_block != 0 and args.update_block != 4 and args.update_block != 3:    
+                if args.update_block != 0 and args.update_block != 4 and args.update_block != 3:
                     pred_depths_rc_list = result["pred_depths_rc_list"]
-            
+
             # Uncertainty bins #
-            if args.update_block == 0 or args.update_block == 3 or args.update_block == 18 \
-               or args.update_block == 1 or args.update_block == 2:
+            if args.update_block == 0 or args.update_block == 3 or args.update_block == 1 \
+               or args.update_block == 18 or args.update_block == 2:
                 pred_depths_c_list = result["pred_depths_c_list"]
                 uncertainty_maps_list = result["uncertainty_maps_list"]
-           
+
             if args.instances:
-                # Fair comparison segmentation - instances: use eval_per_class.sh script   
-                if args.pick_class != 0: 
+                # Fair comparison segmentation - instances: use eval_per_class.sh script
+                if args.pick_class != 0:
                     non_class = torch.nonzero(labels[0] != args.pick_class)
                     if non_class.shape[0] == 63:
                         continue
                     instances[0, non_class] = torch.zeros_like(instances[0, non_class])
-                
+
                 pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
-                
+
                 mask = torch.sum(instances, dim=1).unsqueeze(0).to(torch.bool).cpu()
                 gt_depth = (gt_depth * mask)
             elif args.segmentation:
@@ -106,8 +107,8 @@ def predict(model, dataloader_eval) -> None:
                 pred_depth = pred_depths_r_list[-1]
 
             pred_depth = pred_depth.cpu().numpy().squeeze()
-            gt_depth = gt_depth.cpu().numpy().squeeze()     
-        
+            gt_depth = gt_depth.cpu().numpy().squeeze()
+
         pred_depth[pred_depth < args.min_depth_test] = args.min_depth_test
         pred_depth[pred_depth > args.max_depth_test] = args.max_depth_test
         pred_depth[np.isinf(pred_depth)] = args.max_depth_test
@@ -118,126 +119,134 @@ def predict(model, dataloader_eval) -> None:
         filename = filename_base + '.png'
         normalization_const_depth = 1e3
 
-        cv2.imwrite(args.save_dir + 'depth/' + filename, map_float_data_to_int(pred_depth, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+        cv2.imwrite(args.save_dir + 'depth/' + filename, map_float_data_to_int(pred_depth, normalization_const_depth),
+                    [cv2.IMWRITE_PNG_COMPRESSION, 9])
         if args.instances:
             # Scale #
             scale = result['pred_scale_instances_list'][-1].cpu().numpy()[0].tolist()
             scale_data = {'scale': scale, 'scale_type': 'instancesse'}
-            scale_idx = [i for i in range(len(scale))]            
-            
-            scale_idx_tensor = torch.tensor(scale_idx, dtype=torch.int16).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).to(device=instances.device)
-          
+            scale_idx = [i for i in range(len(scale))]
+
+            scale_idx_tensor = torch.tensor(
+                scale_idx, dtype=torch.int16).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).to(device=instances.device)
+
             scale_map = torch.sum((instances * scale_idx_tensor), dim=1).to(torch.int16).squeeze(0)
-            cv2.imwrite(args.save_dir + 'scale_map/' + filename, scale_map.cpu().numpy(), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+            cv2.imwrite(args.save_dir + 'scale_map/' + filename,
+                        scale_map.cpu().numpy(), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
             valid_scales = torch.unique(scale_map).cpu().numpy().tolist()
             scale_data['valid'] = [1 if scale_idx_item in valid_scales else 0 for scale_idx_item in scale_idx]
 
-            # Canonical #    
+            # Canonical #
             canonical = torch.sum((instances * result["pred_depths_instances_rc_list"][-1]), dim=1)
             canonical = canonical.cpu().numpy().squeeze()
-            
-            cv2.imwrite(args.save_dir + 'canonical/' + filename, map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])    
+
+            cv2.imwrite(args.save_dir + 'canonical/' + filename,
+                        map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
             # Uncertainty canonical and scale #
             if args.d3vo:
                 if args.d3vo_c:
-                    canonical_unc = result["unc_d3vo_c"].squeeze(0).squeeze(0)              
+                    canonical_unc = result["unc_d3vo_c"].squeeze(0).squeeze(0)
                 else:
-                    canonical_unc = result["uncertainty_maps_list"].squeeze(0).squeeze(0) ** 2            
-                
+                    canonical_unc = result["uncertainty_maps_list"].squeeze(0).squeeze(0)**2
+
                 scale_unc = result["unc_d3vo"].squeeze(0).cpu().numpy().tolist()
                 scale_data['scale_uncertainty'] = scale_unc
 
-                canonical_unc = canonical_unc.cpu().numpy()    
-            
+                canonical_unc = canonical_unc.cpu().numpy()
+
                 np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
-   
-            with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:           
+
+            with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
                 json.dump(scale_data, file, indent=4)
 
         elif args.segmentation:
             # Scale #
             scale = result['pred_scale_list'][-1].cpu().numpy()[0].tolist()
             scale_data = {'scale': scale, 'scale_type': 'segmentation'}
-            scale_idx = [i for i in range(len(scale))]            
-            
-            scale_idx_tensor = torch.tensor(scale_idx, dtype=torch.int16).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).to(device=segmentation_map.device)
-          
+            scale_idx = [i for i in range(len(scale))]
+
+            scale_idx_tensor = torch.tensor(
+                scale_idx,
+                dtype=torch.int16).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).to(device=segmentation_map.device)
+
             scale_map = torch.sum((segmentation_map * scale_idx_tensor), dim=1).to(torch.int16).squeeze(0)
-            cv2.imwrite(args.save_dir + 'scale_map/' + filename, scale_map.cpu().numpy(), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+            cv2.imwrite(args.save_dir + 'scale_map/' + filename,
+                        scale_map.cpu().numpy(), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
             valid_scales = torch.unique(scale_map).cpu().numpy().tolist()
             scale_data['valid'] = [1 if scale_idx_item in valid_scales else 0 for scale_idx_item in scale_idx]
 
-            # Canonical #    
+            # Canonical #
             canonical = torch.sum((segmentation_map * result["pred_depths_rc_list"][-1]), dim=1)
             canonical = canonical.cpu().numpy().squeeze()
-            
-            cv2.imwrite(args.save_dir + 'canonical/' + filename, map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])    
+
+            cv2.imwrite(args.save_dir + 'canonical/' + filename,
+                        map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
             # Uncertainty canonical and scale #
             if args.d3vo:
                 if args.d3vo_c:
-                    canonical_unc = result["unc_d3vo_c"].squeeze(0).squeeze(0)              
+                    canonical_unc = result["unc_d3vo_c"].squeeze(0).squeeze(0)
                 else:
-                    canonical_unc = result["uncertainty_maps_list"].squeeze(0).squeeze(0) ** 2            
-                
+                    canonical_unc = result["uncertainty_maps_list"].squeeze(0).squeeze(0)**2
+
                 scale_unc = result["unc_d3vo"].squeeze(0).cpu().numpy().tolist()
                 scale_data['scale_uncertainty'] = scale_unc
 
-                canonical_unc = canonical_unc.cpu().numpy()    
-            
-                np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
-   
-            with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:           
-                json.dump(scale_data, file, indent=4)
-    
+                canonical_unc = canonical_unc.cpu().numpy()
 
-        else: # Single scale 
+                np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
+
+            with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
+                json.dump(scale_data, file, indent=4)
+
+        else:  # Single scale
             # Scale #
             scale = float(result['pred_scale_list'][-1].cpu().numpy().squeeze())
-            scale_data = {'scale': [scale], 'scale_type': 'single', 'valid': [1]}            
-   
-            # Canonical #    
+            scale_data = {'scale': [scale], 'scale_type': 'single', 'valid': [1]}
+
+            # Canonical #
             canonical = result['pred_depths_rc_list'][-1].cpu().numpy().squeeze()
-            cv2.imwrite(args.save_dir + 'canonical/' + filename, map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])    
+            cv2.imwrite(args.save_dir + 'canonical/' + filename,
+                        map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
             # Ids of scales -> one scale, hence 0 idx #
-            cv2.imwrite(args.save_dir + 'scale_map/' + filename, np.zeros_like(canonical), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+            cv2.imwrite(args.save_dir + 'scale_map/' + filename, np.zeros_like(canonical),
+                        [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
             # Uncertainty canonical and scale #
             if args.d3vo:
                 if args.d3vo_c:
-                    canonical_unc = result["unc_d3vo_c"].squeeze(0).squeeze(0)              
+                    canonical_unc = result["unc_d3vo_c"].squeeze(0).squeeze(0)
                 else:
-                    canonical_unc = result["uncertainty_maps_list"].squeeze(0).squeeze(0) ** 2            
+                    canonical_unc = result["uncertainty_maps_list"].squeeze(0).squeeze(0)**2
 
                 scale_unc = float(result["unc_d3vo"].squeeze(0).cpu().numpy().squeeze())
                 scale_data['scale_uncertainty'] = [scale_unc]
 
-                canonical_unc = canonical_unc.cpu().numpy()    
-
+                canonical_unc = canonical_unc.cpu().numpy()
 
                 np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
- 
-            with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:           
+
+            with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
                 json.dump(scale_data, file, indent=4)
-            
+
         if False:
             gt_depth[gt_depth < args.min_depth_test] = args.min_depth_test
             gt_depth[gt_depth > args.max_depth_test] = args.max_depth_test
             gt_depth[np.isinf(gt_depth)] = args.max_depth_test
             gt_depth[np.isnan(gt_depth)] = args.min_depth_test
             valid_mask = np.logical_and(gt_depth > args.min_depth_test, gt_depth < args.max_depth_test)
-            cv2.imshow('i', colormap(np.log(pred_depth[np.newaxis,:]), name='magma').transpose(1, 2, 0))
-            cv2.imshow('i', colormap(np.log(gt_depth[np.newaxis,:]), name='magma').transpose(1, 2, 0))
-            cv2.waitKey(0)       
+            cv2.imshow('i', colormap(np.log(pred_depth[np.newaxis, :]), name='magma').transpose(1, 2, 0))
+            cv2.imshow('i', colormap(np.log(gt_depth[np.newaxis, :]), name='magma').transpose(1, 2, 0))
+            cv2.waitKey(0)
             measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
-    
+
 
 def main_worker(args):
-    
+
     dataloader_eval = DataLoaderCustom(args, 'online_eval')
 
     num_semantic_classes = dataloader_eval.num_semantic_classes
@@ -245,12 +254,13 @@ def main_worker(args):
 
     # Depth model
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
-                        max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type, 
+                        max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type,
                         num_semantic_classes=num_semantic_classes, num_instances=num_instances, var=args.var, \
                         padding_instances=args.padding_instances, \
                         segmentation_active=args.segmentation,  instances_active=args.instances,\
                         roi_align=args.roi_align, roi_align_size=args.roi_align_size, \
-                        bins_scale=args.bins_scale, d3vo=args.d3vo, d3vo_c=args.d3vo_c, virtual_depth_variation=args.virtual_depth_variation)
+                        bins_scale=args.bins_scale, d3vo=args.d3vo, d3vo_c=args.d3vo_c, virtual_depth_variation=args.virtual_depth_variation, \
+                        upsample_type=args.upsample_type, bins_type=args.bins_type, bins_type_scale=args.bins_type_scale)
     model.train()
 
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
@@ -304,8 +314,9 @@ def main():
     if ngpus_per_node > 1:
         print("This machine has more than 1 gpu. Please set \'CUDA_VISIBLE_DEVICES=0\'")
         return -1
-    
+
     main_worker(args)
+
 
 if __name__ == '__main__':
     main()

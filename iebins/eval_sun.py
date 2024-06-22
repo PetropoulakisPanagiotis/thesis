@@ -20,31 +20,33 @@ def convert_arg_line_to_args(arg_line):
 parser = argparse.ArgumentParser(description='IEbins PyTorch implementation.', fromfile_prefix_chars='@')
 parser.convert_arg_line_to_args = convert_arg_line_to_args
 
-parser.add_argument('--model_name',                type=str,   help='model name', default='iebins')
-parser.add_argument('--encoder',                   type=str,   help='type of encoder, base07, large07, tiny07', default='large07')
-parser.add_argument('--checkpoint_path',           type=str,   help='path to a checkpoint to load', default='')
+parser.add_argument('--model_name', type=str, help='model name', default='iebins')
+parser.add_argument('--encoder', type=str, help='type of encoder, base07, large07, tiny07', default='large07')
+parser.add_argument('--checkpoint_path', type=str, help='path to a checkpoint to load', default='')
 
 # Dataset
-parser.add_argument('--dataset',                   type=str,   help='dataset to train on, kitti or nyu', default='nyu')
-parser.add_argument('--input_height',              type=int,   help='input height', default=480)
-parser.add_argument('--input_width',               type=int,   help='input width',  default=640)
-parser.add_argument('--max_depth',                 type=float, help='maximum depth in estimation', default=10)
+parser.add_argument('--dataset', type=str, help='dataset to train on, kitti or nyu', default='nyu')
+parser.add_argument('--input_height', type=int, help='input height', default=480)
+parser.add_argument('--input_width', type=int, help='input width', default=640)
+parser.add_argument('--max_depth', type=float, help='maximum depth in estimation', default=10)
 
 # Preprocessing
-parser.add_argument('--do_random_rotate',                      help='if set, will perform random rotation for augmentation', action='store_true')
-parser.add_argument('--degree',                    type=float, help='random rotation maximum degree', default=2.5)
-parser.add_argument('--do_kb_crop',                            help='if set, crop input images as kitti benchmark images', action='store_true')
-parser.add_argument('--use_right',                             help='if set, will randomly use right images when train on KITTI', action='store_true')
+parser.add_argument('--do_random_rotate', help='if set, will perform random rotation for augmentation',
+                    action='store_true')
+parser.add_argument('--degree', type=float, help='random rotation maximum degree', default=2.5)
+parser.add_argument('--do_kb_crop', help='if set, crop input images as kitti benchmark images', action='store_true')
+parser.add_argument('--use_right', help='if set, will randomly use right images when train on KITTI',
+                    action='store_true')
 
 # Eval
-parser.add_argument('--data_path_eval',            type=str,   help='path to the data for evaluation', required=False)
-parser.add_argument('--gt_path_eval',              type=str,   help='path to the groundtruth data for evaluation', required=False)
-parser.add_argument('--filenames_file_eval',       type=str,   help='path to the filenames text file for evaluation', required=False)
-parser.add_argument('--min_depth_eval',            type=float, help='minimum depth for evaluation', default=1e-3)
-parser.add_argument('--max_depth_eval',            type=float, help='maximum depth for evaluation', default=80)
-parser.add_argument('--eigen_crop',                            help='if set, crops according to Eigen NIPS14', action='store_true')
-parser.add_argument('--garg_crop',                             help='if set, crops according to Garg  ECCV16', action='store_true')
-
+parser.add_argument('--data_path_eval', type=str, help='path to the data for evaluation', required=False)
+parser.add_argument('--gt_path_eval', type=str, help='path to the groundtruth data for evaluation', required=False)
+parser.add_argument('--filenames_file_eval', type=str, help='path to the filenames text file for evaluation',
+                    required=False)
+parser.add_argument('--min_depth_eval', type=float, help='minimum depth for evaluation', default=1e-3)
+parser.add_argument('--max_depth_eval', type=float, help='maximum depth for evaluation', default=80)
+parser.add_argument('--eigen_crop', help='if set, crops according to Eigen NIPS14', action='store_true')
+parser.add_argument('--garg_crop', help='if set, crops according to Garg  ECCV16', action='store_true')
 
 if sys.argv.__len__() == 2:
     arg_filename_with_prefix = '@' + sys.argv[1]
@@ -99,11 +101,13 @@ def eval(model, dataloader_eval, post_process=False):
             eval_mask = np.zeros(valid_mask.shape)
 
             if args.garg_crop:
-                eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height), int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
+                eval_mask[int(0.40810811 * gt_height):int(0.99189189 * gt_height),
+                          int(0.03594771 * gt_width):int(0.96405229 * gt_width)] = 1
 
             elif args.eigen_crop:
                 if args.dataset == 'kitti':
-                    eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height), int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
+                    eval_mask[int(0.3324324 * gt_height):int(0.91351351 * gt_height),
+                              int(0.0359477 * gt_width):int(0.96405229 * gt_width)] = 1
                 elif args.dataset == 'nyu':
                     eval_mask[45:471, 41:601] = 1
 
@@ -119,8 +123,7 @@ def eval(model, dataloader_eval, post_process=False):
     eval_measures_cpu /= cnt
     print('Computing errors for {} eval samples'.format(int(cnt)), ', post_process: ', post_process)
     print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format('silog', 'abs_rel', 'log10', 'rms',
-                                                                                    'sq_rel', 'log_rms', 'd1', 'd2',
-                                                                                    'd3'))
+                                                                                 'sq_rel', 'log_rms', 'd1', 'd2', 'd3'))
     for i in range(8):
         print('{:7.4f}, '.format(eval_measures_cpu[i]), end='')
     print('{:7.4f}'.format(eval_measures_cpu[8]))
@@ -171,7 +174,7 @@ def main():
     if ngpus_per_node > 1:
         print("This machine has more than 1 gpu. Please set \'CUDA_VISIBLE_DEVICES=0\'")
         return -1
-    
+
     main_worker(args)
 
 

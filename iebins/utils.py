@@ -6,7 +6,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,16 +13,13 @@ import torch.distributed as dist
 from torch.utils.data import Sampler
 from torchvision import transforms
 
-inv_normalize = transforms.Normalize(
-    mean=[-0.485/0.229, -0.456/0.224, -0.406/0.225],
-    std=[1/0.229, 1/0.224, 1/0.225]
-)
+inv_normalize = transforms.Normalize(mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
+                                     std=[1 / 0.229, 1 / 0.224, 1 / 0.225])
 
 eval_metrics = ['silog', 'abs_rel', 'log10', 'rms', 'sq_rel', 'log_rms', 'd1', 'd2', 'd3']
 
-
 cmap_name = "custom_colormap"
-colors = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]  
+colors = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]
 custom_cmap_labels = LinearSegmentedColormap.from_list(cmap_name, colors, N=14)
 custom_cmap_instances = LinearSegmentedColormap.from_list(cmap_name, colors, N=40)
 
@@ -62,12 +58,12 @@ def load_checkpoint_skip_update_project(checkpoint_path, gpu, retrain, model, op
             else:
                 loc = 'cuda:{}'.format(gpu)
                 checkpoint = torch.load(checkpoint_path, map_location=loc)
-           
+
             # Skip weights #
             weights_to_remove_1 = "update"
             weights_to_remove_2 = "project"
             keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove_1 in key]
-            keys_to_remove.extend([key for key in checkpoint['model'].keys() if weights_to_remove_2 in key]) 
+            keys_to_remove.extend([key for key in checkpoint['model'].keys() if weights_to_remove_2 in key])
 
             for key_to_remove in keys_to_remove:
                 checkpoint['model'].pop(key_to_remove)
@@ -84,7 +80,7 @@ def load_checkpoint_skip_update_project(checkpoint_path, gpu, retrain, model, op
                     print("Could not load values for online evaluation")
 
             print("== Loaded checkpoint '{}' (global_step {})".format(checkpoint_path, checkpoint['global_step']))
-        
+
             del checkpoint
         else:
             print("== No checkpoint found at '{}'".format(checkpoint_path))
@@ -143,10 +139,13 @@ def set_hparams_dict(args, num_semantic_classes):
         "d3vo_c": args.d3vo_c,
         "d3vo_original": args.d3vo_original,
         "virtual_depth_variation": args.virtual_depth_variation,
+        "upsample_type": args.upsample_type,
+        "bins_type": args.bins_type,
+        "bins_type_scale": args.bins_type_scale,
     }
 
     return hparams
-        
+
 
 def colorize(value, vmin=None, vmax=None, cmap='Greys'):
     value = value.cpu().numpy()[:, :, :]
@@ -185,26 +184,26 @@ def normalize_result(value, vmin=None, vmax=None):
 def compute_errors(gt, pred, var=None):
     thresh = np.maximum((gt / pred), (pred / gt))
     d1 = (thresh < 1.25).mean()
-    d2 = (thresh < 1.25 ** 2).mean()
-    d3 = (thresh < 1.25 ** 3).mean()
+    d2 = (thresh < 1.25**2).mean()
+    d3 = (thresh < 1.25**3).mean()
 
-    rms = (gt - pred) ** 2
+    rms = (gt - pred)**2
     rms = np.sqrt(rms.mean())
 
-    log_rms = (np.log(gt) - np.log(pred)) ** 2
+    log_rms = (np.log(gt) - np.log(pred))**2
     log_rms = np.sqrt(log_rms.mean())
 
     abs_rel = np.mean(np.abs(gt - pred) / gt)
-    sq_rel = np.mean(((gt - pred) ** 2) / gt)
+    sq_rel = np.mean(((gt - pred)**2) / gt)
 
     err = np.log(pred) - np.log(gt)
-    silog = np.sqrt(np.mean(err ** 2) - np.mean(err) ** 2) * 100
+    silog = np.sqrt(np.mean(err**2) - np.mean(err)**2) * 100
 
     err = np.abs(np.log10(pred) - np.log10(gt))
     log10 = np.mean(err)
 
     if var is not None:
-        cons_unc = (gt - pred) ** 2 / var 
+        cons_unc = (gt - pred)**2 / var
         cons_unc = np.mean(cons_unc)
         return [silog, abs_rel, log10, rms, sq_rel, log_rms, d1, d2, d3, cons_unc]
 
@@ -226,8 +225,8 @@ class silog_loss(nn.Module):
 
     def forward(self, depth_est, depth_gt, mask):
         d = torch.log(depth_est[mask]) - torch.log(depth_gt[mask])
-        
-        return torch.sqrt((d ** 2).mean() - self.variance_focus * (d.mean() ** 2)) * 10.0
+
+        return torch.sqrt((d**2).mean() - self.variance_focus * (d.mean()**2)) * 10.0
 
 
 class l1_loss(nn.Module):
@@ -235,7 +234,7 @@ class l1_loss(nn.Module):
         super(l1_loss, self).__init__()
 
     def forward(self, depth_est, depth_gt, mask):
-        
+
         return torch.mean(torch.abs(depth_est[mask] - depth_gt[mask]))
 
 
@@ -247,13 +246,17 @@ class d3vo_loss(nn.Module):
 
     def forward(self, depth_est, depth_gt, unc, mask):
         if self.original:
-            return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) + (math.log(2 * math.pi))))
+            return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) +
+                               (math.log(2 * math.pi))))
         else:
-            return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) + (math.log(2 * math.pi))) * (unc[mask].detach() ** self.beta))
+            return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) +
+                               (math.log(2 * math.pi))) * (unc[mask].detach()**self.beta))
+
 
 # Variance decomposition: get variance of metric depth from canonical and scale #
 def sigma_metric_from_canonical_and_scale(depth_c, unc_c, scale, unc_scale, args):
-    sigma_metric = F.relu(depth_c ** 2 * unc_scale.unsqueeze(-1).unsqueeze(-1) + scale.unsqueeze(-1).unsqueeze(-1) ** 2 * unc_c).clamp(min=1e-4)
+    sigma_metric = F.relu(depth_c**2 * unc_scale.unsqueeze(-1).unsqueeze(-1) +
+                          scale.unsqueeze(-1).unsqueeze(-1)**2 * unc_c).clamp(min=1e-4)
     return sigma_metric
 
 
@@ -261,8 +264,8 @@ def colormap(inputs, name='jet', normalize=True, torch_transpose=True):
     if isinstance(inputs, torch.Tensor):
         inputs = inputs.detach().cpu().numpy()
 
-    _DEPTH_COLORMAP = plt.get_cmap(name, 256)   
-    
+    _DEPTH_COLORMAP = plt.get_cmap(name, 256)
+
     vis = inputs
     if normalize:
         ma = float(vis.max())
@@ -288,8 +291,8 @@ def colormap(inputs, name='jet', normalize=True, torch_transpose=True):
         vis = vis[..., :3]
         if torch_transpose:
             vis = vis.transpose(2, 0, 1)
-    
-    return vis[0,:,:,:]
+
+    return vis[0, :, :, :]
 
 
 def flip_lr(image):
@@ -300,7 +303,7 @@ def flip_lr(image):
         image_flipped : torch.Tensor [B,3,H,W]
     """
     assert image.dim() == 4, 'You need to provide a [B,C,H,W] image to flip'
-    
+
     return torch.flip(image, [3])
 
 
@@ -323,7 +326,6 @@ class DistributedSamplerNoEvenlyDivisible(Sampler):
         rank (optional): Rank of the current process within num_replicas.
         shuffle (optional): If true (default), sampler will shuffle the indices
     """
-
     def __init__(self, dataset, num_replicas=None, rank=None, shuffle=True):
         if num_replicas is None:
             if not dist.is_available():
@@ -343,7 +345,7 @@ class DistributedSamplerNoEvenlyDivisible(Sampler):
         rest = len(self.dataset) - num_samples * self.num_replicas
         if self.rank < rest:
             num_samples += 1
-     
+
         self.num_samples = num_samples
         self.total_size = len(dataset)
         # self.total_size = self.num_samples * self.num_replicas
@@ -375,12 +377,12 @@ class DistributedSamplerNoEvenlyDivisible(Sampler):
 
     def set_epoch(self, epoch):
         self.epoch = epoch
-    
+
 
 def map_float_data_to_int(data: np.ndarray, normalization_const: int) -> np.ndarray:
     return (data * normalization_const).astype('uint16')
-   
- 
+
+
 def find_indexes_valid_instances(labels):
     """
     1-dim

@@ -8,7 +8,6 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
 class Mlp(nn.Module):
     """ Multilayer perceptron."""
-
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
         super().__init__()
         out_features = out_features or in_features
@@ -72,7 +71,6 @@ class WindowAttention(nn.Module):
         attn_drop (float, optional): Dropout ratio of attention weight. Default: 0.0
         proj_drop (float, optional): Dropout ratio of output. Default: 0.0
     """
-
     def __init__(self, dim, window_size, num_heads, v_dim, qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0.):
 
         super().__init__()
@@ -80,7 +78,7 @@ class WindowAttention(nn.Module):
         self.window_size = window_size  # Wh, Ww
         self.num_heads = num_heads
         head_dim = dim // num_heads
-        self.scale = qk_scale or head_dim ** -0.5
+        self.scale = qk_scale or head_dim**-0.5
 
         # define a parameter table of relative position bias
         self.relative_position_bias_table = nn.Parameter(
@@ -135,7 +133,7 @@ class WindowAttention(nn.Module):
             attn = self.softmax(attn)
 
         attn = self.attn_drop(attn)
-        
+
         # assert self.dim % v.shape[-1] == 0, "self.dim % v.shape[-1] != 0"
         # repeat_num = self.dim // v.shape[-1]
         # v = v.view(B_, N, self.num_heads // repeat_num, -1).transpose(1, 2).repeat(1, repeat_num, 1, 1)
@@ -166,10 +164,8 @@ class CRFBlock(nn.Module):
         act_layer (nn.Module, optional): Activation layer. Default: nn.GELU
         norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
     """
-
-    def __init__(self, dim, num_heads, v_dim, window_size=7, shift_size=0,
-                 mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., drop_path=0.,
-                 act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+    def __init__(self, dim, num_heads, v_dim, window_size=7, shift_size=0, mlp_ratio=4., qkv_bias=True, qk_scale=None,
+                 drop=0., attn_drop=0., drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
         self.dim = dim
         self.num_heads = num_heads
@@ -180,9 +176,8 @@ class CRFBlock(nn.Module):
         assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
 
         self.norm1 = norm_layer(dim)
-        self.attn = WindowAttention(
-            dim, window_size=to_2tuple(self.window_size), num_heads=num_heads, v_dim=v_dim,
-            qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+        self.attn = WindowAttention(dim, window_size=to_2tuple(self.window_size), num_heads=num_heads, v_dim=v_dim,
+                                    qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
 
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(v_dim)
@@ -230,8 +225,9 @@ class CRFBlock(nn.Module):
         x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
         x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
         v_windows = window_partition(shifted_v, self.window_size)  # nW*B, window_size, window_size, C
-        v_windows = v_windows.view(-1, self.window_size * self.window_size, v_windows.shape[-1])  # nW*B, window_size*window_size, C
-        
+        v_windows = v_windows.view(-1, self.window_size * self.window_size,
+                                   v_windows.shape[-1])  # nW*B, window_size*window_size, C
+
         # W-MSA/SW-MSA
         attn_windows = self.attn(x_windows, v_windows, mask=attn_mask)  # nW*B, window_size*window_size, C
 
@@ -275,22 +271,8 @@ class BasicCRFLayer(nn.Module):
         downsample (nn.Module | None, optional): Downsample layer at the end of the layer. Default: None
         use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False.
     """
-
-    def __init__(self,
-                 dim,
-                 depth,
-                 num_heads,
-                 v_dim,
-                 window_size=7,
-                 mlp_ratio=4.,
-                 qkv_bias=True,
-                 qk_scale=None,
-                 drop=0.,
-                 attn_drop=0.,
-                 drop_path=0.,
-                 norm_layer=nn.LayerNorm,
-                 downsample=None,
-                 use_checkpoint=False):
+    def __init__(self, dim, depth, num_heads, v_dim, window_size=7, mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0.,
+                 attn_drop=0., drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False):
         super().__init__()
         self.window_size = window_size
         self.shift_size = window_size // 2
@@ -299,20 +281,12 @@ class BasicCRFLayer(nn.Module):
 
         # build blocks
         self.blocks = nn.ModuleList([
-            CRFBlock(
-                dim=dim,
-                num_heads=num_heads,
-                v_dim=v_dim,
-                window_size=window_size,
-                shift_size=0 if (i % 2 == 0) else window_size // 2,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
-                drop=drop,
-                attn_drop=attn_drop,
-                drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
-                norm_layer=norm_layer)
-            for i in range(depth)])
+            CRFBlock(dim=dim, num_heads=num_heads, v_dim=v_dim, window_size=window_size, shift_size=0 if
+                     (i % 2 == 0) else window_size // 2, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                     drop=drop, attn_drop=attn_drop,
+                     drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path, norm_layer=norm_layer)
+            for i in range(depth)
+        ])
 
         # patch merging layer
         if downsample is not None:
@@ -332,12 +306,10 @@ class BasicCRFLayer(nn.Module):
         Hp = int(np.ceil(H / self.window_size)) * self.window_size
         Wp = int(np.ceil(W / self.window_size)) * self.window_size
         img_mask = torch.zeros((1, Hp, Wp, 1), device=x.device)  # 1 Hp Wp 1
-        h_slices = (slice(0, -self.window_size),
-                    slice(-self.window_size, -self.shift_size),
-                    slice(-self.shift_size, None))
-        w_slices = (slice(0, -self.window_size),
-                    slice(-self.window_size, -self.shift_size),
-                    slice(-self.shift_size, None))
+        h_slices = (slice(0, -self.window_size), slice(-self.window_size,
+                                                       -self.shift_size), slice(-self.shift_size, None))
+        w_slices = (slice(0, -self.window_size), slice(-self.window_size,
+                                                       -self.shift_size), slice(-self.shift_size, None))
         cnt = 0
         for h in h_slices:
             for w in w_slices:
@@ -364,22 +336,13 @@ class BasicCRFLayer(nn.Module):
 
 
 class NewCRF(nn.Module):
-    def __init__(self,
-                 input_dim=96,
-                 embed_dim=96,
-                 v_dim=64,
-                 window_size=7,
-                 num_heads=4,
-                 depth=2,
-                 patch_size=4,
-                 in_chans=3,
-                 norm_layer=nn.LayerNorm,
-                 patch_norm=True):
+    def __init__(self, input_dim=96, embed_dim=96, v_dim=64, window_size=7, num_heads=4, depth=2, patch_size=4,
+                 in_chans=3, norm_layer=nn.LayerNorm, patch_norm=True):
         super().__init__()
 
         self.embed_dim = embed_dim
         self.patch_norm = patch_norm
-        
+
         if input_dim != embed_dim:
             self.proj_x = nn.Conv2d(input_dim, embed_dim, 3, padding=1)
         else:
@@ -394,26 +357,14 @@ class NewCRF(nn.Module):
         v_dim = embed_dim
         assert v_dim == embed_dim
 
-        self.crf_layer = BasicCRFLayer(
-                dim=embed_dim,
-                depth=depth,
-                num_heads=num_heads,
-                v_dim=v_dim,
-                window_size=window_size,
-                mlp_ratio=4.,
-                qkv_bias=True,
-                qk_scale=None,
-                drop=0.,
-                attn_drop=0.,
-                drop_path=0.,
-                norm_layer=norm_layer,
-                downsample=None,
-                use_checkpoint=False)
+        self.crf_layer = BasicCRFLayer(dim=embed_dim, depth=depth, num_heads=num_heads, v_dim=v_dim,
+                                       window_size=window_size, mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0.,
+                                       attn_drop=0., drop_path=0., norm_layer=norm_layer, downsample=None,
+                                       use_checkpoint=False)
 
         layer = norm_layer(embed_dim)
         layer_name = 'norm_crf'
         self.add_module(layer_name, layer)
-
 
     def forward(self, x, v):
         if self.proj_x is not None:
