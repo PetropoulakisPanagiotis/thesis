@@ -219,7 +219,7 @@ test_parser.add_argument('--checkpoint_path', type=str, help='path to a checkpoi
 test_parser.add_argument('--pretrain', type=str, help='path of pretrained encoder', default=None)
 
 # Dataset
-test_parser.add_argument('--dataset', type=str, help='dataset to train on, kitti or nyu', default='nyu')
+test_parser.add_argument('--dataset', type=str, help='dataset to train on, scannet or nyu', default='nyu')
 
 # Ranges: depth and image #
 test_parser.add_argument('--input_height', type=int, help='input height', default=480)

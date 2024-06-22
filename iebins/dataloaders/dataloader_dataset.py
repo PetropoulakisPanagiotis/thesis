@@ -51,16 +51,8 @@ class DatasetPreprocess(Dataset):
                 depth_gt = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED).astype(np.float32)
 
             else:
-                if self.args.dataset == 'kitti':
-                    rgb_file = sample_path.split()[0]
-                    depth_file = os.path.join(sample_path.split()[1])
-
-                    if self.args.use_right is True and random.random() > 0.5:
-                        rgb_file.replace('image_02', 'image_03')
-                        depth_file.replace('image_02', 'image_03')
-                else:
-                    rgb_file = sample_path.split()[0]
-                    depth_file = sample_path.split()[1]
+                rgb_file = sample_path.split()[0]
+                depth_file = sample_path.split()[1]
 
                 image_path = os.path.join(self.args.data_path, rgb_file)
                 depth_path = os.path.join(self.args.gt_path, depth_file)
@@ -86,7 +78,7 @@ class DatasetPreprocess(Dataset):
                 image = image.crop((left_margin, top_margin, left_margin + 1216, top_margin + 352))
 
             # To avoid blank boundaries due to pixel registration
-            if self.args.dataset == 'nyu' or self.args.dataset == 'nyud' and self.args.dataset != 'scannet':
+            if self.args.dataset == 'nyu' and self.args.dataset != 'scannet':
                 if self.args.input_height == 480:
                     depth_gt = np.array(depth_gt)
                     valid_mask = np.zeros_like(depth_gt)
@@ -113,7 +105,7 @@ class DatasetPreprocess(Dataset):
             depth_gt = np.expand_dims(depth_gt, axis=2)
 
             # Fix depth range
-            if self.args.dataset == 'nyu' or self.args.dataset == 'nyud' or self.args.dataset == 'scannet':
+            if self.args.dataset == 'nyu' or self.args.dataset == 'scannet':
                 depth_gt = depth_gt / 1000.0
             else:
                 depth_gt = depth_gt / 256.0
@@ -158,8 +150,6 @@ class DatasetPreprocess(Dataset):
                     gt_path = self.args.gt_path_eval
                     depth_path = os.path.join(gt_path, sample_path.split()[1])
 
-                    if self.args.dataset == 'kitti':
-                        depth_path = os.path.join(gt_path, sample_path.split()[1])
                     has_valid_depth = False
                     try:
                         depth_gt = Image.open(depth_path)
@@ -173,7 +163,7 @@ class DatasetPreprocess(Dataset):
                 depth_gt = np.expand_dims(depth_gt, axis=2)
 
                 # Fix depth ranges
-                if self.args.dataset == 'nyu' or self.args.dataset == 'nyud' or self.args.dataset == 'scannet':
+                if self.args.dataset == 'nyu' or self.args.dataset == 'scannet':
                     depth_gt = depth_gt / 1000.0
                 else:
                     depth_gt = depth_gt / 256.0
@@ -267,7 +257,7 @@ class DatasetPreprocess(Dataset):
         image_aug = image**gamma
 
         # Brightness augmentation
-        if self.args.dataset == 'nyu' or self.args.dataset == 'nyud':
+        if self.args.dataset == 'nyu':
             brightness = random.uniform(0.75, 1.25)
         else:
             brightness = random.uniform(0.9, 1.1)
@@ -342,14 +332,7 @@ class ToTensorCustom(object):
         depth = self.to_tensor(depth)
 
         # Intr #
-        if dataset == 'kitti':
-            K_p = np.array([[716.88, 0, 596.5593, 0], [0, 716.88, 149.854, 0], [0, 0, 1, 0], [0, 0, 0, 1]],
-                           dtype=np.float32)
-
-            inv_K_p = np.linalg.pinv(K_p)
-            inv_K_p = torch.from_numpy(inv_K_p)
-
-        elif dataset == 'nyu' or dataset == 'nyud':
+        if dataset == 'nyu':
             K_p = np.array([[518.8579, 0, 325.5824, 0], [0, 518.8579, 253.7362, 0], [0, 0, 1, 0], [0, 0, 0, 1]],
                            dtype=np.float32)
 

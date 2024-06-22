@@ -217,10 +217,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 unc_d3vo_c = result["unc_d3vo_c"]
 
             # gt_depth masking #
-            if args.dataset != 'kitti':
-                mask = depth_gt > 0.1
-            else:
-                mask = depth_gt > 1.0
+            mask = depth_gt > 0.1
 
             #debug_visualize_gt_instances(instances, mask, depth_gt)
 
