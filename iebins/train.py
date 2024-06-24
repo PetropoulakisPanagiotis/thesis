@@ -237,7 +237,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 else:
                     sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1],
                                                                          unc_c,
-                                                                         pred_scale_list[-1], unc_s, args)
+                                                                         pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1), unc_s.unsqueeze(-1).unsqueeze(-1), args)
 
                 if args.instances:
                     sigma_metric = torch.sum((sigma_metric * instances), dim=1).unsqueeze(1)

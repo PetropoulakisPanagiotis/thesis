@@ -152,16 +152,14 @@ def eval_func(model, dataloader_eval):
                 if args.eval_unc:
                     if args.unc_head:
                         sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
-                                                                        result["unc_d3vo_c"],
-                                                                        result['pred_scale_list'][-1],
-                                                                        result["unc_d3vo"], args)
+                                                                        result["unc_c"][-1],
+                                                                        result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
+                                                                        result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
                     else: # Convert std to variance
                         sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
                                                                     result['uncertainty_maps_list'][-1]**2,
-                                                                    result['pred_scale_list'][-1],
-                                                                    result["uncertainty_maps_scale_list"][-1]**2, args)
-
-
+                                                                    result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
+                                                                    (result["uncertainty_maps_scale_list"][-1]**2).unsqueeze(-1).unsqueeze(-1), args)
             # Tensorboard
             if args.eval_unc:
                 tb_visualization_d3vo(writer, global_step=step, args=args, current_loss_d3vo=None, current_lr=None, var_sum=None, var_cnt=None, \
@@ -246,7 +244,7 @@ def eval_func(model, dataloader_eval):
         print(("&{:8.3f}  " * 6).format(*aucs["abs_rel"].tolist() + aucs["rmse"].tolist() + aucs["a1"].tolist()) +
               "\\\\")
 
-        print("Eval uncertainty bins e^2/variance: ", eval_measures[10].cpu().numpy() / cnt)
+        print("e_metric^2/variance: ", eval_measures[10].cpu().numpy() / cnt)
         print("SCC: ", scc_total / cnt)
 
     return eval_measures_cpu, unc_error
@@ -301,6 +299,8 @@ def main():
     ngpus_per_node = torch.cuda.device_count()
     exp_name = args.exp_name
 
+    check_args(args)
+    
     args.log_directory = os.path.join(args.log_directory, exp_name)
 
     command = 'mkdir -p ' + os.path.join(args.log_directory, args.model_name)
@@ -313,6 +313,13 @@ def main():
 
     main_worker(args)
 
+
+def check_args(args):
+    if args.eval_unc:
+        if args.update_block == 1 and args.virtual_depth_variation != 0 and not args.unc_head:
+            print("Can not evaluate evalutate uncertainty. Please enable bins or predict uncertainty via extra heads\n")
+
+    
 
 if __name__ == '__main__':
     main()

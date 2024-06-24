@@ -170,11 +170,12 @@ class GlobalScale(nn.Module):
         # Scale 
         pred_scale = self.s_head(input_feature_map)
         if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2: # Bins
-            scale = (pred_scale.unsqueeze(-1).unsqueeze(-1) * bins_map_scale.detach()).sum(1, keepdim=True)
+            scale = (pred_scale * bins_map_scale.squeeze(-1).squeeze(-1).detach()).sum(1, keepdim=True).unsqueeze(-1).unsqueeze(-1)
+           
             uncertainty_map = torch.sqrt(
-                (pred_scale * ((bins_map_scale.detach() - scale.repeat(1, self.bins_scale, 1, 1))**2)).sum(
-                    1, keepdim=True))
-
+                (pred_scale.unsqueeze(-1).unsqueeze(-1) * ((bins_map_scale.detach() - scale.repeat(1, self.bins_scale, 1, 1))**2)).sum(
+                    1, keepdim=True)).squeeze(-1).squeeze(-1)
+            
             # Copy to scale bins the result #
             pred_scale = scale.squeeze(-1).squeeze(-1)
             
