@@ -47,7 +47,7 @@ class IEBINS(nn.Module):
             uncertainty_map = torch.sqrt(
                 (pred_prob * ((current_depths.detach() - depth_r.repeat(1, bin_num, 1, 1))**2)).sum(1, keepdim=True))
             uncertainty_maps_list.append(uncertainty_map)
-
+              
             pred_label = get_label(torch.squeeze(depth_r, 1), bin_edges, bin_num).unsqueeze(1)
             depth_c = torch.gather(current_depths.detach(), 1, pred_label.detach())
             pred_depths_c_list.append(depth_c)
@@ -219,7 +219,7 @@ Per-Class variations
 
 class PerClassScale(nn.Module):
     def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5, bins_scale=50,
-                 virtual_depth_variation=0, , upsample_type=1, bins_type=1, bins_type_scale=1):
+                 virtual_depth_variation=0, upsample_type=1, bins_type=1, bins_type_scale=1):
         super(PerClassScale, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -242,7 +242,6 @@ class PerClassScale(nn.Module):
         else:
             print("PerClassScale: log bins for scale\n")
 
-
         self.p_heads = nn.ModuleList()
         self.s_heads = nn.ModuleList()
         for i in range(num_semantic_classes):
@@ -251,14 +250,13 @@ class PerClassScale(nn.Module):
                 self.p_heads.append(PHead(128 + 1, 128, bin_num=bin_num))
                 self.s_heads.append(SHead(128 + 1, num_bins=self.bins_scale))
             elif self.virtual_depth_variation == 1: # Probabilities canonical 
-                self.p_heads.append(SigmoidHead(hidden_dim, hidden_dim, num_classes=1))
+                self.p_heads.append(PHead(128 + 1, 128, bin_num=bin_num))
                 self.s_heads.append(SSHead(128 + 1, num_out=1))
-
             elif self.virtual_depth_variation == 2: # Probabilities scale 
-                self.p_heads.append(SigmoidHead(hidden_dim, hidden_dim, num_classes=1))
+                self.p_heads.append(SigmoidHead(128 + 1, 128, num_classes=1))
                 self.s_heads.append(SHead(128 + 1, num_bins=self.bins_scale))
             else: # Regression 
-                self.p_heads.append(SigmoidHead(hidden_dim, hidden_dim, num_classes=1))
+                self.p_heads.append(SigmoidHead(128 + 1, 128, num_classes=1))
                 self.s_heads.append(SSHead(128 + 1, num_out=1))
 
         self.relu = nn.ReLU(inplace=True)
@@ -275,6 +273,8 @@ class PerClassScale(nn.Module):
         pred_depths_scale_c_list = []
 
         b, _, h, w = depth.shape
+        h *= 4
+        w *= 4
         depth_rc = []
         pred_scale = []
 
@@ -297,9 +297,8 @@ class PerClassScale(nn.Module):
         uncertainty_map = torch.zeros(b, self.num_semantic_classes, h, w).to(masks.device)
         depth_c = torch.zeros(b, self.num_semantic_classes, h, w).to(masks.device)
 
-        if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2:
-            uncertainty_map_scale = torch.zeros(b, self.num_semantic_classes, 1, 1).to(masks.device)
-            c_map_scale = torch.zeros(b, self.num_semantic_classes, 1, 1).to(masks.device)
+        uncertainty_map_scale = torch.zeros(b, self.num_semantic_classes, 1, 1).to(masks.device)
+        c_map_scale = torch.zeros(b, self.num_semantic_classes, 1, 1).to(masks.device)
 
         # Predict canonical and scale per class
         for i in range(self.num_semantic_classes):
@@ -309,56 +308,57 @@ class PerClassScale(nn.Module):
 
             # Canonical
             prob = self.p_heads[i](input_feature_map_current)
-            if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2:
+            if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 1:
                 # Canonical depth estimation #
                 depth_rc_current = (prob * bins_map.detach()).sum(1, keepdim=True)
-
+             
                 # Uncertainty #
                 uncertainty_map_current = torch.sqrt(
                     (prob * ((bins_map.detach() - depth_rc_current.repeat(1, bin_num, 1, 1))**2)).sum(1, keepdim=True))
-
-                # Labels
+                
+                # Labels #
                 pred_label = get_label(torch.squeeze(depth_rc_current, 1), bin_edges, bin_num).unsqueeze(1)
-                depth_c_current =  (torch.gather(bins_map.detach(), 1, pred_label.detach())).squeeze(1)               
+                depth_c_current = torch.gather(bins_map.detach(), 1, pred_label.detach())          
 
                 # Upsample #
                 depth_rc_current = upsample(depth_rc_current, scale_factor=4, upsample_type=self.upsample_type)
                 depth_c_current = upsample(depth_c_current, scale_factor=4, upsample_type=self.upsample_type)
                 uncertainty_map_current = upsample(uncertainty_map_current, scale_factor=4, upsample_type=self.upsample_type, uncertainty=True)
-
+            
                 depth_rc.append(depth_rc_current)
-                depth_c[:, i, :, :] = depth_c_current
-                uncertainty_map[:, i, :, :] = uncertainty_map_current
+                depth_c[:, i, :, :] = depth_c_current.squeeze(1)
+                uncertainty_map[:, i, :, :] = uncertainty_map_current.squeeze(1)
             else:
                 prob = upsample(prob, scale_factor=4, upsample_type=self.upsample_type)
                 depth_rc_current = prob
                 
                 depth_rc.append(depth_rc_current)
-                uncertainty_map[:, i, :, :] = np.zeros_like(uncertainty_map[:, i, :, :])
-                depth_c[:, i, :, :] = np.zeros_like(depth_c[:, i, :, :])
-            
+                uncertainty_map[:, i, :, :] = torch.zeros_like(uncertainty_map[:, i, :, :])
+                depth_c[:, i, :, :] = torch.zeros_like(depth_c[:, i, :, :])
+             
 
             # Scale
             scale_current = self.s_heads[i](input_feature_map_current)
             # Bins #
             if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2:
                 # Estimate scale #
+                scale_current = scale_current.unsqueeze(-1).unsqueeze(-1)
                 scale = (scale_current * bins_map_scale.detach()).sum(1, keepdim=True)
-                pred_scale.append(scale)
+                pred_scale.append(scale.squeeze(-1).squeeze(-1))
 
                 # Uncertainty #
                 uncertainty_map_current_scale = torch.sqrt(
                     (scale_current * ((bins_map_scale.detach() - scale)**2)).sum(1, keepdim=True))
-                uncertainty_map_scale[:, i, :, :] = uncertainty_map_current_scale.unsqueeze(-1)
-
+                uncertainty_map_scale[:, i, :, :] = uncertainty_map_current_scale.squeeze(1)
+                
                 # Labels #
                 pred_label = get_label(torch.squeeze(scale, 1), bin_scale_edges, self.bins_scale).unsqueeze(1)
                 depth_scale_c = torch.gather(bins_map_scale.detach(), 1, pred_label.detach())
-                c_map_scale[:, i, :, :] = depth_scale_c.unsqueeze(1)
+                c_map_scale[:, i, :, :] = depth_scale_c.squeeze(1)
             else:
                 pred_scale.append(scale_current)
-                uncertainty_map_scale[:, i, :, :] = np.zeros_like(uncertainty_map_scale[:, i, :, :])
-                c_map_scale[:, i, :, :] = np.zeros_like(c_map_scale[:, i, :, :])
+                uncertainty_map_scale[:, i, :, :] = torch.zeros_like(uncertainty_map_scale[:, i, :, :])
+                c_map_scale[:, i, :, :] = torch.zeros_like(c_map_scale[:, i, :, :])
 
         depth_rc = torch.cat(depth_rc, dim=1)
 
@@ -368,13 +368,13 @@ class PerClassScale(nn.Module):
         uncertainty_maps_list.append(uncertainty_map)
 
         pred_scale = torch.cat(pred_scale, dim=1)
-        pred_scale_list.append(pred_scale_shift)
-
+        pred_scale_list.append(pred_scale)
+        
         # Metric depth
         if self.loss_type == 0:
-            depth_r = (self.relu(depth_rc * pred_scale_list[-1].unsqueeze(1).unsqueeze(1))).clamp(min=1e-3)
+            depth_r = (self.relu(depth_rc * pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
         else:
-            depth_r = depth_rc * pred_scale_list[-1].unsqueeze(1).unsqueeze(1)
+            depth_r = depth_rc * pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1)
 
         pred_depths_r_list.append(depth_r)
 

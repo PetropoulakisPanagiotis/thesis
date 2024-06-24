@@ -138,9 +138,9 @@ def get_uniform_bins(feature_map, min_depth=0, max_depth=0, bin_num=5, sid=True)
 
             indices = torch.arange(bin_num + 1, dtype=torch.float32).to(feature_map.device)
 
-            bin_edges = torch.exp(torch.log(beta_star) * indices / bin_num)
+            bin_edges = torch.exp(torch.log(beta_star) * indices / bin_num) - xi
             bin_edges = bin_edges.unsqueeze(0).unsqueeze(2).unsqueeze(3).expand(b, -1, h, w)
-            bins = 0.5 * (bin_edges[:, :-1] + bin_edges[:, 1:]) - xi
+            bins = 0.5 * (bin_edges[:, :-1] + bin_edges[:, 1:])
         else:
             interval = (max_depth - min_depth) / bin_num
 

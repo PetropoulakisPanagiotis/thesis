@@ -100,17 +100,16 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
                                   name='magma'), global_step)
 
             # Bins
-            if args.update_block == 18:
-                for ii in range(max_tree_depth):
-                    writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i),
-                                     colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), \
-                                     name='magma'), global_step)
+            for ii in range(max_tree_depth):
+                writer.add_image('depth_labels_est{}/image/{}/'.format(ii, i),
+                                 colormap(torch.log10(torch.sum(pred_depths_c_list[ii][i, :, :, :] * segmentation_map[i, :, :, :], dim=0).unsqueeze(0).data), \
+                                 name='magma'), global_step)
 
-                    writer.add_image(
-                        'uncer_bins_est{}/image/{}/'.format(ii, i),
-                        colormap(
-                            torch.sum(uncertainty_maps_list[ii][i, :, :, :] * segmentation_map[i, :, :, :],
-                                      dim=0).unsqueeze(0).data), global_step)
+                writer.add_image(
+                    'uncer_bins_est{}/image/{}/'.format(ii, i),
+                    colormap(
+                        torch.sum(uncertainty_maps_list[ii][i, :, :, :] * segmentation_map[i, :, :, :],
+                                  dim=0).unsqueeze(0).data), global_step)
 
             # Expensive visualization
             if expensive_viz:

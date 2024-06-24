@@ -52,7 +52,7 @@ def main_worker(gpu, ngpus_per_node, args):
     dataloader = DataLoaderCustom(args, 'train')
     dataloader_eval = DataLoaderCustom(args, 'online_eval')
     num_semantic_classes = dataloader.num_semantic_classes
-    num_instances = dataloader.num_instance88s
+    num_instances = dataloader.num_instances
 
     # Only in IEBINS GRU is used #
     if args.update_block != 0:
