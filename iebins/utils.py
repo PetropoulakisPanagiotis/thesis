@@ -129,6 +129,7 @@ def set_hparams_dict(args, num_semantic_classes):
         "train_decoder": args.train_decoder,
         "num_semantic_classes": num_semantic_classes,
         "segmentation": args.segmentation,
+        "concat_masks": args.concat_masks,
         "instances": args.instances,
         "padding_instances": args.padding_instances,
         "roi_align": args.roi_align,

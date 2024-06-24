@@ -64,7 +64,7 @@ def main_worker(gpu, ngpus_per_node, args):
                         train_decoder=args.train_decoder, pretrained=args.pretrain,
                         num_semantic_classes=num_semantic_classes, num_instances=num_instances, \
                         padding_instances=args.padding_instances, \
-                        segmentation_active=args.segmentation,  instances_active=args.instances, \
+                        segmentation_active=args.segmentation,  concat_masks=args.concat_masks, instances_active=args.instances, \
                         roi_align=args.roi_align, roi_align_size=args.roi_align_size, \
                         bins_scale=args.bins_scale, unc_head=args.unc_head, virtual_depth_variation=args.virtual_depth_variation, \
                         upsample_type=args.upsample_type, bins_type=args.bins_type, bins_type_scale=args.bins_type_scale)
@@ -220,32 +220,20 @@ def main_worker(gpu, ngpus_per_node, args):
 
             # Train only uncertainty decoder, most of the weights are frozen #
             if args.unc_head:
-                """
-                if not args.instances:
-                    sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1], unc_c,
-                                                                         pred_scale_list[-1], unc_s, args)
-                elif ar:
-                    sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_instances_rc_list[-1],
-                                                                         unc_c, pred_scale_instances_list[-1],
-                                                                         unc_s, args)
-                """
-
-                if args.instances:
-                    pass
-                elif args.segmentation:
-                    pass
-                else:
-                    sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1],
-                                                                         unc_c,
-                                                                         pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1), unc_s.unsqueeze(-1).unsqueeze(-1), args)
-
                 if args.instances:
                     sigma_metric = torch.sum((sigma_metric * instances), dim=1).unsqueeze(1)
                     pred_d = torch.sum((pred_depths_instances_rc_list[-1] * instances), dim=1).unsqueeze(1)
                 elif args.segmentation:
-                    sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).unsqueeze(1)
+                    sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1],
+                                                                         unc_c,
+                                                                         pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1), unc_s.unsqueeze(-1).unsqueeze(-1), args)
+                    sigma_metric = torch.sum(sigma_metric * segmentation_map, dim=1).unsqueeze(1)
+                    print(sigma_metric.max())
                     pred_d = torch.sum((pred_depths_rc_list[-1] * segmentation_map), dim=1).unsqueeze(1)
                 else:
+                    sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1],
+                                                                         unc_c,
+                                                                         pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1), unc_s.unsqueeze(-1).unsqueeze(-1), args)
                     pred_d = pred_depths_r_list[-1]
 
                 loss = d3vo_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))

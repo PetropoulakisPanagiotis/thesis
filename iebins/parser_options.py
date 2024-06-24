@@ -104,6 +104,7 @@ train_parser.add_argument('--bins_type_scale', type=int, help='0 for uniform, 0 
                           default='1')
 # -> Segmentation #
 train_parser.add_argument('--segmentation', dest='segmentation', help='segmentation variation', action='store_true')
+train_parser.add_argument('--concat_masks', dest='concat_masks', help='if enabled, concatenate segmentation mask for canonical/scale prediction', action='store_true')
 
 # -> Instances #
 train_parser.add_argument('--padding_instances', type=int, help='how many pixels to pad the bbox', default='0')
@@ -178,6 +179,7 @@ eval_parser.add_argument('--bins_type_scale', type=int, help='0 for IEBINS, 1 fo
                           default='1')
 # -> Segmentation #
 eval_parser.add_argument('--segmentation', dest='segmentation', help='segmentation variation', action='store_true')
+eval_parser.add_argument('--concat_masks', dest='concat_masks', help='if enabled, concatenate segmentation mask for canonical/scale prediction', action='store_true')
 
 # -> Instances #
 eval_parser.add_argument('--padding_instances', type=int, help='how many pixels to pad the bbox', default='0')
@@ -248,6 +250,7 @@ test_parser.add_argument('--bins_type_scale', type=int, help='0 for IEBINS, 1 fo
                           default='1')
 # -> Segmentation #
 test_parser.add_argument('--segmentation', dest='segmentation', help='segmentation variation', action='store_true')
+test_parser.add_argument('--concat_masks', dest='concat_masks', help='if enabled, concatenate segmentation mask for canonical/scale prediction', action='store_true')
 
 # -> Instances #
 test_parser.add_argument('--padding_instances', type=int, help='how many pixels to pad the bbox', default='0')

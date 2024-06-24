@@ -16,7 +16,7 @@ class NewCRFDepth(nn.Module):
     def __init__(self, version=None, pretrained=None, min_depth=0.1, max_depth=100.0, max_tree_depth=1,
                     bin_num=16, update_block=0, loss_type=0, train_decoder=0, \
                     num_semantic_classes=14, num_instances=63, var=0, padding_instances=0, \
-                    segmentation_active= False, instances_active=False, roi_align=False, roi_align_size=32, \
+                    segmentation_active= False, concat_masks=False, instances_active=False, roi_align=False, roi_align_size=32, \
                     bins_scale=50, unc_head=False, virtual_depth_variation=0, upsample_type=0, bins_type=1, bins_type_scale=1, **kwargs):
         super().__init__()
         self.freeze_backbone = True
@@ -33,8 +33,11 @@ class NewCRFDepth(nn.Module):
         self.bins_type_scale = bins_type_scale
         self.bins_scale = bins_scale
 
-        # Instances
+        # Segmentation
+        self.concat_masks = concat_masks
         self.segmentation_active = segmentation_active
+        
+        # Instances
         self.instances_active = instances_active
 
         self.num_semantic_classes = num_semantic_classes
@@ -111,7 +114,7 @@ class NewCRFDepth(nn.Module):
             self.update = PerClassScale(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
                                                                    loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, bins_scale=bins_scale, \
                                                                    virtual_depth_variation=self.virtual_depth_variation, upsample_type=self.upsample_type, bins_type=self.bins_type, 
-                                                                   bins_type_scale=self.bins_type_scale)
+                                                                   bins_type_scale=self.bins_type_scale, concat_masks=self.concat_masks)
             print("[VARIATION PerClassScale]\n")
 
         #############

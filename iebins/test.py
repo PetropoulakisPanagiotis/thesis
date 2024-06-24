@@ -265,7 +265,7 @@ def main_worker(args):
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type,
                         num_semantic_classes=num_semantic_classes, num_instances=num_instances, \
                         padding_instances=args.padding_instances, \
-                        segmentation_active=args.segmentation,  instances_active=args.instances,\
+                        segmentation_active=args.segmentation, concat_masks=args.concat_masks, instances_active=args.instances,\
                         roi_align=args.roi_align, roi_align_size=args.roi_align_size, \
                         bins_scale=args.bins_scale, unc_head=args.unc_head, virtual_depth_variation=args.virtual_depth_variation, \
                         upsample_type=args.upsample_type, bins_type=args.bins_type, bins_type_scale=args.bins_type_scale)

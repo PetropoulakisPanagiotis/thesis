@@ -82,15 +82,16 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
 
                 if args.instances:
                     sigma_metric = torch.sum((sigma_metric * instances), dim=1).squeeze(0).cpu().numpy()
-                elif args.segmentation:
-                    sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).squeeze(0).cpu().numpy()
-                else:
-                    sigma_metric = sigma_metric.squeeze(0).squeeze(0).cpu().numpy()
                 """
                 if args.instances:
                     pass
                 elif args.segmentation:
-                    pass
+                    sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1],
+                                                                        result["unc_c"][-1],
+                                                                        result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1),
+                                                                        result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)               
+                    sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).squeeze(0).cpu().numpy()
+                    print(sigma_metric.max())
                 else:
                     sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1],
                                                                          result["unc_c"][-1],
@@ -158,6 +159,7 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
             if args.unc_head:
                 eval_d3vo = eval_d3vo.cpu().numpy()[0]
                 eval_d3vo /= cnt
+                print(eval_d3vo)
                 return eval_measures_cpu, eval_d3vo
             else:
                 return eval_measures_cpu, None

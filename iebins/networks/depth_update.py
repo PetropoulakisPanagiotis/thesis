@@ -219,7 +219,7 @@ Per-Class variations
 
 class PerClassScale(nn.Module):
     def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5, bins_scale=50,
-                 virtual_depth_variation=0, upsample_type=1, bins_type=1, bins_type_scale=1):
+                 virtual_depth_variation=0, upsample_type=1, bins_type=1, bins_type_scale=1, concat_masks=False):
         super(PerClassScale, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
@@ -228,6 +228,8 @@ class PerClassScale(nn.Module):
         self.bins_scale = bins_scale
         self.virtual_depth_variation = virtual_depth_variation
         self.upsample_type = upsample_type
+
+        self.concat_masks = concat_masks
 
         self.bins_type = bins_type
         self.bins_type_scale = bins_type_scale
@@ -242,22 +244,26 @@ class PerClassScale(nn.Module):
         else:
             print("PerClassScale: log bins for scale\n")
 
+        if self.concat_masks:
+            in_dim = 128 + 1
+        else:
+            in_dim = 128
+
         self.p_heads = nn.ModuleList()
         self.s_heads = nn.ModuleList()
         for i in range(num_semantic_classes):
-
             if self.virtual_depth_variation == 0: # Propabilities both scale and canonical
-                self.p_heads.append(PHead(128 + 1, 128, bin_num=bin_num))
-                self.s_heads.append(SHead(128 + 1, num_bins=self.bins_scale))
+                self.p_heads.append(PHead(in_idm, 128, bin_num=bin_num))
+                self.s_heads.append(SHead(in_dim, num_bins=self.bins_scale))
             elif self.virtual_depth_variation == 1: # Probabilities canonical 
-                self.p_heads.append(PHead(128 + 1, 128, bin_num=bin_num))
-                self.s_heads.append(SSHead(128 + 1, num_out=1))
+                self.p_heads.append(PHead(in_dim, 128, bin_num=bin_num))
+                self.s_heads.append(SSHead(in_dim, num_out=1))
             elif self.virtual_depth_variation == 2: # Probabilities scale 
-                self.p_heads.append(SigmoidHead(128 + 1, 128, num_classes=1))
-                self.s_heads.append(SHead(128 + 1, num_bins=self.bins_scale))
+                self.p_heads.append(SigmoidHead(in_dim, 128, num_classes=1))
+                self.s_heads.append(SHead(in_dim, num_bins=self.bins_scale))
             else: # Regression 
-                self.p_heads.append(SigmoidHead(128 + 1, 128, num_classes=1))
-                self.s_heads.append(SSHead(128 + 1, num_out=1))
+                self.p_heads.append(SigmoidHead(in_dim, 128, num_classes=1))
+                self.s_heads.append(SSHead(in_dim, num_out=1))
 
         self.relu = nn.ReLU(inplace=True)
     
@@ -303,8 +309,11 @@ class PerClassScale(nn.Module):
         # Predict canonical and scale per class
         for i in range(self.num_semantic_classes):
 
-            # Concat mask
-            input_feature_map_current = torch.cat((input_feature_map, masks[:, i, :, :].unsqueeze(1)), dim=1)
+            # Concat mask #
+            if self.concat_masks:
+                input_feature_map_current = torch.cat((input_feature_map, masks[:, i, :, :].unsqueeze(1)), dim=1)
+            else:
+                input_feature_map_current = input_feature_map
 
             # Canonical
             prob = self.p_heads[i](input_feature_map_current)
