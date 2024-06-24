@@ -104,35 +104,20 @@ class NewCRFDepth(nn.Module):
                                              virtual_depth_variation=self.virtual_depth_variation, upsample_type=self.upsample_type, bins_type=self.bins_type, bins_type_scale=self.bins_type_scale)
             print("[VARIATION GlobalScale]\n")
 
-        ################
-        # Segmentation #
-        ################
-        elif self.update_block == 18:
-            self.update = UniformSegmentationModuleListConcatMasks(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
+        ###################
+        # Per-Class scale #
+        ###################
+        elif self.update_block == 2:
+            self.update = PerClassScale(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
                                                                    loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, bins_scale=bins_scale, \
-                                                                   virtual_depth_variation=self.virtual_depth_variation, upsample_type=self.upsample_type)
-            print("[VARIATION UniformSegmentationModuleListConcatMasks]\n")
-
-        elif self.update_block == 12:
-            self.update = RegressionSegmentationNoMasking(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
-                                                          loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
-            print("[VARIATION RegressionSegmentationNoMasking]\n")
-
-        elif self.update_block == 13:
-            self.update = RegressionSegmentationNoMaskingConcatMasks(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
-                                                                     loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes)
-            print("[VARIATION RegressionSegmentationNoMaskingConcatMasks]\n")
-
-        elif self.update_block == 15:
-            self.update = RegressionSegmentationModuleListConcatMasks(hidden_dim=self.hidden_dim, context_dim=self.context_dim, \
-                                                                           loss_type=self.loss_type, \
-                                                                           num_semantic_classes=self.num_semantic_classes)
-            print("[VARIATION RegressionSegmentationModuleListConcatMasks]\n")
+                                                                   virtual_depth_variation=self.virtual_depth_variation, upsample_type=self.upsample_type, bins_type=self.bins_type, 
+                                                                   bins_type_scale=self.bins_type_scale)
+            print("[VARIATION PerClassScale]\n")
 
         #############
         # Instances #
         #############
-        elif self.update_block == 2:
+        elif self.update_block == 18:
             self.update = UniformInstancesSharedCanonical(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
                                                           loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, \
                                                           num_instances=self.num_instances, var=var, padding_instances=self.padding_instances, \

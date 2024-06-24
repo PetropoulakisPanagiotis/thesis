@@ -99,8 +99,8 @@ train_parser.add_argument(
     '--upsample_type', type=int,
     help='0 for torch, 1 for custom bilinear interpolation, 2 custom and weight**2 for uncertainty', default='1')
 
-train_parser.add_argument('--bins_type', type=int, help='0 for IEBINS, 1 for uniform, 2 for logarithmic', default='1')
-train_parser.add_argument('--bins_type_scale', type=int, help='0 for IEBINS, 1 for uniform, 2 for logarithmic',
+train_parser.add_argument('--bins_type', type=int, help='0 for uniform, 1 for logarithmic', default='0')
+train_parser.add_argument('--bins_type_scale', type=int, help='0 for uniform, 0 for logarithmic',
                           default='1')
 # -> Segmentation #
 train_parser.add_argument('--segmentation', dest='segmentation', help='segmentation variation', action='store_true')

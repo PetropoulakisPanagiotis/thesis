@@ -122,26 +122,30 @@ class GlobalScale(nn.Module):
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, depth, context, input_feature_map, bin_num, min_depth, max_depth, max_scale=15):
+        # Results list #
         pred_depths_r_list = []  # Metric
         pred_depths_rc_list = []  # Canonical
-
-        if self.bins_type == 1:
-            bins_map, bin_edges = get_uniform_bins(depth, min_depth, max_depth, bin_num, sid=False)
-        else:
-            bins_map, bin_edges = get_uniform_bins(depth, min_depth, max_depth, bin_num, sid=True)
-
-        if self.bins_type_scale == 1:
-            bins_map_scale, bin_scale_edges = get_uniform_bins(
-                torch.zeros(depth.shape[0], 1, 1, 1).to(depth.device), 0, max_scale, self.bins_scale, sid=False)
-        else:
-            bins_map_scale, bin_scale_edges = get_uniform_bins(
-                torch.zeros(depth.shape[0], 1, 1, 1).to(depth.device), 0, max_scale, self.bins_scale, sid=True)
-
         pred_scale_list = []
         uncertainty_maps_list = []
         pred_depths_c_list = []
         pred_depths_scale_c_list = []
         uncertainty_maps_scale_list = []
+
+        # Canonical bins #
+        if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 1:
+            if self.bins_type == 0:
+                bins_map, bin_edges = get_uniform_bins(depth, min_depth, max_depth, bin_num, sid=False)
+            else:
+                bins_map, bin_edges = get_uniform_bins(depth, min_depth, max_depth, bin_num, sid=True)
+
+        # Scale bins #
+        if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2:
+            if self.bins_type_scale == 0:
+                bins_map_scale, bin_scale_edges = get_uniform_bins(
+                    torch.zeros(depth.shape[0], 1, 1, 1).to(depth.device), 0, max_scale, self.bins_scale, sid=False)
+            else:
+                bins_map_scale, bin_scale_edges = get_uniform_bins(
+                    torch.zeros(depth.shape[0], 1, 1, 1).to(depth.device), 0, max_scale, self.bins_scale, sid=True)
 
         # Canonical
         pred_rc = self.c_head(input_feature_map)
@@ -150,7 +154,7 @@ class GlobalScale(nn.Module):
             depth_rc = (pred_rc * bins_map.detach()).sum(1, keepdim=True)
             uncertainty_map = torch.sqrt(
                 (pred_rc * ((bins_map.detach() - depth_rc.repeat(1, bin_num, 1, 1))**2)).sum(1, keepdim=True))
-            print(uncertainty_map[0,0,40,40]) 
+            
             # Label
             pred_label = get_label(torch.squeeze(depth_rc, 1), bin_edges, bin_num).unsqueeze(1)
             depth_c = torch.gather(bins_map.detach(), 1, pred_label.detach())
@@ -171,12 +175,10 @@ class GlobalScale(nn.Module):
         pred_scale = self.s_head(input_feature_map)
         if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2: # Bins
             scale = (pred_scale * bins_map_scale.squeeze(-1).squeeze(-1).detach()).sum(1, keepdim=True).unsqueeze(-1).unsqueeze(-1)
-            #print("ssasa\n") 
-            #print(pred_scale)
             uncertainty_map = torch.sqrt(
                 (pred_scale.unsqueeze(-1).unsqueeze(-1) * ((bins_map_scale.detach() - scale.repeat(1, self.bins_scale, 1, 1))**2)).sum(
                     1, keepdim=True)).squeeze(-1).squeeze(-1)
-            #print(uncertainty_map)
+            
             # Copy to scale bins the result #
             pred_scale = scale.squeeze(-1).squeeze(-1)
             
@@ -189,7 +191,6 @@ class GlobalScale(nn.Module):
         pred_scale_list.append(pred_scale)
         pred_depths_scale_c_list.append(depth_scale_c)
         uncertainty_maps_scale_list.append(uncertainty_map)
-        
 
         # Metric depth
         if self.loss_type == 0:
@@ -212,14 +213,14 @@ class GlobalScale(nn.Module):
 
 
 """
-Segmentation variations
+Per-Class variations
 """
 
 
-class UniformSegmentationModuleListConcatMasks(nn.Module):
+class PerClassScale(nn.Module):
     def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=5, bins_scale=50,
-                 virtual_depth_variation=0, upsample_type=1):
-        super(UniformSegmentationModuleListConcatMasks, self).__init__()
+                 virtual_depth_variation=0, , upsample_type=1, bins_type=1, bins_type_scale=1):
+        super(PerClassScale, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
@@ -228,26 +229,45 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
         self.virtual_depth_variation = virtual_depth_variation
         self.upsample_type = upsample_type
 
-        self.relu = nn.ReLU(inplace=True)
+        self.bins_type = bins_type
+        self.bins_type_scale = bins_type_scale
+
+        if(self.bins_type == 0):
+            print("PerClassScale: uniform bins for canonical\n")
+        else:
+            print("PerClassScale: log bins for canonical\n")
+
+        if(self.bins_type_scale == 0):
+            print("PerClassScale: uniform bins for scale\n")
+        else:
+            print("PerClassScale: log bins for scale\n")
+
 
         self.p_heads = nn.ModuleList()
         self.s_heads = nn.ModuleList()
         for i in range(num_semantic_classes):
-            self.p_heads.append(PHead(128 + 1, 128, bin_num=bin_num))
 
-            if self.virtual_depth_variation == 0:
-                self.s_heads.append(SSHead(128 + 1, num_out=2))
-            elif self.virtual_depth_variation == 1:
-                self.s_heads.append(SSHead(128 + 1, num_out=1))
-            elif self.virtual_depth_variation == 2:
+            if self.virtual_depth_variation == 0: # Propabilities both scale and canonical
+                self.p_heads.append(PHead(128 + 1, 128, bin_num=bin_num))
                 self.s_heads.append(SHead(128 + 1, num_bins=self.bins_scale))
+            elif self.virtual_depth_variation == 1: # Probabilities canonical 
+                self.p_heads.append(SigmoidHead(hidden_dim, hidden_dim, num_classes=1))
+                self.s_heads.append(SSHead(128 + 1, num_out=1))
 
-    def forward(self, depth, context, input_feature_map, bin_num, min_depth, max_depth, masks):
+            elif self.virtual_depth_variation == 2: # Probabilities scale 
+                self.p_heads.append(SigmoidHead(hidden_dim, hidden_dim, num_classes=1))
+                self.s_heads.append(SHead(128 + 1, num_bins=self.bins_scale))
+            else: # Regression 
+                self.p_heads.append(SigmoidHead(hidden_dim, hidden_dim, num_classes=1))
+                self.s_heads.append(SSHead(128 + 1, num_out=1))
+
+        self.relu = nn.ReLU(inplace=True)
+    
+    def forward(self, depth, context, input_feature_map, bin_num, min_depth, max_depth, masks, min_scale=0,max_scale=15):
         pred_depths_r_list = []  # Metric
         pred_depths_rc_list = []  # Canonical
 
         pred_scale_list = []
-        pred_shift_list = []
 
         uncertainty_maps_list = []
         uncertainty_maps_scale_list = []
@@ -256,95 +276,105 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
 
         b, _, h, w = depth.shape
         depth_rc = []
-        pred_scale_shift = []
+        pred_scale = []
 
-        bins_map, bin_edges = get_uniform_bins(depth, min_depth, max_depth, bin_num)
-        if self.virtual_depth_variation == 2:
-            bins_map_scale, bin_scale_edges = get_uniform_bins(
-                torch.zeros(depth.shape[0], 1, 1, 1).to(depth.device), 0, 15, self.bins_scale)
-            bins_map_scale = bins_map_scale.squeeze(-1).squeeze(-1)
+        # Canonical bins #
+        if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 1:
+            if self.bins_type == 0:
+                bins_map, bin_edges = get_uniform_bins(depth, min_depth, max_depth, bin_num, sid=False)
+            else:
+                bins_map, bin_edges = get_uniform_bins(depth, min_depth, max_depth, bin_num, sid=True)
+
+        # Scale bins #
+        if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2:
+            if self.bins_type_scale == 0:
+                bins_map_scale, bin_scale_edges = get_uniform_bins(
+                    torch.zeros(depth.shape[0], 1, 1, 1).to(depth.device), min_scale, max_scale, self.bins_scale, sid=False)
+            else: 
+                bins_map_scale, bin_scale_edges = get_uniform_bins(
+                    torch.zeros(depth.shape[0], 1, 1, 1).to(depth.device), min_scale, max_scale, self.bins_scale, sid=True)
 
         uncertainty_map = torch.zeros(b, self.num_semantic_classes, h, w).to(masks.device)
         depth_c = torch.zeros(b, self.num_semantic_classes, h, w).to(masks.device)
 
-        if self.virtual_depth_variation == 2:
+        if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2:
             uncertainty_map_scale = torch.zeros(b, self.num_semantic_classes, 1, 1).to(masks.device)
             c_map_scale = torch.zeros(b, self.num_semantic_classes, 1, 1).to(masks.device)
 
-        # Predict canonical and scale/shift per class
+        # Predict canonical and scale per class
         for i in range(self.num_semantic_classes):
 
             # Concat mask
             input_feature_map_current = torch.cat((input_feature_map, masks[:, i, :, :].unsqueeze(1)), dim=1)
 
-            # Prob and canonical
+            # Canonical
             prob = self.p_heads[i](input_feature_map_current)
-            depth_rc_current = (prob * bins_map.detach()).sum(1, keepdim=True)
-            depth_rc.append(depth_rc_current)
+            if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2:
+                # Canonical depth estimation #
+                depth_rc_current = (prob * bins_map.detach()).sum(1, keepdim=True)
 
-            uncertainty_map_current = torch.sqrt(
-                (prob * ((bins_map.detach() - depth_rc_current.repeat(1, bin_num, 1, 1))**2)).sum(1, keepdim=True))
-            uncertainty_map[:, i, :, :] = uncertainty_map_current.squeeze(1)
+                # Uncertainty #
+                uncertainty_map_current = torch.sqrt(
+                    (prob * ((bins_map.detach() - depth_rc_current.repeat(1, bin_num, 1, 1))**2)).sum(1, keepdim=True))
 
-            # Labels
-            pred_label = get_label(torch.squeeze(depth_rc_current, 1), bin_edges, bin_num).unsqueeze(1)
-            depth_c[:, i, :, :] = (torch.gather(bins_map.detach(), 1, pred_label.detach())).squeeze(1)
+                # Labels
+                pred_label = get_label(torch.squeeze(depth_rc_current, 1), bin_edges, bin_num).unsqueeze(1)
+                depth_c_current =  (torch.gather(bins_map.detach(), 1, pred_label.detach())).squeeze(1)               
 
-            # Scale/shift
-            scale_shift_current = self.s_heads[i](input_feature_map_current)
-            if self.virtual_depth_variation == 0:
-                pred_scale_shift.append(scale_shift_current)
-            elif self.virtual_depth_variation == 1:
-                pred_scale_shift.append(scale_shift_current)
-            elif self.virtual_depth_variation == 2:
-                scale = (scale_shift_current * bins_map_scale.detach()).sum(1, keepdim=True)
-                pred_scale_shift.append(scale)
+                # Upsample #
+                depth_rc_current = upsample(depth_rc_current, scale_factor=4, upsample_type=self.upsample_type)
+                depth_c_current = upsample(depth_c_current, scale_factor=4, upsample_type=self.upsample_type)
+                uncertainty_map_current = upsample(uncertainty_map_current, scale_factor=4, upsample_type=self.upsample_type, uncertainty=True)
 
+                depth_rc.append(depth_rc_current)
+                depth_c[:, i, :, :] = depth_c_current
+                uncertainty_map[:, i, :, :] = uncertainty_map_current
+            else:
+                prob = upsample(prob, scale_factor=4, upsample_type=self.upsample_type)
+                depth_rc_current = prob
+                
+                depth_rc.append(depth_rc_current)
+                uncertainty_map[:, i, :, :] = np.zeros_like(uncertainty_map[:, i, :, :])
+                depth_c[:, i, :, :] = np.zeros_like(depth_c[:, i, :, :])
+            
+
+            # Scale
+            scale_current = self.s_heads[i](input_feature_map_current)
+            # Bins #
+            if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2:
+                # Estimate scale #
+                scale = (scale_current * bins_map_scale.detach()).sum(1, keepdim=True)
+                pred_scale.append(scale)
+
+                # Uncertainty #
                 uncertainty_map_current_scale = torch.sqrt(
-                    (scale_shift_current * ((bins_map_scale.detach() - scale)**2)).sum(1, keepdim=True))
+                    (scale_current * ((bins_map_scale.detach() - scale)**2)).sum(1, keepdim=True))
                 uncertainty_map_scale[:, i, :, :] = uncertainty_map_current_scale.unsqueeze(-1)
 
+                # Labels #
                 pred_label = get_label(torch.squeeze(scale, 1), bin_scale_edges, self.bins_scale).unsqueeze(1)
                 depth_scale_c = torch.gather(bins_map_scale.detach(), 1, pred_label.detach())
                 c_map_scale[:, i, :, :] = depth_scale_c.unsqueeze(1)
+            else:
+                pred_scale.append(scale_current)
+                uncertainty_map_scale[:, i, :, :] = np.zeros_like(uncertainty_map_scale[:, i, :, :])
+                c_map_scale[:, i, :, :] = np.zeros_like(c_map_scale[:, i, :, :])
 
         depth_rc = torch.cat(depth_rc, dim=1)
-
-        # Upsample #
-        depth_rc = upsample(depth_rc, scale_factor=4, upsample_type=upsample_type)
-        depth_c = upsample(depth_c, scale_factor=4, upsample_type=upsample_type)
-        uncertainty_map = upsample(uncertainty_map, scale_factor=4, upsample_type=upsample_type, uncertainty=True)
 
         # Save #
         pred_depths_c_list.append(depth_c)
         pred_depths_rc_list.append(depth_rc)
         uncertainty_maps_list.append(uncertainty_map)
 
-        pred_scale_shift = torch.cat(pred_scale_shift, dim=1)
+        pred_scale = torch.cat(pred_scale, dim=1)
+        pred_scale_list.append(pred_scale_shift)
 
-        if self.virtual_depth_variation == 0:
-            pred_scale_list.append(pred_scale_shift[:, ::2])  # b, scale
-            pred_shift_list.append(pred_scale_shift[:, 1::2])  # b, shift
-        elif self.virtual_depth_variation == 1:
-            pred_scale_list.append(pred_scale_shift)
-        elif self.virtual_depth_variation == 2:
-            uncertainty_maps_scale_list.append(uncertainty_map_scale)
-            pred_depths_scale_c_list.append(c_map_scale)
-            pred_scale_list.append(pred_scale_shift)
-
-        # Metric
+        # Metric depth
         if self.loss_type == 0:
-            if self.virtual_depth_variation == 0:
-                depth_r = (self.relu(depth_rc * pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1) +
-                                     pred_shift_list[-1].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
-            else:
-                depth_r = (self.relu(depth_rc * pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+            depth_r = (self.relu(depth_rc * pred_scale_list[-1].unsqueeze(1).unsqueeze(1))).clamp(min=1e-3)
         else:
-            if self.virtual_depth_variation == 0:
-                depth_r = depth_rc * pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1) + pred_shift_list[-1].unsqueeze(
-                    -1).unsqueeze(-1)
-            else:
-                depth_r = depth_rc * pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1)
+            depth_r = depth_rc * pred_scale_list[-1].unsqueeze(1).unsqueeze(1)
 
         pred_depths_r_list.append(depth_r)
 
@@ -356,180 +386,6 @@ class UniformSegmentationModuleListConcatMasks(nn.Module):
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_scale_list"] = pred_scale_list
-        result["pred_shift_list"] = pred_shift_list
-
-        return result
-
-
-class RegressionSegmentationNoMasking(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0, num_semantic_classes=5):
-        super(RegressionSegmentationNoMasking, self).__init__()
-        self.num_semantic_classes = num_semantic_classes
-        self.hidden_dim = hidden_dim
-        self.context_dim = context_dim
-        self.loss_type = loss_type
-
-        # Each class predicts [0, 1] canonical
-        self.sigmoid_head = SigmoidHead(hidden_dim, hidden_dim, num_classes=self.num_semantic_classes)
-        self.s_head = SSHead(hidden_dim, num_out=self.num_semantic_classes * 2)
-
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, depth, context, input_feature_map, bin_num, min_depth, max_depth, masks):
-        pred_depths_r_list = []  # Metric
-        pred_depths_rc_list = []  # Canonical
-
-        pred_scale_list = []
-        pred_shift_list = []
-
-        b, _, h, w = depth.shape
-
-        pred_canonical = self.sigmoid_head(input_feature_map)
-        pred_scale_shift = self.s_head(input_feature_map)
-
-        pred_scale_list.append(pred_scale_shift[:, ::2])  # b, c
-        pred_shift_list.append(pred_scale_shift[:, 1::2])  # b, c
-
-        # Canonical
-        depth_rc = pred_canonical
-        pred_depths_rc_list.append(depth_rc)
-
-        # Metric
-        if self.loss_type == 0:
-            depth_r = (self.relu(depth_rc * pred_scale_shift[:, ::2].unsqueeze(-1).unsqueeze(-1) +
-                                 pred_scale_shift[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
-        else:
-            depth_r = depth_rc * pred_scale_shift[:, ::2].unsqueeze(-1).unsqueeze(
-                -1) + pred_scale_shift[:, 1::2].unsqueeze(-1).unsqueeze(-1)
-
-        # depth_r: b, c, h, w
-        pred_depths_r_list.append(depth_r)
-
-        result = {}
-        result["pred_depths_r_list"] = pred_depths_r_list
-        result["pred_depths_rc_list"] = pred_depths_rc_list
-        result["pred_scale_list"] = pred_scale_list
-        result["pred_shift_list"] = pred_shift_list
-
-        return result
-
-
-class RegressionSegmentationNoMaskingConcatMasks(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0, num_semantic_classes=14):
-        super(RegressionSegmentationNoMaskingConcatMasks, self).__init__()
-        self.num_semantic_classes = num_semantic_classes
-        self.hidden_dim = hidden_dim
-        self.context_dim = context_dim
-        self.loss_type = loss_type
-
-        self.sigmoid_head = SigmoidHead(hidden_dim + num_semantic_classes, hidden_dim,
-                                        num_classes=self.num_semantic_classes)
-        self.s_head = SSHead(hidden_dim + num_semantic_classes, num_out=self.num_semantic_classes * 2)
-
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, depth, context, input_feature_map, bin_num, min_depth, max_depth, masks):
-        pred_depths_r_list = []  # Metric
-        pred_depths_rc_list = []  # Canonical
-
-        pred_scale_list = []
-        pred_shift_list = []
-
-        b, _, h, w = depth.shape
-
-        input_feature_map = torch.cat((input_feature_map, masks), dim=1)
-        pred_prob = self.sigmoid_head(input_feature_map)
-        pred_scale_shift = self.s_head(input_feature_map)
-
-        pred_scale_list.append(pred_scale_shift[:, ::2])  # b, c
-        pred_shift_list.append(pred_scale_shift[:, 1::2])  # b, c
-
-        # Canonical
-        depth_rc = pred_prob
-        pred_depths_rc_list.append(depth_rc)
-
-        # Metric
-        if self.loss_type == 0:
-            depth_r = (self.relu(depth_rc * pred_scale_shift[:, ::2].unsqueeze(-1).unsqueeze(-1) +
-                                 pred_scale_shift[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
-        else:
-            depth_r = depth_rc * pred_scale_shift[:, ::2].unsqueeze(-1).unsqueeze(
-                -1) + pred_scale_shift[:, 1::2].unsqueeze(-1).unsqueeze(-1)
-
-        pred_depths_r_list.append(depth_r)
-
-        result = {}
-        result["pred_depths_r_list"] = pred_depths_r_list
-        result["pred_depths_rc_list"] = pred_depths_rc_list
-        result["pred_scale_list"] = pred_scale_list
-        result["pred_shift_list"] = pred_shift_list
-
-        return result
-
-
-class RegressionSegmentationModuleListConcatMasks(nn.Module):
-    def __init__(self, hidden_dim=128, context_dim=192, loss_type=0, num_semantic_classes=5):
-        super(RegressionSegmentationModuleListConcatMasks, self).__init__()
-        self.num_semantic_classes = num_semantic_classes
-        self.hidden_dim = hidden_dim
-        self.context_dim = context_dim
-        self.loss_type = loss_type
-
-        self.sigmoid_heads = nn.ModuleList()
-        self.s_heads = nn.ModuleList()
-
-        for i in range(num_semantic_classes):
-            self.sigmoid_heads.append(SigmoidHead(128 + 1, 128, num_classes=1))
-            self.s_heads.append(SSHead(128 + 1, num_out=1 * 2))
-
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, depth, context, input_feature_map, min_depth, max_depth, masks):
-        pred_depths_r_list = []  # Metric
-        pred_depths_rc_list = []  # Canonical
-        pred_scale_list = []
-        pred_shift_list = []
-
-        b, _, h, w = depth.shape
-
-        pred_canonical = []
-        pred_scale_shift = []
-        for i in range(self.num_semantic_classes):
-            # Concat masks
-            input_feature_map_current = torch.cat((input_feature_map, masks[:, i, :, :].unsqueeze(1)), dim=1)
-
-            canonical = self.sigmoid_heads[i](input_feature_map_current)
-            scale_shift_current = self.s_heads[i](input_feature_map_current)
-
-            pred_canonical.append(canonical)
-            pred_scale_shift.append(scale_shift_current)
-
-        pred_canonical = torch.cat(pred_canonical, dim=1)
-        pred_scale_shift = torch.cat(pred_scale_shift, dim=1)
-
-        pred_scale_list.append(pred_scale_shift[:, ::2])  # b, c
-        pred_shift_list.append(pred_scale_shift[:, 1::2])  # b, c
-
-        # Canonical
-        depth_rc = pred_canonical
-        pred_depths_rc_list.append(depth_rc)
-
-        # Metric
-        if self.loss_type == 0:
-            depth_r = (self.relu(depth_rc * pred_scale_shift[:, ::2].unsqueeze(-1).unsqueeze(-1) +
-                                 pred_scale_shift[:, 1::2].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
-        else:
-            depth_r = depth_rc * pred_scale_shift[:, ::2].unsqueeze(-1).unsqueeze(
-                -1) + pred_scale_shift[:, 1::2].unsqueeze(-1).unsqueeze(-1)
-
-        # depth_r: b, c, h, w
-        pred_depths_r_list.append(depth_r)
-
-        result = {}
-        result["pred_depths_r_list"] = pred_depths_r_list
-        result["pred_depths_rc_list"] = pred_depths_rc_list
-        result["pred_scale_list"] = pred_scale_list
-        result["pred_shift_list"] = pred_shift_list
 
         return result
 
