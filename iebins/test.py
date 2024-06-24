@@ -143,7 +143,7 @@ def predict(model, dataloader_eval) -> None:
 
             cv2.imwrite(args.save_dir + 'canonical/' + filename,
                         map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
-
+            """
             # Uncertainty canonical and scale #
             if args.d3vo:
                 if args.d3vo_c:
@@ -157,6 +157,7 @@ def predict(model, dataloader_eval) -> None:
                 canonical_unc = canonical_unc.cpu().numpy()
 
                 np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
+            """
 
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
                 json.dump(scale_data, file, indent=4)
@@ -185,6 +186,7 @@ def predict(model, dataloader_eval) -> None:
             cv2.imwrite(args.save_dir + 'canonical/' + filename,
                         map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
+            """
             # Uncertainty canonical and scale #
             if args.d3vo:
                 if args.d3vo_c:
@@ -198,6 +200,7 @@ def predict(model, dataloader_eval) -> None:
                 canonical_unc = canonical_unc.cpu().numpy()
 
                 np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
+            """
 
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
                 json.dump(scale_data, file, indent=4)
@@ -205,7 +208,7 @@ def predict(model, dataloader_eval) -> None:
         else:  # Single scale
             # Scale #
             scale = float(result['pred_scale_list'][-1].cpu().numpy().squeeze())
-            scale_data = {'scale': [scale], 'scale_type': 'single', 'valid': [1]}
+            scale_data = {'scale': [scale], 'scale_type': 'global', 'valid': [1]}
 
             # Canonical #
             canonical = result['pred_depths_rc_list'][-1].cpu().numpy().squeeze()
@@ -217,18 +220,21 @@ def predict(model, dataloader_eval) -> None:
                         [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
             # Uncertainty canonical and scale #
-            if args.d3vo:
-                if args.d3vo_c:
-                    canonical_unc = result["unc_d3vo_c"].squeeze(0).squeeze(0)
-                else:
-                    canonical_unc = result["uncertainty_maps_list"].squeeze(0).squeeze(0)**2
+            if args.unc_head:
+                canonical_unc = result["unc_c"][-1]
+                scale_unc = result["unc_s"][-1]   
+            elif args.virtual_depth_variation == 0:
+                canonical_unc = result["uncertainty_maps_list"][-1]**2 # to variance
+                scale_unc = result["uncertainty_maps_scale_list"][-1]**2 # to variance
+            else:
+                raise ValueError("Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n")
 
-                scale_unc = float(result["unc_d3vo"].squeeze(0).cpu().numpy().squeeze())
-                scale_data['scale_uncertainty'] = [scale_unc]
+            scale_unc = float(scale_unc.squeeze(0).cpu().numpy().squeeze())
+            scale_data["scale_uncertainty"] = scale_unc
 
-                canonical_unc = canonical_unc.cpu().numpy()
-
-                np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
+            canonical_unc = canonical_unc.cpu().numpy()
+            
+            np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
 
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
                 json.dump(scale_data, file, indent=4)
@@ -246,6 +252,8 @@ def predict(model, dataloader_eval) -> None:
 
 
 def main_worker(args):
+    torch.set_num_threads(16)
+    torch.set_num_interop_threads(16)
 
     dataloader_eval = DataLoaderCustom(args, 'online_eval')
 
@@ -259,7 +267,7 @@ def main_worker(args):
                         padding_instances=args.padding_instances, \
                         segmentation_active=args.segmentation,  instances_active=args.instances,\
                         roi_align=args.roi_align, roi_align_size=args.roi_align_size, \
-                        bins_scale=args.bins_scale, d3vo=args.d3vo, d3vo_c=args.d3vo_c, virtual_depth_variation=args.virtual_depth_variation, \
+                        bins_scale=args.bins_scale, unc_head=args.unc_head, virtual_depth_variation=args.virtual_depth_variation, \
                         upsample_type=args.upsample_type, bins_type=args.bins_type, bins_type_scale=args.bins_type_scale)
     model.train()
 
@@ -303,7 +311,7 @@ def main():
     elif args.segmentation:
         args.save_dir += 'segmentation/'
     else:
-        args.save_dir += 'single/'
+        args.save_dir += 'global/'
 
     print('Save dir: ', args.save_dir)
     os.makedirs(args.save_dir, exist_ok=True)

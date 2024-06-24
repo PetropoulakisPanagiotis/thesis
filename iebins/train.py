@@ -436,6 +436,8 @@ def main_worker(gpu, ngpus_per_node, args):
 
 
 def main():
+    torch.set_num_threads(16)
+    torch.set_num_interop_threads(16)
     torch.cuda.empty_cache()
     gc.collect()
 

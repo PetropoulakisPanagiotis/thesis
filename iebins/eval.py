@@ -294,6 +294,8 @@ def main_worker(args):
 
 
 def main():
+    torch.set_num_threads(16)
+    torch.set_num_interop_threads(16)
     torch.cuda.empty_cache()
     args.distributed = False
     ngpus_per_node = torch.cuda.device_count()

@@ -150,7 +150,7 @@ class GlobalScale(nn.Module):
             depth_rc = (pred_rc * bins_map.detach()).sum(1, keepdim=True)
             uncertainty_map = torch.sqrt(
                 (pred_rc * ((bins_map.detach() - depth_rc.repeat(1, bin_num, 1, 1))**2)).sum(1, keepdim=True))
-
+            print(uncertainty_map[0,0,40,40]) 
             # Label
             pred_label = get_label(torch.squeeze(depth_rc, 1), bin_edges, bin_num).unsqueeze(1)
             depth_c = torch.gather(bins_map.detach(), 1, pred_label.detach())
@@ -171,11 +171,12 @@ class GlobalScale(nn.Module):
         pred_scale = self.s_head(input_feature_map)
         if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2: # Bins
             scale = (pred_scale * bins_map_scale.squeeze(-1).squeeze(-1).detach()).sum(1, keepdim=True).unsqueeze(-1).unsqueeze(-1)
-           
+            #print("ssasa\n") 
+            #print(pred_scale)
             uncertainty_map = torch.sqrt(
                 (pred_scale.unsqueeze(-1).unsqueeze(-1) * ((bins_map_scale.detach() - scale.repeat(1, self.bins_scale, 1, 1))**2)).sum(
                     1, keepdim=True)).squeeze(-1).squeeze(-1)
-            
+            #print(uncertainty_map)
             # Copy to scale bins the result #
             pred_scale = scale.squeeze(-1).squeeze(-1)
             
