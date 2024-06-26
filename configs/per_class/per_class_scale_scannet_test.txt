@@ -1,0 +1,31 @@
+--model_name iebins_nyu
+--encoder tiny07
+--dataset scannet
+--input_height 480
+--input_width 640
+
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train_debug.txt
+
+--min_depth_test 1e-3
+--max_depth_test 10
+
+--bins_type 0
+--bins_type_scale 0
+
+--update_block 2
+--virtual_depth_variation 0
+
+--loss_type 1
+--segmentation
+--concat_masks
+--bin_num 40
+--min_depth 0
+--max_depth 1
+--max_tree_depth 1
+--bins_scale 40
+--unc_head
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale-scannet-unc/nyu/model-50-best_unc_d3vo_0.03439
+
+--save_dir /usr/stud/petp/storage/user/petp/datasets/predictions/

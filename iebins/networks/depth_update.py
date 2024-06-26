@@ -253,7 +253,7 @@ class PerClassScale(nn.Module):
         self.s_heads = nn.ModuleList()
         for i in range(num_semantic_classes):
             if self.virtual_depth_variation == 0: # Propabilities both scale and canonical
-                self.p_heads.append(PHead(in_idm, 128, bin_num=bin_num))
+                self.p_heads.append(PHead(in_dim, 128, bin_num=bin_num))
                 self.s_heads.append(SHead(in_dim, num_bins=self.bins_scale))
             elif self.virtual_depth_variation == 1: # Probabilities canonical 
                 self.p_heads.append(PHead(in_dim, 128, bin_num=bin_num))
@@ -375,7 +375,7 @@ class PerClassScale(nn.Module):
         pred_depths_c_list.append(depth_c)
         pred_depths_rc_list.append(depth_rc)
         uncertainty_maps_list.append(uncertainty_map)
-
+        uncertainty_maps_scale_list.append(uncertainty_map_scale)
         pred_scale = torch.cat(pred_scale, dim=1)
         pred_scale_list.append(pred_scale)
         
@@ -395,7 +395,7 @@ class PerClassScale(nn.Module):
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_scale_list"] = pred_scale_list
-
+        
         return result
 
 

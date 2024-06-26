@@ -210,8 +210,8 @@ def main_worker(gpu, ngpus_per_node, args):
             uncertainty_maps_list = result["uncertainty_maps_list"]
 
             if args.unc_head:  # scale unc
-                unc_s = result["unc_s"][-1]
                 unc_c = result["unc_c"][-1]
+                unc_s = result["unc_s"][-1]
 
             # gt_depth masking #
             mask = depth_gt > 0.1
@@ -222,14 +222,13 @@ def main_worker(gpu, ngpus_per_node, args):
             if args.unc_head:
                 if args.instances:
                     sigma_metric = torch.sum((sigma_metric * instances), dim=1).unsqueeze(1)
-                    pred_d = torch.sum((pred_depths_instances_rc_list[-1] * instances), dim=1).unsqueeze(1)
+                    pred_d = torch.sum((pred_depths_instances_r_list[-1] * instances), dim=1).unsqueeze(1)
                 elif args.segmentation:
                     sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1],
                                                                          unc_c,
                                                                          pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1), unc_s.unsqueeze(-1).unsqueeze(-1), args)
                     sigma_metric = torch.sum(sigma_metric * segmentation_map, dim=1).unsqueeze(1)
-                    print(sigma_metric.max())
-                    pred_d = torch.sum((pred_depths_rc_list[-1] * segmentation_map), dim=1).unsqueeze(1)
+                    pred_d = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(1)
                 else:
                     sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1],
                                                                          unc_c,

@@ -127,25 +127,18 @@ def eval_func(model, dataloader_eval):
 
                 if args.eval_unc:
                     if args.unc_head:
-                        sigma_c = torch.sum((segmentation_map * (result["uncertainty_maps_list"][-1]**2)), dim=1)
-                        c = torch.sum((segmentation_map * result["pred_depths_rc_list"][-1]), dim=1)
-
-                        sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
-                                                                        result["unc_d3vo_c"],
-                                                                        result['pred_scale_list'][-1],
-                                                                        result["unc_d3vo"], args)
-                        sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
+                        sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
+                                                                        result["unc_c"][-1],
+                                                                        result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
+                                                                        result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
+                        sigma_m = torch.sum((sigma_m * segmentation_map), dim=1).unsqueeze(1)
                     else:
                         # uncertainty of canonical is std --> convert to variance
-                        sigma_s = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
+                        sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
                                                                         result['uncertainty_maps_list'][-1]**2,
-                                                                        result['pred_scale_list'][-1],
-                                                                        result["unc_d3vo"], args)
-                        sigma_s = torch.sum((sigma_s * segmentation_map), dim=1).unsqueeze(1)
-
-                    s = torch.sum((segmentation_map * result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)), dim=1)
-                    sigma_m = s**2 * sigma_c + c**2 * sigma_s
-                    sigma_m = sigma_m.unsqueeze(0)
+                                                                        result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
+                                                                        (result["uncertainty_maps_scale_list"][-1]**2), args)
+                        sigma_m = torch.sum((sigma_m * segmentation_map), dim=1).unsqueeze(1)
             else: # Global
                 pred_depth = pred_depths_r_list[-1]
 
@@ -156,6 +149,7 @@ def eval_func(model, dataloader_eval):
                                                                         result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
                                                                         result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
                     else: # Convert std to variance
+                        print((result["uncertainty_maps_scale_list"][-1]**2).unsqueeze(-1).unsqueeze(-1).shape)
                         sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
                                                                     result['uncertainty_maps_list'][-1]**2,
                                                                     result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),

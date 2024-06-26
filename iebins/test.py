@@ -124,7 +124,7 @@ def predict(model, dataloader_eval) -> None:
         if args.instances:
             # Scale #
             scale = result['pred_scale_instances_list'][-1].cpu().numpy()[0].tolist()
-            scale_data = {'scale': scale, 'scale_type': 'instancesse'}
+            scale_data = {'scale': scale, 'scale_type': 'per-instance'}
             scale_idx = [i for i in range(len(scale))]
 
             scale_idx_tensor = torch.tensor(
@@ -165,7 +165,7 @@ def predict(model, dataloader_eval) -> None:
         elif args.segmentation:
             # Scale #
             scale = result['pred_scale_list'][-1].cpu().numpy()[0].tolist()
-            scale_data = {'scale': scale, 'scale_type': 'segmentation'}
+            scale_data = {'scale': scale, 'scale_type': 'per-class'}
             scale_idx = [i for i in range(len(scale))]
 
             scale_idx_tensor = torch.tensor(
@@ -186,21 +186,21 @@ def predict(model, dataloader_eval) -> None:
             cv2.imwrite(args.save_dir + 'canonical/' + filename,
                         map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
-            """
             # Uncertainty canonical and scale #
-            if args.d3vo:
-                if args.d3vo_c:
-                    canonical_unc = result["unc_d3vo_c"].squeeze(0).squeeze(0)
-                else:
-                    canonical_unc = result["uncertainty_maps_list"].squeeze(0).squeeze(0)**2
+            if args.unc_head:
+                canonical_unc = result["unc_c"][-1]
+                scale_unc = result["unc_s"][-1]  
+            elif args.virtual_depth_variation == 0:
+                canonical_unc = result["uncertainty_maps_list"][-1]**2 # to variance
+                scale_unc = result["uncertainty_maps_scale_list"][-1]**2 # to variance
+            else:
+                raise ValueError("Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n")
+            scale_unc = scale_unc.view(num_semantic_classes).cpu().numpy().tolist()
+            scale_data['scale_uncertainty'] = scale_unc
 
-                scale_unc = result["unc_d3vo"].squeeze(0).cpu().numpy().tolist()
-                scale_data['scale_uncertainty'] = scale_unc
+            canonical_unc = canonical_unc.cpu().numpy()
 
-                canonical_unc = canonical_unc.cpu().numpy()
-
-                np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
-            """
+            np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
 
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
                 json.dump(scale_data, file, indent=4)
@@ -228,8 +228,7 @@ def predict(model, dataloader_eval) -> None:
                 scale_unc = result["uncertainty_maps_scale_list"][-1]**2 # to variance
             else:
                 raise ValueError("Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n")
-
-            scale_unc = float(scale_unc.squeeze(0).cpu().numpy().squeeze())
+            scale_unc = scale_unc.squeeze(0).cpu().numpy().tolist()
             scale_data["scale_uncertainty"] = scale_unc
 
             canonical_unc = canonical_unc.cpu().numpy()
@@ -307,9 +306,9 @@ def main():
 
     args.save_dir += args.filenames_file_eval.split('/')[-1].split('.')[0] + '/'
     if args.instances:
-        args.save_dir += 'instances/'
+        args.save_dir += 'per_instance/'
     elif args.segmentation:
-        args.save_dir += 'segmentation/'
+        args.save_dir += 'per_class/'
     else:
         args.save_dir += 'global/'
 

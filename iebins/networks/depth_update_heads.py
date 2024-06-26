@@ -70,7 +70,7 @@ class SSHead(nn.Module):
     def forward(self, x):
         out = F.relu(self.pool(self.conv1(x)))
         out = torch.flatten(out, 1)
-        out = self.fc1(out)
+        out = F.relu(self.fc1(out)).clamp(min=1e-3)
 
         return out
 

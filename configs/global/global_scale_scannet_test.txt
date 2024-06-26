@@ -1,0 +1,28 @@
+--model_name iebins_nyu
+--encoder tiny07
+--dataset scannet
+--input_height 480
+--input_width 640
+
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train_debug.txt
+
+--min_depth_test 1e-3
+--max_depth_test 10
+
+--update_block 1
+--virtual_depth_variation 0
+
+--loss_type 1
+--bins_type 1
+--bins_type_scale 0
+
+--bin_num 40
+--min_depth 0
+--max_depth 1
+--max_tree_depth 1
+--bins_scale 80
+--save_dir /usr/stud/petp/storage/user/petp/datasets/predictions/
+
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/global-scale-scannet/nyu/model-50-best_silog_12.39933

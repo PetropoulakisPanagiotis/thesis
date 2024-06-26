@@ -51,7 +51,6 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
 
             # Mask predictions #
             if args.instances:
-                #instances[:, 6:, :, :] = 0
                 pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
             elif args.segmentation:
                 pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
@@ -91,7 +90,6 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
                                                                         result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1),
                                                                         result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)               
                     sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).squeeze(0).cpu().numpy()
-                    print(sigma_metric.max())
                 else:
                     sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1],
                                                                          result["unc_c"][-1],
@@ -99,11 +97,11 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
                                                                          result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
                     sigma_metric = sigma_metric.squeeze(0).squeeze(0).cpu().numpy()
             # Mask gt_depth #
-            if args.instances:
-                mask = torch.sum(instances, dim=1).squeeze(0).to(torch.bool).cpu()
-                gt_depth = (gt_depth * mask).cpu().numpy().squeeze()
-            else:
-                gt_depth = gt_depth.cpu().numpy().squeeze()
+            #if args.instances:
+            #    mask = torch.sum(instances, dim=1).squeeze(0).to(torch.bool).cpu()
+            #    gt_depth = (gt_depth * mask).cpu().numpy().squeeze()
+            #else:
+            gt_depth = gt_depth.cpu().numpy().squeeze()
 
             # Filter predicted depth #
             pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
