@@ -434,7 +434,7 @@ class PerInstanceScale(nn.Module):
             print("PerInstanceScale: bins for both scale and shift\n") 
         elif self.virtual_depth_variation == 1: # Propabilities canonical 
             self.instances_canonical = ROISelectSharedCanonicalUniform(128, bin_num=bin_num)
-            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_out=self.num_semantic_classes)
+            self.instances_scale_and_shift = ROISelectScaleModule(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
             print("PerInstanceScale: bins for canonical\n") 
         elif self.virtual_depth_variation == 2: # Propabilities scale
             self.instances_canonical = ROISelectSharedCanonical(128, num_semantic_classes=1)
@@ -443,8 +443,8 @@ class PerInstanceScale(nn.Module):
                                                                 num_bins=self.bins_scale)
             print("PerInstanceScale: bins for scale\n") 
         else: # Regression
-            self.instances_scale_and_shift = ROISelectScale(128, downsampling=4, num_out=self.num_semantic_classes)
             self.instances_canonical = ROISelectSharedCanonical(128, num_semantic_classes=1)
+            self.instances_scale_and_shift = ROISelectScaleModule(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
             print("PerInstanceScale: regression\n") 
 
         self.roi_align = roi_align
