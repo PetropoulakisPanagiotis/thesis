@@ -135,13 +135,15 @@ Predict scale with bins for a ROI with bbox concat
 
 
 class ROISelectScaleBins(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=13, num_bins=50):
+    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=13, num_bins=50, min_scale=0, max_scale=15):
         super(ROISelectScaleBins, self).__init__()
         self.downsampling = downsampling
         self.num_bins = num_bins
         self.input_dim = input_dim
         self.num_semantic_classes = num_semantic_classes
-
+        self.min_scale = min_scale
+        self.max_scale = max_scale
+      
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
         self.pool = nn.AdaptiveAvgPool2d(70)
 
@@ -150,8 +152,9 @@ class ROISelectScaleBins(nn.Module):
             self.scale_nets.append(nn.Linear((70 * 70) + 4, self.num_bins))
 
     def forward(self, x, boxes, labels):
-        bins_map_scale = get_uniform_bins(torch.zeros(x.shape[0], 1, 1, 1).to(x.device), 0, 15,
-                                          self.num_bins).squeeze(-1).squeeze(-1)
+        bins_map_scale, bin_edges_scale = get_uniform_bins(torch.zeros(x.shape[0], 1, 1, 1).to(x.device), self.min_scale, self.max_scale,
+                                          self.num_bins)
+        bins_map_scale = bins_map_scale.squeeze(-1).squeeze(-1)
 
         boxes_valid_normalized_projected, num_valid_boxes = get_valid_normalized_projected_boxes(
             x, boxes, labels, self.downsampling)

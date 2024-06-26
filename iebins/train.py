@@ -201,7 +201,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 pred_depths_r_list = result["pred_depths_r_list"]
 
                 # Canonical segmentation/single scale #
-                if args.update_block != 0 and args.update_block != 4 and args.update_block != 3:
+                if args.update_block != 0 and args.update_block != 3:
                     pred_depths_rc_list = result["pred_depths_rc_list"]
                     pred_scale_list = result["pred_scale_list"]
 
