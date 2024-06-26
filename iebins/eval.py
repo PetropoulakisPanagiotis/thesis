@@ -52,9 +52,9 @@ def eval_func(model, dataloader_eval):
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         with torch.no_grad():
             # Init
-            pred_depths_r_list, pred_depths_rc_list, pred_depths_instances_r_list, \
-                pred_depths_instances_rc_list, pred_depths_c_list, uncertainty_maps_list, \
-                pred_depths_u_list = [], [], [], [], [], [], []
+            pred_depths_r_list, pred_depths_rc_list, \
+                pred_depths_c_list, uncertainty_maps_list, \
+                pred_depths_u_list = [], [], [], [], []
             segmentation_map, instances, labels, unc_decoder = None, None, None, None
 
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
@@ -74,7 +74,7 @@ def eval_func(model, dataloader_eval):
             # Predict
             if args.instances:
                 result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
-                for scale in result['pred_scale_instances_list'][-1]:
+                for scale in result['pred_scale_list'][-1]:
                     for scale_s in scale:
                         scales.append(float(scale_s.cpu().numpy()))
             elif args.segmentation:
@@ -92,16 +92,9 @@ def eval_func(model, dataloader_eval):
                 debug_result(result, gt_depth)
 
             # Unpack result
-            if args.instances:
-                pred_depths_r_list = result["pred_depths_instances_r_list"]
-
-                pred_depths_instances_rc_list = result["pred_depths_instances_rc_list"]
-                pred_depths_instances_r_list = result["pred_depths_instances_r_list"]
-            else:
-                pred_depths_r_list = result["pred_depths_r_list"]
-                # Canonical segmentation/single scale #
-                if args.update_block != 0 and args.update_block != 4 and args.update_block != 3:
-                    pred_depths_rc_list = result["pred_depths_rc_list"]
+            pred_depths_r_list = result["pred_depths_r_list"]
+            if args.update_block != 0:
+                pred_depths_rc_list = result["pred_depths_rc_list"]
 
             # Uncertainty bins #
             if args.update_block == 0 or args.update_block == 3 or args.update_block == 1 \
@@ -162,7 +155,6 @@ def eval_func(model, dataloader_eval):
                 tb_visualization(writer=writer, global_step=step, args=args, current_loss_depth=None, current_lr=None, current_loss_unc_decoder=None, \
                              var_sum=None, var_cnt=None, num_images=1, depth_gt=gt_depth, image=image, max_tree_depth=args.max_tree_depth, \
                              pred_depths_r_list=pred_depths_r_list, pred_depths_rc_list=pred_depths_rc_list, \
-                             pred_depths_instances_r_list=pred_depths_instances_r_list, pred_depths_instances_rc_list=pred_depths_instances_rc_list, \
                              num_semantic_classes=num_semantic_classes, instances=instances, segmentation_map=segmentation_map, \
                              labels=labels, pred_depths_c_list=pred_depths_c_list, uncertainty_maps_list=uncertainty_maps_list, \
                              pred_depths_u_list=pred_depths_u_list, unc_decoder=None, expensive_viz=True)

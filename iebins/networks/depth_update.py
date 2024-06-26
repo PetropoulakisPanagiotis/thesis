@@ -26,6 +26,7 @@ class IEBINS(nn.Module):
 
     def forward(self, depth, context, gru_hidden, bin_num, min_depth, max_depth, max_tree_depth=6):
 
+        # Depth #
         pred_depths_r_list = []  # Metric
         pred_depths_c_list = []  # Labels
         uncertainty_maps_list = []
@@ -122,13 +123,17 @@ class GlobalScale(nn.Module):
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, depth, context, input_feature_map, bin_num, min_depth, max_depth, max_scale=15, max_tree_depth=1):
-        # Results list #
+        # Depth #
         pred_depths_r_list = []  # Metric
-        pred_depths_rc_list = []  # Canonical
+        pred_depths_rc_list = [] # Canonical
+        pred_depths_c_list = []  # Labels
+
+        # Scale #
         pred_scale_list = []
-        uncertainty_maps_list = []
-        pred_depths_c_list = []
         pred_depths_scale_c_list = []
+
+        # Uncertainty # 
+        uncertainty_maps_list = []
         uncertainty_maps_scale_list = []
 
         # Canonical bins #
@@ -204,10 +209,12 @@ class GlobalScale(nn.Module):
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_depths_c_list"] = pred_depths_c_list
+
+        result["pred_scale_list"] = pred_scale_list
         result["pred_depths_scale_c_list"] = pred_depths_scale_c_list
+
         result["uncertainty_maps_list"] = uncertainty_maps_list
         result["uncertainty_maps_scale_list"] = uncertainty_maps_scale_list
-        result["pred_scale_list"] = pred_scale_list
 
         return result
 
@@ -267,15 +274,19 @@ class PerClassScale(nn.Module):
         self.relu = nn.ReLU(inplace=True)
     
     def forward(self, depth, context, input_feature_map, bin_num, min_depth, max_depth, masks, min_scale=0,max_scale=15, max_tree_depth=1):
+        
+        # Depth # 
         pred_depths_r_list = []  # Metric
-        pred_depths_rc_list = []  # Canonical
+        pred_depths_rc_list = [] # Canonical
+        pred_depths_c_list = []  # Labels 
 
+        # Scale #
         pred_scale_list = []
+        pred_depths_scale_c_list = []
 
+        # Uncertainty #
         uncertainty_maps_list = []
         uncertainty_maps_scale_list = []
-        pred_depths_c_list = []
-        pred_depths_scale_c_list = []
 
         b, _, h, w = depth.shape
         h *= 4
@@ -387,13 +398,16 @@ class PerClassScale(nn.Module):
         pred_depths_r_list.append(depth_r)
 
         result = {}
-        result["pred_depths_c_list"] = pred_depths_c_list
-        result["pred_depths_scale_c_list"] = pred_depths_scale_c_list
-        result["uncertainty_maps_list"] = uncertainty_maps_list
-        result["uncertainty_maps_scale_list"] = uncertainty_maps_scale_list
         result["pred_depths_r_list"] = pred_depths_r_list
         result["pred_depths_rc_list"] = pred_depths_rc_list
+        result["pred_depths_c_list"] = pred_depths_c_list
+
         result["pred_scale_list"] = pred_scale_list
+        result["pred_depths_scale_c_list"] = pred_depths_scale_c_list
+
+        result["uncertainty_maps_list"] = uncertainty_maps_list
+        result["uncertainty_maps_scale_list"] = uncertainty_maps_scale_list
+
         
         return result
 
@@ -405,7 +419,7 @@ Per-Instance scale
 
 class PerInstanceScale(nn.Module):
     def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, \
-                 num_instances=63, padding_instances=0, roi_align=0, roi_align_size=32, bins_scale=150, virtual_depth_variation=0, upsample_type=1, bins_type=0, bins_type_scale=0):
+                 num_instances=63, padding_instances=0, roi_align=False, roi_align_size=32, bins_scale=150, virtual_depth_variation=0, upsample_type=1, bins_type=0, bins_type_scale=0):
         super(PerInstanceScale, self).__init__()
         self.hidden_dim = hidden_dim
         self.context_dim = context_dim
@@ -419,13 +433,26 @@ class PerInstanceScale(nn.Module):
         self.upsample_type = upsample_type
         self.bins_type = bins_type
         self.bins_type_scale = bins_type_scale
+        self.roi_align = roi_align
 
         global padding_global
 
         self.padding_instances = padding_instances
         padding_global = padding_instances
+            
 
+        print("PerInstanceScale: padding set to: " + str(self.padding_instances) + "\n") 
 
+        if self.roi_align:
+            output_size = (roi_align_size, roi_align_size)
+            spatial_scale = 1.0 / 4
+            sampling_ratio = 4
+
+            self.roiAlign = RoIAlign(output_size, spatial_scale=spatial_scale, sampling_ratio=sampling_ratio)
+            print("PerInstanceScale: using RoIAlign with sampling ratio: " + str(sampling_ratio) + " and spatial scale: " + str(spatial_scale) + '\n') 
+        else:            
+            print("PerInstanceScale: using RoIScale\n") 
+            
         if self.virtual_depth_variation == 0: # Probabilities canonical/scale
             self.instances_canonical = ROISelectSharedCanonicalUniform(128, bin_num=bin_num)
             self.instances_scale_and_shift = ROISelectScaleBins(128, downsampling=4,
@@ -447,35 +474,29 @@ class PerInstanceScale(nn.Module):
             self.instances_scale_and_shift = ROISelectScaleModule(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
             print("PerInstanceScale: regression\n") 
 
-        self.roi_align = roi_align
-        if roi_align == 1:
-            output_size = (roi_align_size, roi_align_size)
-            spatial_scale = 1.0 / 4
-            sampling_ratio = 4
-
-            self.roiAlign = RoIAlign(output_size, spatial_scale=spatial_scale, sampling_ratio=sampling_ratio)
-
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, depth, context, input_feature_map, bin_num, min_depth, max_depth, masks, instances, boxes,
                 labels):
-        pred_depths_instances_r_list = []  # Metric
-        pred_depths_instances_rc_list = []  # Canonical
 
-        pred_scale_instances_list = []
-        pred_shift_instances_list = []
+        # Depth #
+        pred_depths_r_list = []   # Metric
+        pred_depths_rc_list = []  # Canonical
+        pred_depths_c_list = []   # Labels
 
+        # Scale #
+        pred_scale_list = []
+        pred_depths_scale_c_list = []
+
+        # Uncertainty #
         uncertainty_maps_list = []
         uncertainty_maps_scale_list = []
-        pred_depths_c_list = []
 
         batch_size, _, h, w = depth.shape
         max_instances_size = instances.shape[1]
 
         # Mask feature maps based on bboxes #
-        if self.roi_align == 0:
-            input_feature_map_instances_roi = roi_select_features(input_feature_map, boxes, labels)
-        else:
+        if self.roi_align:
             boxes_roi, _ = get_valid_boxes(boxes, labels)
             instances_per_batch, num_valid_boxes = get_valid_num_instances_per_batch(boxes, labels)
             instances_per_batch = torch.cat((torch.tensor([0]).to(labels.device), instances_per_batch))
@@ -487,7 +508,9 @@ class PerInstanceScale(nn.Module):
                          for i in range(instances_per_batch.shape[0] - 1)]
 
             input_feature_map_instances_roi = self.roiAlign(input_feature_map, boxes_roi)
-
+        else:
+            input_feature_map_instances_roi = roi_select_features(input_feature_map, boxes, labels)
+        
         # Canonical 
         if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 1:
             # Canonical instances valid #
@@ -501,28 +524,28 @@ class PerInstanceScale(nn.Module):
             
             bin_edges = torch.cat([bin_edges] * instances_canonical_prob.shape[0], dim=0)
 
-            depth_instances_rc = (instances_canonical_prob * bins_map.detach()).sum(1, keepdim=True)
+            depth_rc = (instances_canonical_prob * bins_map.detach()).sum(1, keepdim=True)
 
             # Unc #
             uncertainty_map_current = torch.sqrt(
-                (instances_canonical_prob * ((bins_map.detach() - depth_instances_rc.repeat(1, bin_num, 1, 1))**2)).sum(
+                (instances_canonical_prob * ((bins_map.detach() - depth_rc.repeat(1, bin_num, 1, 1))**2)).sum(
                     1, keepdim=True))
             uncertainty_map = uncertainty_map_current
 
             # Labels #
-            pred_label = get_label(torch.squeeze(depth_instances_rc, 1), bin_edges, bin_num).unsqueeze(1)
+            pred_label = get_label(torch.squeeze(depth_rc, 1), bin_edges, bin_num).unsqueeze(1)
             depth_c = (torch.gather(bins_map.detach(), 1, pred_label.detach()))
 
             # Fill full instances map canonical #
-            canonical_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_instances_rc.device)
-            uncertainty_maps_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_instances_rc.device)
-            depth_c_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_instances_rc.device)
+            canonical_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device)
+            uncertainty_maps_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device)
+            depth_c_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device)
 
             valid_boxes = labels.view(batch_size * max_instances_size, 1)
             valid_boxes = torch.nonzero(valid_boxes != -1)
 
-            canonical_full[valid_boxes[:, 0]] = depth_instances_rc
-            depth_instances_rc = canonical_full.view(batch_size, max_instances_size, h, w)
+            canonical_full[valid_boxes[:, 0]] = depth_rc
+            depth_rc = canonical_full.view(batch_size, max_instances_size, h, w)
 
             uncertainty_maps_full[valid_boxes[:, 0]] = uncertainty_map
             uncertainty_map = uncertainty_maps_full.view(batch_size, max_instances_size, h, w)
@@ -531,11 +554,11 @@ class PerInstanceScale(nn.Module):
             depth_c = depth_c_full.view(batch_size, max_instances_size, h, w)
 
             # Upsample #
-            depth_instances_rc = upsample(depth_instances_rc, scale_factor=4, upsample_type=self.upsample_type)
+            depth_rc = upsample(depth_rc, scale_factor=4, upsample_type=self.upsample_type)
             uncertainty_map = upsample(uncertainty_map, scale_factor=4, upsample_type=self.upsample_type, uncertainty=True)
             depth_c = upsample(depth_c, scale_factor=4, upsample_type=self.upsample_type)
 
-            pred_depths_instances_rc_list.append(depth_instances_rc)
+            pred_depths_rc_list.append(depth_rc)
             uncertainty_maps_list.append(uncertainty_map)
             pred_depths_c_list.append(depth_c)
         else:
@@ -548,43 +571,50 @@ class PerInstanceScale(nn.Module):
 
             canonical_full = canonical_full.view(batch_size, self.num_instances, h, w)
             instances_canonical = canonical_full
-            depth_instances_rc = canonical_full
-
+            depth_rc = canonical_full
                 
-            depth_instances_rc = upsample(depth_instances_rc, scale_factor=4, upsample_type=self.upsample_type)
+            depth_rc = upsample(depth_rc, scale_factor=4, upsample_type=self.upsample_type)
             
-            pred_depths_instances_rc_list.append(depth_instances_rc)
-
+            pred_depths_rc_list.append(depth_rc)
+            uncertainty_maps_list.append(torch.zeros_like(depth_rc))
+            pred_depths_c_list.append(torch.zeros_like(depth_rc))
 
         # Scale
         if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2:
-            instances_scale_unc = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
-            instances_scale, instances_scale_unc = pick_predictions_instances_scale_shift(instances_scale_unc, labels)
-            pred_scale_instances_list.append(instances_scale)
-            uncertainty_maps_scale_list.append(instances_scale_unc)
-        else:
-            instances_scale_shift = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
-            instances_scale, instances_shift = pick_predictions_instances_scale_shift(
-                instances_scale_shift, labels, only_scale=True)
-            pred_scale_instances_list.append(instances_scale)
+            instances_scale, unc, scale_labels_bins = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
 
+            instances_scale = mask_predictions_to_true_class(instances_scale, labels)
+            unc = mask_predictions_to_true_class(unc, labels)
+            scale_labels_bins = mask_predictions_to_true_class(scale_labels_bins, labels)
+
+            pred_scale_list.append(instances_scale)
+            uncertainty_maps_scale_list.append(unc)
+            pred_depths_scale_c_list.append(scale_labels_bins)
+        else:
+            instances_scale = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
+            instances_scale = mask_predictions_to_true_class(instances_scale, labels)
+            pred_scale_list.append(scale)
+            uncertainty_maps_scale_list.append(torch.zeros_like(scale))
+            pred_depths_scale_c_list.append(torch.zeros_like(scale))
 
         # Metric
         if self.loss_type == 0:
-            depth_instances_r = (self.relu(depth_instances_rc * instances_scale.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+            depth_instances_r = (self.relu(depth_rc * instances_scale.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
         else:
-            depth_instances_r = depth_instances_rc * instances_scale.unsqueeze(-1).unsqueeze(-1)
+            depth_instances_r = depth_rc * instances_scale.unsqueeze(-1).unsqueeze(-1)
 
         # depth_r: b, c, h, w
-        pred_depths_instances_r_list.append(depth_instances_r)
+        pred_depths_r_list.append(depth_instances_r)
         result = {}
+
+        result["pred_depths_r_list"] = pred_depths_r_list
+        result["pred_depths_rc_list"] = pred_depths_rc_list
         result["pred_depths_c_list"] = pred_depths_c_list
+
         result["uncertainty_maps_list"] = uncertainty_maps_list
         result["uncertainty_maps_scale_list"] = uncertainty_maps_scale_list
 
-        result["pred_depths_instances_r_list"] = pred_depths_instances_r_list
-        result["pred_depths_instances_rc_list"] = pred_depths_instances_rc_list
-        result["pred_scale_instances_list"] = pred_scale_instances_list
-        result["pred_shift_instances_list"] = pred_shift_instances_list
+        result["pred_scale_list"] = pred_scale_list
+        result["pred_depths_scale_c_list"] = pred_depths_scale_c_list
 
         return result

@@ -462,7 +462,9 @@ Select out operations start
 """
 
 
-def pick_predictions_instances_scale_shift(prediction_scale_shift, labels, only_scale=False):
+def pick_predictions_instances_scale(prediction_estimate, labels):
+
+    assert num_outs <= 3 and num_outs >= 0 
 
     batch_size, labels_max_size = labels.shape[0:2]
 
@@ -473,46 +475,27 @@ def pick_predictions_instances_scale_shift(prediction_scale_shift, labels, only_
 
         labels_valid = labels_reshaped[labels_valid_idx[:, 0]]
 
-    if only_scale:
-        pred_scale = prediction_scale_shift
 
-        # Pick scale/shift that corresponds to the correct class #
-        pred_scale = pred_scale[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)
+    
+    prediction_estimate = prediction_scale_shift
 
-        pred_scale_full = torch.zeros((batch_size * labels_max_size, 1)).to(prediction_scale_shift.device)
+    # Pick scale/shift that corresponds to the correct class #
+    prediction_estimate = prediction_estimate[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)
 
-        pred_scale_full[labels_valid_idx[:, 0]] = pred_scale
+    prediction_estimate_full = torch.zeros((batch_size * labels_max_size, 1)).to(prediction_scale_shift.device)
 
-        pred_scale_full = pred_scale_full.view(batch_size, labels_max_size)
+    prediction_estimate_full[labels_valid_idx[:, 0]] = prediction_estimate
 
-        return pred_scale_full, None
+    prediction_estimate_full = prediction_estimate_full.view(batch_size, labels_max_size)
 
-    else:
-        pred_scale = prediction_scale_shift[:, ::2]
-        pred_shift = prediction_scale_shift[:, 1::2]
-
-        # Pick scale/shift that corresponds to the correct class #
-        pred_scale = pred_scale[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)
-        pred_shift = pred_shift[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)
-
-        pred_scale_full = torch.zeros((batch_size * labels_max_size, 1)).to(prediction_scale_shift.device)
-        pred_shift_full = torch.zeros((batch_size * labels_max_size, 1)).to(prediction_scale_shift.device)
-
-        pred_scale_full[labels_valid_idx[:, 0]] = pred_scale
-        pred_shift_full[labels_valid_idx[:, 0]] = pred_shift
-
-        pred_scale_full = pred_scale_full.view(batch_size, labels_max_size)
-        pred_shift_full = pred_shift_full.view(batch_size, labels_max_size)
-
-        return pred_scale_full, pred_shift_full
-
+    return prediction_estimate_full
 
 """
 Only scale
 """
 
 
-def pick_predictions_instances_scale(pred_scale, labels):
+def mask_predictions_to_true_class(prediction_estimate, labels):
 
     batch_size, labels_max_size = labels.shape[0:2]
 
@@ -524,15 +507,15 @@ def pick_predictions_instances_scale(pred_scale, labels):
         labels_valid = labels_reshaped[labels_valid_idx[:, 0]]
 
     # Pick scale/shift that corresponds to the correct class #
-    pred_scale = pred_scale[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)
+    prediction_estimate = prediction_estimate[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)
 
-    pred_scale_full = torch.zeros((batch_size * labels_max_size, 1)).to(pred_scale.device)
+    prediction_estimate_full = torch.zeros((batch_size * labels_max_size, 1)).to(prediction_estimate.device)
 
-    pred_scale_full[labels_valid_idx[:, 0]] = pred_scale
+    prediction_estimate_full[labels_valid_idx[:, 0]] = prediction_estimate
 
-    pred_scale_full = pred_scale_full.view(batch_size, labels_max_size)
+    prediction_estimate_full = prediction_estimate_full.view(batch_size, labels_max_size)
 
-    return pred_scale_full
+    return prediction_estimate_full
 
 
 def pick_predictions_instances_canonical(prediction, labels):

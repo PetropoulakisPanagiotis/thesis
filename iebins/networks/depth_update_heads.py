@@ -126,6 +126,7 @@ class ROISelectScaleBins(nn.Module):
         bins_map_scale, bin_edges_scale = get_uniform_bins(torch.zeros(x.shape[0], 1, 1, 1).to(x.device), self.min_scale, self.max_scale,
                                           self.num_bins)
         bins_map_scale = bins_map_scale.squeeze(-1).squeeze(-1)
+        bin_edges_scale = bin_edges_scale.squeeze(-1).squeeze(-1)
 
         boxes_valid_normalized_projected, num_valid_boxes = get_valid_normalized_projected_boxes(
             x, boxes, labels, self.downsampling)
@@ -135,19 +136,26 @@ class ROISelectScaleBins(nn.Module):
         out = torch.flatten(out, 1)
         out = torch.cat((out, boxes_valid_normalized_projected), dim=1)  # Concat boxes
 
-        out_list = []
+        out_list_scale, out_list_unc, out_list_labels = [], [], []
         for i in range(self.num_semantic_classes):
 
             probs = torch.softmax(self.scale_nets[i](out), axis=1)
             scale = (probs * bins_map_scale.detach()).sum(1, keepdim=True)
 
             uncertainty = torch.sqrt((probs * ((bins_map_scale.detach() - scale)**2)).sum(1, keepdim=True))
-            scale_unc = torch.cat([scale, uncertainty], dim=1)
-            out_list.append(scale_unc)
+              
+            pred_label = get_label(torch.squeeze(scale, 1), bin_edges_scale, self.num_bins).unsqueeze(1)
+            depth_c = (torch.gather(bins_map_scale.detach(), 1, pred_label.detach()))
+            
+            out_list_scale.append(scale)
+            out_list_unc.append(uncertainty)
+            out_list_labels.append(depth_c)
 
-        out = torch.cat(out_list, dim=1)
-
-        return out
+        out_scale = torch.cat(out_list_scale, dim=1)
+        out_unc = torch.cat(out_list_unc, dim=1)
+        out_labels = torch.cat(out_list_labels, dim=1)
+        
+        return out_scale, out_unc, out_labels
 
 
 """

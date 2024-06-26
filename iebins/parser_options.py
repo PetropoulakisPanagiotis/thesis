@@ -109,7 +109,7 @@ train_parser.add_argument('--concat_masks', dest='concat_masks', help='if enable
 # -> Instances #
 train_parser.add_argument('--instances', dest='instances', help='instances variation', action='store_true')
 train_parser.add_argument('--padding_instances', type=int, help='how many pixels to pad the bbox', default='0')
-train_parser.add_argument('--roi_align', type=int, help='use roi align', default='0')
+train_parser.add_argument('--roi_align', dest='roi_align', help='use roi align', action='store_true')
 train_parser.add_argument('--roi_align_size', type=int, help='size of roi align', default='32')
 
 
@@ -184,7 +184,7 @@ eval_parser.add_argument('--concat_masks', dest='concat_masks', help='if enabled
 # -> Instances #
 eval_parser.add_argument('--instances', dest='instances', help='instances variation', action='store_true')
 eval_parser.add_argument('--padding_instances', type=int, help='how many pixels to pad the bbox', default='0')
-eval_parser.add_argument('--roi_align', type=int, help='use roi align', default='0')
+eval_parser.add_argument('--roi_align', dest='roi_align', help='use roi align', action='store_true')
 eval_parser.add_argument('--roi_align_size', type=int, help='size of roi align', default='32')
 
 
@@ -255,7 +255,7 @@ test_parser.add_argument('--concat_masks', dest='concat_masks', help='if enabled
 # -> Instances #
 test_parser.add_argument('--instances', dest='instances', help='instances variation', action='store_true')
 test_parser.add_argument('--padding_instances', type=int, help='how many pixels to pad the bbox', default='0')
-test_parser.add_argument('--roi_align', type=int, help='use roi align', default='0')
+test_parser.add_argument('--roi_align', dest='roi_align', help='use roi align', action='store_true')
 test_parser.add_argument('--roi_align_size', type=int, help='size of roi align', default='32')
 
 

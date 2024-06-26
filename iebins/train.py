@@ -151,9 +151,9 @@ def main_worker(gpu, ngpus_per_node, args):
     group = dist.new_group([i for i in range(ngpus_per_node)])
 
     # Initialize vars
-    pred_depths_r_list, pred_depths_rc_list, pred_depths_instances_r_list, \
-        pred_depths_instances_rc_list, pred_depths_c_list, uncertainty_maps_list, \
-        pred_depths_u_list = [], [], [], [], [], [], []
+    pred_depths_r_list, pred_depths_rc_list, \
+        pred_depths_c_list, uncertainty_maps_list, \
+        pred_depths_u_list = [], [], [], [], []
     segmentation_map, instances, labels, unc_decoder = None, None, None, None
 
     while epoch < args.num_epochs:
@@ -193,17 +193,10 @@ def main_worker(gpu, ngpus_per_node, args):
             #debug_result(result, depth_gt)
 
             # Unpack result #
-            if args.instances:
-                pred_depths_instances_rc_list = result["pred_depths_instances_rc_list"]
-                pred_depths_instances_r_list = result["pred_depths_instances_r_list"]
-                pred_scale_instances_list = result["pred_scale_instances_list"]
-            else:
-                pred_depths_r_list = result["pred_depths_r_list"]
-
-                # Canonical segmentation/single scale #
-                if args.update_block != 0 and args.update_block != 3:
-                    pred_depths_rc_list = result["pred_depths_rc_list"]
-                    pred_scale_list = result["pred_scale_list"]
+            pred_depths_r_list = result["pred_depths_r_list"]
+            pred_scale_list = result["pred_scale_list"]
+            if args.update_block != 0:
+                pred_depths_rc_list = result["pred_depths_rc_list"]
 
             # Uncertainty bins #
             pred_depths_c_list = result["pred_depths_c_list"]
@@ -222,7 +215,7 @@ def main_worker(gpu, ngpus_per_node, args):
             if args.unc_head:
                 if args.instances:
                     sigma_metric = torch.sum((sigma_metric * instances), dim=1).unsqueeze(1)
-                    pred_d = torch.sum((pred_depths_instances_r_list[-1] * instances), dim=1).unsqueeze(1)
+                    pred_d = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(1)
                 elif args.segmentation:
                     sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1],
                                                                          unc_c,
@@ -240,7 +233,7 @@ def main_worker(gpu, ngpus_per_node, args):
             else:  # Depth loss #
                 for curr_tree_depth in range(args.max_tree_depth):
                     if args.instances:
-                        pred_d = torch.sum((pred_depths_instances_r_list[curr_tree_depth] * instances),
+                        pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * instances),
                                            dim=1).unsqueeze(1)
                     elif args.segmentation:
                         pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * segmentation_map), dim=1).unsqueeze(1)
@@ -304,7 +297,7 @@ def main_worker(gpu, ngpus_per_node, args):
                     else:
                         tb_visualization(writer, global_step, args, current_loss_depth, current_lr, current_loss_unc_decoder, var_sum, var_cnt,\
                                      num_images, depth_gt, image, args.max_tree_depth, pred_depths_r_list, \
-                                     pred_depths_rc_list, pred_depths_instances_r_list, pred_depths_instances_rc_list, num_semantic_classes, \
+                                     pred_depths_rc_list, num_semantic_classes, \
                                      instances, segmentation_map, labels, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list, unc_decoder)
 
             # Evaluate #

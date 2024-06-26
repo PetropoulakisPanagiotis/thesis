@@ -44,10 +44,7 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
             else:
                 result = model(image)
 
-            if args.instances:
-                pred_depths_r_list = result["pred_depths_instances_r_list"]
-            else:
-                pred_depths_r_list = result["pred_depths_r_list"]
+            pred_depths_r_list = result["pred_depths_r_list"]
 
             # Mask predictions #
             if args.instances:
@@ -96,11 +93,7 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
                                                                          result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1),
                                                                          result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
                     sigma_metric = sigma_metric.squeeze(0).squeeze(0).cpu().numpy()
-            # Mask gt_depth #
-            #if args.instances:
-            #    mask = torch.sum(instances, dim=1).squeeze(0).to(torch.bool).cpu()
-            #    gt_depth = (gt_depth * mask).cpu().numpy().squeeze()
-            #else:
+            
             gt_depth = gt_depth.cpu().numpy().squeeze()
 
             # Filter predicted depth #
