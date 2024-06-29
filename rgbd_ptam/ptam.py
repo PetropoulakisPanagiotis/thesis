@@ -13,6 +13,9 @@ from mapping import MappingThread
 from components import Measurement
 from motion import MotionModel
 from loopclosing import LoopClosing
+from evaluate import read_trajectory, evaluate_trajectory
+import pandas as pd
+
 """
 Three threads:
               - mapping
@@ -316,6 +319,127 @@ class RGBDPTAM(object):
         print("Total keyframes: ", len(self.mapping.graph.keyframes()))
         print("Results saved!\n")
 
+
+def  main_loop(args):
+    if 'tum' in args.dataset.lower():
+        dataset = TUMRGBDDataset(args.path)
+    elif 'icl' in args.dataset.lower():
+        dataset = ICLNUIMDataset(args.path)
+    elif 'scannet' in args.dataset.lower():
+        dataset = ScanNetDataset(args.path, args.scene, args.split, args.scale_aware, args.optimization_type, network_depth=args.network_depth, total=args.total)
+
+    params = Params()
+    height, width = dataset.rgb.shape[:2]
+    cam = Camera(dataset.cam.fx, dataset.cam.fy, dataset.cam.cx, dataset.cam.cy, width, height, dataset.cam.scale,
+                 params.virtual_baseline, params.depth_near, params.depth_far, params.frustum_near, params.frustum_far)
+    ptam = RGBDPTAM(params, args)
+
+    if not os.path.exists(args.result_path):
+        os.makedirs(args.result_path)
+
+    if args.scale_aware:
+        scale_path = args.result_path + args.optimization_type + '/optimized_scale/'
+        if not os.path.exists(scale_path):
+            os.makedirs(scale_path)
+
+    if not args.no_viz:
+        from viewer import MapViewer
+        viewer = MapViewer(ptam, params)
+
+
+    durations = []
+    for i in range(len(dataset))[:]:
+        feature = ImageFeature(dataset.rgb[i], params)
+        depth = dataset.depth[i]
+        if dataset.timestamps is None:
+            timestamp = i / 20.
+        else:
+            timestamp = dataset.timestamps[i]
+        time_start = time.time()
+        feature.extract()  # Detect keypoints and descriptors of image
+        if args.scale_aware:
+            scales, scales_uncertainty, _, scales_valid = dataset.scale[i]
+            frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp, canonical=dataset.canonical[i],
+                              canonical_uncertainty=dataset.canonical_uncertainty[i], scales=scales, 
+                              scales_uncertainty=scales_uncertainty, pixel_to_scale_map=dataset.pixel_to_scale_map[i], scales_valid=scales_valid)
+        else:
+            frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp)
+
+        if not ptam.is_initialized():
+            ptam.initialize(frame)
+        else:
+            ptam.track(frame)
+
+        duration = time.time() - time_start
+        durations.append(duration)
+        print('duration', duration)
+        print()
+
+        if not args.no_viz:
+            viewer.update()
+
+    print('num frames', len(durations))
+    print('num keyframes', len(ptam.graph.keyframes()))
+    print('average time', np.mean(durations))
+
+    print("saving results\n")
+    save_path = args.result_path + 'slam.txt'
+
+    ptam.save_results(save_path)
+
+    ptam.mapping.create_map(args.result_path + 'map.pcd')
+
+    ptam.stop()
+    if not args.no_viz:
+        viewer.stop()
+
+    return save_path
+
+
+def evaluate(slam_path, gt_path, result_path):
+    print("evaluating...")
+
+    # Relative pose first #
+    traj_gt = read_trajectory(gt_path)
+    traj_est = read_trajectory(slam_path)
+
+    result_eval = evaluate_trajectory(traj_gt,
+                                 traj_est,
+                                 0,
+                                 False,
+                                 1.0,
+                                 's',
+                                 0.0,
+                                 1.0)
+
+    trans_error = np.array(result_eval)[:,4]
+    rot_error = np.array(result_eval)[:,5]
+
+    result = {}
+
+    result['pairs'] = len(trans_error)
+
+    result['trans_rmse'] = np.sqrt(np.dot(trans_error,trans_error) / len(trans_error))
+    result['trans_mean'] = np.mean(trans_error)
+    result['trans_median'] = np.median(trans_error)
+    result['trans_std'] = np.std(trans_error)
+    result['trans_min'] = np.min(trans_error)
+    result['trans_max'] = np.max(trans_error)
+
+    result['rot_rmse'] = (np.sqrt(np.dot(rot_error,rot_error) / len(rot_error)) * 180.0 / np.pi)
+    result['rot_mean'] = (np.mean(rot_error) * 180.0 / np.pi)
+    result['rot_median'] = (np.median(rot_error) * 180.0 / np.pi)
+    result['rot_std'] = (np.std(rot_error) * 180.0 / np.pi)
+    result['rot_min'] = (np.min(rot_error) * 180.0 / np.pi)
+    result['rot_max'] = (np.max(rot_error) * 180.0 / np.pi)
+
+    f = open(result_path, "w")
+    f.write("\n".join([" ".join(["%f"%v for v in line]) for line in result_eval]))
+    f.close()
+    print("evaluation done...")
+
+    return result
+
 if __name__ == '__main__':
     import cv2
     import g2o
@@ -373,74 +497,54 @@ if __name__ == '__main__':
     parser.add_argument('--split', type=str, default='valid')
     args = parser.parse_args()
 
-    args.out_path += args.exp_name + '/'
+    total_runs = 3
+    args.no_viz = True
 
-    if 'tum' in args.dataset.lower():
-        dataset = TUMRGBDDataset(args.path)
-    elif 'icl' in args.dataset.lower():
-        dataset = ICLNUIMDataset(args.path)
-    elif 'scannet' in args.dataset.lower():
-        dataset = ScanNetDataset(args.path, args.scene, args.split, args.scale_aware, args.optimization_type, network_depth=args.network_depth, total=args.total)
+    args.scale_aware = False
+    args.network_depth = True
 
-    params = Params()
-    ptam = RGBDPTAM(params, args)
+    mono_relative_df =  pd.DataFrame()
 
-    if not os.path.exists(args.out_path):
-        os.makedirs(args.out_path)
+    # Monocular SLAM #  
+    args.optimization_base_type = 'mono'
+    gt_path = args.path + '/gt/' + args.scene + '/slam_gt.txt'
+    for i in range(total_runs):
+        args.exp_name = 'mono/mono_' + str(i) + '/'
+        args.result_path = args.out_path + args.exp_name
+        slam_path = main_loop(args)
 
-    if args.scale_aware:
-        scale_path = args.out_path + args.optimization_type + '/optimized_scale/'
-        if not os.path.exists(scale_path):
-            os.makedirs(scale_path)
+        eval_path = args.out_path + args.exp_name + 'evaluation.txt'
+        result_dict = evaluate(slam_path, gt_path, eval_path)
+        print(result_dict)
+        mono_relative_df = mono_relative_df.append(result_dict, ignore_index=True)
+        print(mono_relative_df)
 
-    if not args.no_viz:
-        from viewer import MapViewer
-        viewer = MapViewer(ptam, params)
+    # Virtual stereo SLAM #
+    args.optimization_base_type = 'virtual'
+    for i in range(total_runs):
+        args.exp_name = 'virtual/virtual_' + str(i) + '/'
+        save_path = main_loop(args)
 
-    height, width = dataset.rgb.shape[:2]
-    cam = Camera(dataset.cam.fx, dataset.cam.fy, dataset.cam.cx, dataset.cam.cy, width, height, dataset.cam.scale,
-                 params.virtual_baseline, params.depth_near, params.depth_far, params.frustum_near, params.frustum_far)
+    args.scale_aware = True
+    args.optimization_type = 'global'
+    # Global scale per image #
+    for i in range(total_runs):
+        args.exp_name = 'global/global_' + str(i) + '/'
+        save_path = main_loop(args)
 
-    durations = []
-    for i in range(len(dataset))[:]:
-        feature = ImageFeature(dataset.rgb[i], params)
-        depth = dataset.depth[i]
-        if dataset.timestamps is None:
-            timestamp = i / 20.
-        else:
-            timestamp = dataset.timestamps[i]
-        time_start = time.time()
-        feature.extract()  # Detect keypoints and descriptors of image
-        if args.scale_aware:
-            scales, scales_uncertainty, _, scales_valid = dataset.scale[i]
-            frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp, canonical=dataset.canonical[i],
-                              canonical_uncertainty=dataset.canonical_uncertainty[i], scales=scales, 
-                              scales_uncertainty=scales_uncertainty, pixel_to_scale_map=dataset.pixel_to_scale_map[i], scales_valid=scales_valid)
-        else:
-            frame = RGBDFrame(i, g2o.Isometry3d(), feature, depth, cam, timestamp=timestamp)
+    args.scale_aware = True
+    args.optimization_type = 'segmentation'
+    # Per-Class scale #
+    for i in range(total_runs):
+        args.exp_name = 'segmentation/segmentation_' + str(i) + '/'
+        save_path = main_loop(args)
 
-        if not ptam.is_initialized():
-            ptam.initialize(frame)
-        else:
-            ptam.track(frame)
+    """
+    args.scale_aware = True
+    args.optimization_type = 'instances'
+    # Per-Instance scale #
+    for i in range(total_runs):
+        main_loop(params, args)
+    """
 
-        duration = time.time() - time_start
-        durations.append(duration)
-        print('duration', duration)
-        print()
 
-        if not args.no_viz:
-            viewer.update()
-
-    print('num frames', len(durations))
-    print('num keyframes', len(ptam.graph.keyframes()))
-    print('average time', np.mean(durations))
-
-    print("saving results\n")
-    ptam.save_results(args.out_path + 'slam_result.txt')
-
-    ptam.mapping.create_map(args.out_path + 'map.pcd')
-
-    ptam.stop()
-    if not args.no_viz:
-        viewer.stop()

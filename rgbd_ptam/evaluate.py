@@ -75,18 +75,18 @@ def transform44(l):
 
 def read_trajectory(filename, matrix=True):
     """
-    Read a trajectory from a text file. 
-    
+    Read a trajectory from a text file.
+
     Input:
     filename -- file to be read
     matrix -- convert poses to 4x4 matrices
-    
+
     Output:
     dictionary of stamped 3D poses
     """
     file = open(filename)
     data = file.read()
-    lines = data.replace(","," ").replace("\t"," ").split("\n") 
+    lines = data.replace(","," ").replace("\t"," ").split("\n")
     list = [[float(v.strip()) for v in line.split(" ") if v.strip()!=""] for line in lines if len(line)>0 and line[0]!="#"]
     list_ok = []
     for i,l in enumerate(list):
@@ -110,11 +110,11 @@ def read_trajectory(filename, matrix=True):
 def find_closest_index(L,t):
     """
     Find the index of the closest value in a list.
-    
+
     Input:
     L -- the list
     t -- value to be found
-    
+
     Output:
     index of the closest element
     """
@@ -322,13 +322,13 @@ if __name__ == '__main__':
     parser.add_argument('--plot', help='plot the result to a file (requires --fixed_delta, output format: png)')
     parser.add_argument('--verbose', help='print all evaluation data (otherwise, only the mean translational error measured in meters will be printed)', action='store_true')
     args = parser.parse_args()
-   
+
     if args.plot and not args.fixed_delta:
         sys.exit("The '--plot' option can only be used in combination with '--fixed_delta'")
-    
+
     traj_gt = read_trajectory(args.groundtruth_file)
     traj_est = read_trajectory(args.estimated_file)
-    
+
     result = evaluate_trajectory(traj_gt,
                                  traj_est,
                                  int(args.max_pairs),
@@ -337,46 +337,45 @@ if __name__ == '__main__':
                                  args.delta_unit,
                                  float(args.offset),
                                  float(args.scale))
-    
+
     stamps = numpy.array(result)[:,0]
     trans_error = numpy.array(result)[:,4]
     rot_error = numpy.array(result)[:,5]
-    
+
     if args.save:
         f = open(args.save,"w")
         f.write("\n".join([" ".join(["%f"%v for v in line]) for line in result]))
         f.close()
-    
+
     if args.verbose:
-        print "compared_pose_pairs %d pairs"%(len(trans_error))
+        print("compared_pose_pairs %d pairs"%(len(trans_error)))
 
-        print "translational_error.rmse %f m"%numpy.sqrt(numpy.dot(trans_error,trans_error) / len(trans_error))
-        print "translational_error.mean %f m"%numpy.mean(trans_error)
-        print "translational_error.median %f m"%numpy.median(trans_error)
-        print "translational_error.std %f m"%numpy.std(trans_error)
-        print "translational_error.min %f m"%numpy.min(trans_error)
-        print "translational_error.max %f m"%numpy.max(trans_error)
+        print("translational_error.rmse %f m"%numpy.sqrt(numpy.dot(trans_error,trans_error) / len(trans_error)))
+        print("translational_error.mean %f m"%numpy.mean(trans_error))
+        print("translational_error.median %f m"%numpy.median(trans_error))
+        print("translational_error.std %f m"%numpy.std(trans_error))
+        print("translational_error.min %f m"%numpy.min(trans_error))
+        print("translational_error.max %f m"%numpy.max(trans_error))
 
-        print "rotational_error.rmse %f deg"%(numpy.sqrt(numpy.dot(rot_error,rot_error) / len(rot_error)) * 180.0 / numpy.pi)
-        print "rotational_error.mean %f deg"%(numpy.mean(rot_error) * 180.0 / numpy.pi)
-        print "rotational_error.median %f deg"%(numpy.median(rot_error) * 180.0 / numpy.pi)
-        print "rotational_error.std %f deg"%(numpy.std(rot_error) * 180.0 / numpy.pi)
-        print "rotational_error.min %f deg"%(numpy.min(rot_error) * 180.0 / numpy.pi)
-        print "rotational_error.max %f deg"%(numpy.max(rot_error) * 180.0 / numpy.pi)
+        print("rotational_error.rmse %f deg"%(numpy.sqrt(numpy.dot(rot_error,rot_error) / len(rot_error)) * 180.0 / numpy.pi))
+        print("rotational_error.mean %f deg"%(numpy.mean(rot_error) * 180.0 / numpy.pi))
+        print("rotational_error.median %f deg"%(numpy.median(rot_error) * 180.0 / numpy.pi))
+        print("rotational_error.std %f deg"%(numpy.std(rot_error) * 180.0 / numpy.pi))
+        print("rotational_error.min %f deg"%(numpy.min(rot_error) * 180.0 / numpy.pi))
+        print("rotational_error.max %f deg"%(numpy.max(rot_error) * 180.0 / numpy.pi))
     else:
-        print numpy.mean(trans_error)
+        print(numpy.mean(trans_error))
 
-    if args.plot:    
+    if args.plot:
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
         import matplotlib.pylab as pylab
         fig = plt.figure()
-        ax = fig.add_subplot(111)        
+        ax = fig.add_subplot(111)
         ax.plot(stamps - stamps[0],trans_error,'-',color="blue")
         #ax.plot([t for t,e in err_rot],[e for t,e in trans__rot],'-',color="red")
         ax.set_xlabel('time [s]')
         ax.set_ylabel('translational error [m]')
         plt.savefig(args.plot,dpi=300)
-        
 
