@@ -526,7 +526,7 @@ if __name__ == '__main__':
     for scene in scenes:
         print(f'[scene name {scene}]')
         args.scene = scene
-        args.out_path = initial_path + '/' + 'scene/'
+        args.out_path = initial_path + '/' + args.scene + '/'
 
         gt_path = args.path + '/valid/gt_traj/' + args.scene + '/gt_traj.txt'
 
