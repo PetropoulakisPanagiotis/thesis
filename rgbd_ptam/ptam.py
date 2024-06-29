@@ -14,6 +14,9 @@ from components import Measurement
 from motion import MotionModel
 from loopclosing import LoopClosing
 from evaluate import read_trajectory, evaluate_trajectory
+import associate
+from evaluate_ate import align
+
 import pandas as pd
 
 """
@@ -127,7 +130,8 @@ class RGBDPTAM(object):
         self.set_tracking(True)
 
         self.current = frame
-        print('Tracking:', frame.idx, ' <- ', self.reference.id, self.reference.idx)
+        if not args.no_viz:
+            print('Tracking:', frame.idx, ' <- ', self.reference.id, self.reference.idx)
 
         # set pose to frame from tracking
         predicted_pose, _ = self.motion_model.predict_pose(frame.timestamp)
@@ -146,7 +150,8 @@ class RGBDPTAM(object):
 
         # Measurements -> frame
         # Local        -> local map
-        print('measurements:', len(measurements), '   ', len(local_mappoints))
+        if not args.no_viz:
+            print('measurements:', len(measurements), '   ', len(local_mappoints))
 
         # Update featrues                      #
         # tracked_map -> measurements of frame #
@@ -199,7 +204,8 @@ class RGBDPTAM(object):
                 self.loop_closing.add_keyframe(keyframe)
 
             self.preceding = keyframe
-            print('new keyframe', keyframe.idx)
+            if not args.no_viz:
+                print('new keyframe', keyframe.idx)
         else:  # Remedy already used as keyframe
             if tracking_fail is not True:
                 self.non_keyframes.append(frame)
@@ -213,8 +219,9 @@ class RGBDPTAM(object):
 
         # If we can project the 3D map points to the current frame #
         can_view = frame.can_view(local_mappoints)
-        print('filter points:', len(local_mappoints), can_view.sum(), len(self.preceding.mappoints()),
-              len(self.reference.mappoints()))
+        if not args.no_viz:
+            print('filter points:', len(local_mappoints), can_view.sum(), len(self.preceding.mappoints()),
+                  len(self.reference.mappoints()))
 
         checked = set()
         filtered = []
@@ -316,8 +323,7 @@ class RGBDPTAM(object):
                 cv2.imwrite(path_scale_map, scale_map, [cv2.IMWRITE_PNG_COMPRESSION, 9])
                 #cv2.imwrite(path_depth_map, depth_map, [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
-        print("Total keyframes: ", len(self.mapping.graph.keyframes()))
-        print("Results saved!\n")
+        print("results saved...")
 
 
 def  main_loop(args):
@@ -372,17 +378,18 @@ def  main_loop(args):
 
         duration = time.time() - time_start
         durations.append(duration)
-        print('duration', duration)
-        print()
+        if not args.no_viz:
+            print('duration', duration)
+            print()
 
         if not args.no_viz:
             viewer.update()
 
     print('num frames', len(durations))
     print('num keyframes', len(ptam.graph.keyframes()))
-    print('average time', np.mean(durations))
+    print(f'average time {np.mean(durations):.3f}')
 
-    print("saving results\n")
+    print("saving results...")
     save_path = args.result_path + 'slam.txt'
 
     ptam.save_results(save_path)
@@ -396,7 +403,7 @@ def  main_loop(args):
     return save_path
 
 
-def evaluate(slam_path, gt_path, result_path):
+def evaluate(slam_path, gt_path, max_difference=0.02):
     print("evaluating...")
 
     # Relative pose first #
@@ -433,12 +440,29 @@ def evaluate(slam_path, gt_path, result_path):
     result['rot_min'] = (np.min(rot_error) * 180.0 / np.pi)
     result['rot_max'] = (np.max(rot_error) * 180.0 / np.pi)
 
-    f = open(result_path, "w")
-    f.write("\n".join([" ".join(["%f"%v for v in line]) for line in result_eval]))
-    f.close()
-    print("evaluation done...")
+    # Absolute trajectory #
+    first_list = associate.read_file_list(slam_path)
+    second_list = associate.read_file_list(gt_path)
 
-    return result
+    matches = associate.associate(first_list, second_list, 0.0, max_difference) 
+    if len(matches)<2:
+        sys.exit("Couldn't find matching timestamp pairs between groundtruth and estimated trajectory! Did you choose the correct sequence?")
+
+    first_xyz = np.matrix([[float(value) for value in first_list[a][0:3]] for a,b in matches]).transpose()
+    second_xyz = np.matrix([[float(value)*float(1) for value in second_list[b][0:3]] for a,b in matches]).transpose()
+
+    rot, trans, trans_error = align(second_xyz, first_xyz)
+
+    result_ate = {}
+    result_ate['pairs'] = len(trans_error)
+    result_ate['abs_trans_rmse'] = np.sqrt(np.dot(trans_error, trans_error) / len(trans_error))
+    result_ate['abs_trans_mean'] = np.mean(trans_error)
+    result_ate['abs_trans_median'] = np.median(trans_error)
+    result_ate['abs_trans_min'] = np.min(trans_error)
+    result_ate['abs_trans_max'] = np.max(trans_error)
+
+    print("evaluation done...")
+    return result, result_ate
 
 if __name__ == '__main__':
     import cv2
@@ -459,8 +483,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-viz', action='store_true', help='do not visualize')
     parser.add_argument('--dataset', type=str, default='ICL', help='dataset (TUM/ICL-NUIM)')
-    # parser.add_argument('--path', type=str, help='dataset path',
-    #     default='path/to/your/TUM_RGBD/rgbd_dataset_freiburg1_room')
     parser.add_argument('--path', type=str, help='dataset path',
                         default='path/to/your/ICL-NUIM_RGBD/living_room_traj3_frei_png')
 
@@ -486,13 +508,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--scene',
         type=str,
-        #default='scene0084_02') # hm...
-        default='scene0655_01') # tested 1)
-        #default='scene0608_00')  # nice -> big 
-    #default='scene0164_00') # nice
-    #default='scene0025_02') # tested 2)
-    #default='scene0412_00')
-    # default='scene0095_00')
+        default='scene0655_01')
 
     parser.add_argument('--split', type=str, default='valid')
     args = parser.parse_args()
@@ -500,51 +516,54 @@ if __name__ == '__main__':
     total_runs = 3
     args.no_viz = True
 
-    args.scale_aware = False
-    args.network_depth = True
+    scenes = ['scene0655_01']
 
-    mono_relative_df =  pd.DataFrame()
+    for scene in scenes:
+        print(f'[scene name {scene}]')
+        args.scene = scene
 
-    # Monocular SLAM #  
-    args.optimization_base_type = 'mono'
-    gt_path = args.path + '/gt/' + args.scene + '/slam_gt.txt'
-    for i in range(total_runs):
-        args.exp_name = 'mono/mono_' + str(i) + '/'
-        args.result_path = args.out_path + args.exp_name
-        slam_path = main_loop(args)
+        args.scale_aware = False
+        args.network_depth = True
 
-        eval_path = args.out_path + args.exp_name + 'evaluation.txt'
-        result_dict = evaluate(slam_path, gt_path, eval_path)
-        print(result_dict)
-        mono_relative_df = mono_relative_df.append(result_dict, ignore_index=True)
-        print(mono_relative_df)
+        mono_relative_list = []
+        mono_ate_list = []
 
-    # Virtual stereo SLAM #
-    args.optimization_base_type = 'virtual'
-    for i in range(total_runs):
-        args.exp_name = 'virtual/virtual_' + str(i) + '/'
-        save_path = main_loop(args)
+        # Monocular SLAM #  
+        print('[running monocular SLAM]')
+        args.optimization_base_type = 'mono'
+        gt_path = args.path + '/gt/' + args.scene + '/slam_gt.txt'
+        for i in range(total_runs):
+            print('\n')
+            print(f'[iteration{i+1}]')
+            args.exp_name = 'mono/mono_' + str(i) + '/'
+            args.result_path = args.out_path + args.exp_name
+            slam_path = main_loop(args)
 
-    args.scale_aware = True
-    args.optimization_type = 'global'
-    # Global scale per image #
-    for i in range(total_runs):
-        args.exp_name = 'global/global_' + str(i) + '/'
-        save_path = main_loop(args)
+            eval_path = args.out_path + args.exp_name + 'evaluation.txt'
+            result_dict, result_ate_dict = evaluate(slam_path, gt_path)
 
-    args.scale_aware = True
-    args.optimization_type = 'segmentation'
-    # Per-Class scale #
-    for i in range(total_runs):
-        args.exp_name = 'segmentation/segmentation_' + str(i) + '/'
-        save_path = main_loop(args)
+            mono_relative_error_path = args.result_path + 'relative_error_' + str(i) + '.csv'
+            result_df = pd.DataFrame.from_dict(result_dict, orient='index')
 
-    """
-    args.scale_aware = True
-    args.optimization_type = 'instances'
-    # Per-Instance scale #
-    for i in range(total_runs):
-        main_loop(params, args)
-    """
+            mono_ate_error_path = args.result_path + 'ate_error_' + str(i) + '.csv'
+            result_ate_df = pd.DataFrame.from_dict(result_ate_dict, orient='index')
 
+            result_df.to_csv(mono_relative_error_path)
+            result_ate_df.to_csv(mono_ate_error_path)
 
+            mono_relative_list.append(result_df)
+            mono_ate_list.append(result_ate_df)
+
+        mono_relative_df = pd.concat(mono_relative_list, ignore_index=True)
+        mono_ate_df = pd.concat(mono_ate_list, ignore_index=True)
+
+        # Mean #
+        mono_relative_means_df = mono_relative_df.mean(axis=0)
+        mono_ate_means_df = mono_ate_df.mean(axis=0)
+
+        mono_relative_error_mean_path = args.out_path + 'mono/relative_error.csv'
+        mono_ate_error_mean_path = args.out_path + 'mono/ate_error.csv'
+        mono_relative_means_df.to_csv(mono_relative_error_mean_path)
+        mono_ate_means_df.to_csv(mono_ate_error_mean_path)
+
+    print('-----------------------------------------\n')
