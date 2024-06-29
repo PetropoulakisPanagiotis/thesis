@@ -29,7 +29,9 @@
 --num_threads 1
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2345
---exp_name per-class-scale
+
+
+--exp_name per-instance-scale
 
 
 --bins_type 0
@@ -45,7 +47,7 @@
 --segmentation
 --instances
 --padding_instances 10
-
+--roi_align
 --bin_num 40
 --min_depth 0
 --max_depth 1
