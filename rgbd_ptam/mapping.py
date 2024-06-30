@@ -315,8 +315,8 @@ class MappingThread(Mapping):
 
     def create_map(self, save_file: str):
         mappoints = list(set(chain(*[kf.mappoints() for kf in self.graph.keyframes()])))
-        print("saving map pcd")
-        print("Total mappoints: ", len(mappoints))
+        print("saving map pcd...")
+        print("total mappoints", len(mappoints))
         points = []
         colors = []
         for mappoint in mappoints:

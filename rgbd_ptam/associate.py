@@ -72,7 +72,7 @@ def associate(first_list, second_list,offset,max_difference):
     """
     Associate two dictionaries of (stamp,data). As the time stamps never match exactly, we aim 
     to find the closest match for every input tuple.
-    
+ 
     Input:
     first_list -- first dictionary of (stamp,data) tuples
     second_list -- second dictionary of (stamp,data) tuples
@@ -81,7 +81,7 @@ def associate(first_list, second_list,offset,max_difference):
 
     Output:
     matches -- list of matched tuples ((stamp1,data1),(stamp2,data2))
-    
+ 
     """
     first_keys = first_list.keys()
     second_keys = second_list.keys()
@@ -91,17 +91,18 @@ def associate(first_list, second_list,offset,max_difference):
                          if abs(a - (b + offset)) < max_difference]
     potential_matches.sort()
     matches = []
+    first_keys = list(first_keys)
+    second_keys = list(second_keys)
     for diff, a, b in potential_matches:
         if a in first_keys and b in second_keys:
             first_keys.remove(a)
             second_keys.remove(b)
             matches.append((a, b))
-    
+ 
     matches.sort()
     return matches
 
 if __name__ == '__main__':
-    
     # parse command line
     parser = argparse.ArgumentParser(description='''
     This script takes two data files with timestamps and associates them   
