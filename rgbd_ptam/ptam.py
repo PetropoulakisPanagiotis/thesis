@@ -190,6 +190,7 @@ class RGBDPTAM(object):
             else:
                 tracking_fail = True
                 print('tracking failed!')
+                return False
 
         # Remedy frame used or tracking succeded and should be keyframe #
         if remedy or (self.results[-1] and self.should_be_keyframe(frame, measurements)):  # or (self.results[-1]):
@@ -209,6 +210,8 @@ class RGBDPTAM(object):
                 self.non_keyframes.append(frame)
 
         self.set_tracking(False)
+
+        return True
 
     def filter_points(self, frame):
         # Get local 3D points #
@@ -378,7 +381,12 @@ def main_loop(args):
         if not ptam.is_initialized():
             ptam.initialize(frame)
         else:
-            ptam.track(frame)
+            success = ptam.track(frame)
+            if success == False:
+                return None, None
+                ptam.stop()
+            if not args.no_viz:
+                viewer.stop()
 
         duration = time.time() - time_start
         durations.append(duration)
@@ -495,7 +503,7 @@ if __name__ == '__main__':
                         help='use uncertainties during optimization')
     parser.add_argument('--optimization_type', type=str, default='global',
                         choices=['global', 'per_class', 'per_instance'], help='Scale-Aware variation')
-    parser.add_argument('--out_path', type=str, default='./results/', help='Folder to save results')
+    parser.add_argument('--out_path', type=str, default='./results_all/', help='Folder to save results')
     parser.add_argument('--total', type=int, default=None, help='Total number of frame')
 
     parser.add_argument('--exp_name', type=str, default='exp_1', help='Experiment name')
@@ -519,8 +527,12 @@ if __name__ == '__main__':
     args.no_viz = True
 
     scenes = ['scene0655_01']
-
+    scenes = [
+    'scene0025_01',  'scene0077_00',  'scene0100_00', 'scene0169_01',  'scene0300_01',  'scene0474_04', 'scene0553_00',  'scene0568_02',  'scene0598_02',  'scene0647_00',  'scene0684_00',  'scene0693_01',
+    'scene0064_00',  'scene0086_02',  'scene0153_00',  'scene0203_01',  'scene0314_00',  'scene0527_00',  'scene0558_02',  'scene0574_01',  'scene0609_03',  'scene0664_02',  'scene0685_01',  
+        ]
     methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global', 'per-class']
+    #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global']
 
     initial_path = args.out_path
     for scene in scenes:
@@ -550,11 +562,14 @@ if __name__ == '__main__':
             args.exp_name = args.optimization_base_type + '_gt/' + args.optimization_base_type + '_gt_' + str(i) + '/'
             args.result_path = args.out_path + args.exp_name
             slam_path, durations_dict = main_loop(args)
-
-            durations_list.append(durations_dict)
-
-            eval_path = args.out_path + args.exp_name + 'evaluation.txt'
-            result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+            if slam_path == None:
+                result_dict = {}
+                result_ate_dict = {}
+                durations_list.append({})
+            else:
+                eval_path = args.out_path + args.exp_name + 'evaluation.txt'
+                result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+                durations_list.append(durations_dict)
 
             mono_relative_error_path = args.result_path + 'relative_error_' + str(i) + '.csv'
             result_df = pd.DataFrame.from_dict(result_dict, orient='index')
@@ -611,11 +626,14 @@ if __name__ == '__main__':
             args.exp_name = args.optimization_base_type + '/' + args.optimization_base_type + '_' + str(i) + '/'
             args.result_path = args.out_path + args.exp_name
             slam_path, durations_dict = main_loop(args)
-
-            durations_list.append(durations_dict)
-
-            eval_path = args.out_path + args.exp_name + 'evaluation.txt'
-            result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+            if slam_path == None:
+                result_dict = {}
+                result_ate_dict = {}
+                durations_list.append({})
+            else:
+                eval_path = args.out_path + args.exp_name + 'evaluation.txt'
+                result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+                durations_list.append(durations_dict)
 
             mono_relative_error_path = args.result_path + 'relative_error_' + str(i) + '.csv'
             result_df = pd.DataFrame.from_dict(result_dict, orient='index')
@@ -673,11 +691,14 @@ if __name__ == '__main__':
             args.exp_name = args.optimization_base_type + '_gt/' + args.optimization_base_type + '_gt_' + str(i) + '/'
             args.result_path = args.out_path + args.exp_name
             slam_path, durations_dict = main_loop(args)
-
-            durations_list.append(durations_dict)
-
-            eval_path = args.out_path + args.exp_name + 'evaluation.txt'
-            result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+            if slam_path == None:
+                result_dict = {}
+                result_ate_dict = {}
+                durations_list.append({})
+            else:
+                eval_path = args.out_path + args.exp_name + 'evaluation.txt'
+                result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+                durations_list.append(durations_dict)
 
             mono_relative_error_path = args.result_path + 'relative_error_' + str(i) + '.csv'
             result_df = pd.DataFrame.from_dict(result_dict, orient='index')
@@ -735,11 +756,14 @@ if __name__ == '__main__':
             args.exp_name = args.optimization_base_type + '/' + args.optimization_base_type + '_' + str(i) + '/'
             args.result_path = args.out_path + args.exp_name
             slam_path, durations_dict = main_loop(args)
-
-            durations_list.append(durations_dict)
-
-            eval_path = args.out_path + args.exp_name + 'evaluation.txt'
-            result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+            if slam_path == None:
+                result_dict = {}
+                result_ate_dict = {}
+                durations_list.append({})
+            else:
+                eval_path = args.out_path + args.exp_name + 'evaluation.txt'
+                result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+                durations_list.append(durations_dict)
 
             mono_relative_error_path = args.result_path + 'relative_error_' + str(i) + '.csv'
             result_df = pd.DataFrame.from_dict(result_dict, orient='index')
@@ -785,11 +809,12 @@ if __name__ == '__main__':
         args.scale_aware = True
         args.network_depth = True
         args.optimization_type = 'global'
+        args.use_uncertainties = True
         mono_relative_list = []
         mono_ate_list = []
         durations_list = []
 
-        print('[running virtual SLAM]')
+        print('[running global scale SLAM]')
         for i in range(total_runs):
             print('\n')
             print(f'[iteration {i+1}]')
@@ -798,11 +823,14 @@ if __name__ == '__main__':
             args.scale_path = args.optimization_type + '/' + args.optimization_type + '_' + str(i) + '/optimized_scale/'
             args.result_path = args.out_path + args.exp_name
             slam_path, durations_dict = main_loop(args)
-
-            durations_list.append(durations_dict)
-
-            eval_path = args.out_path + args.exp_name + 'evaluation.txt'
-            result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+            if slam_path == None:
+                result_dict = {}
+                result_ate_dict = {}
+                durations_list.append({})
+            else:
+                eval_path = args.out_path + args.exp_name + 'evaluation.txt'
+                result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+                durations_list.append(durations_dict)
 
             mono_relative_error_path = args.result_path + 'relative_error_' + str(i) + '.csv'
             result_df = pd.DataFrame.from_dict(result_dict, orient='index')
@@ -852,7 +880,7 @@ if __name__ == '__main__':
         mono_ate_list = []
         durations_list = []
 
-        print('[running virtual SLAM]')
+        print('[running per-class SLAM]')
         for i in range(total_runs):
             print('\n')
             print(f'[iteration {i+1}]')
@@ -861,11 +889,14 @@ if __name__ == '__main__':
             args.scale_path = args.optimization_type + '/' + args.optimization_type + '_' + str(i) + '/optimized_scale/'
             args.result_path = args.out_path + args.exp_name
             slam_path, durations_dict = main_loop(args)
-
-            durations_list.append(durations_dict)
-
-            eval_path = args.out_path + args.exp_name + 'evaluation.txt'
-            result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+            if slam_path == None:
+                result_dict = {}
+                result_ate_dict = {}
+                durations_list.append({})
+            else:
+                eval_path = args.out_path + args.exp_name + 'evaluation.txt'
+                result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+                durations_list.append(durations_dict)
 
             mono_relative_error_path = args.result_path + 'relative_error_' + str(i) + '.csv'
             result_df = pd.DataFrame.from_dict(result_dict, orient='index')
@@ -907,19 +938,31 @@ if __name__ == '__main__':
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
         print('-----------------------------------------\n')
 
-        print('[final results]')
+        try:        
+            print('[final results]')
+            print(relative_df)
+            relative_df.insert(0, 'method', methods_names[::-1])
+            ate_df.insert(0, 'method', methods_names[::-1])
+            durations_df.insert(0, 'method', methods_names)
 
-        relative_df.insert(0, 'method', methods_names[::-1])
-        ate_df.insert(0, 'method', methods_names[::-1])
-        durations_df.insert(0, 'method', methods_names)
+            relative_df['scene'] = scene
+            ate_df['scene'] = scene
+            durations_df['scene'] = scene
 
-        relative_df['scene'] = scene
-        ate_df['scene'] = scene
-        durations_df['scene'] = scene
+            print('[relative pose errors]')
+            print(relative_df)
+            print('[absolute trajectory errors]')
+            print(ate_df)
+            print('[duration (sec)]')
+            print(durations_df)
+            
+            relative_df_path = args.out_path + '/relative_error.csv'
+            relative_df.to_csv(relative_df_path)
 
-        print('[relative pose errors]')
-        print(relative_df)
-        print('[absolute trajectory errors]')
-        print(ate_df)
-        print('[duration (sec)]')
-        print(durations_df)
+            ate_df_path = args.out_path + '/ate_error.csv'
+            ate_df.to_csv(ate_df_path)
+
+            durations_df_path = args.out_path + '/durations.csv'
+            durations_df.to_csv(durations_df_path)
+        except:
+            pass
