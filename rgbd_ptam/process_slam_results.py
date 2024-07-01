@@ -129,10 +129,6 @@ for folder in os.listdir(parent_dir):
 
 columns=['scene', 'global', 'virtual', 'virtual-gt', 'mono', 'mono-gt']
 
-
-
-print(ate_rmse_all_scenes_list)
-
 ate_rmse_all_scenes_df = pd.DataFrame(ate_rmse_all_scenes_list, columns=columns)
 ate_mean_all_scenes_df = pd.DataFrame(ate_mean_all_scenes_list, columns=columns)
 ate_max_all_scenes_df = pd.DataFrame(ate_max_all_scenes_list, columns=columns)
@@ -149,7 +145,7 @@ dfs = [ate_rmse_all_scenes_df, ate_mean_all_scenes_df, ate_max_all_scenes_df,
        relative_trans_rmse_all_scenes_df, relative_trans_mean_all_scenes_df, relative_trans_max_all_scenes_df,
        relative_rot_rmse_all_scenes_df, relative_rot_mean_all_scenes_df, relative_rot_max_all_scenes_df]
 
-path = './results/processed_results/all/'
+path = './results/processed_results/combined/'
 file_names = [
 'ate_rsme.png',
 'ate_mean.png',
@@ -163,30 +159,24 @@ file_names = [
 ]
 
 # Find the row with the lowest value after column 4
-ate_error_df_ = ate_error_df.iloc[:, 3:]
-min_vals_ate = ate_error_df_.idxmin()
+for df, file_name in zip(dfs, file_names):
+    df_ = df.iloc[:, 1:]
+    min_vals = df_.idxmin(axis=1)
+    min_vals_ids = [df.columns.get_loc(min_val) for min_val in min_vals] # Per row find the min col 
 
-relative_error_df_ = relative_error_df.iloc[:, 3:]
-min_vals_relative = relative_error_df_.idxmin()
+    fig, ax = plt.subplots()
 
+    ax.axis('tight')
+    ax.axis('off')
+    table = ax.table(cellText=df.values,
+             colLabels=df.columns,
+             loc='center')
 
-
-fig, ax = plt.subplots()
-
-ax.axis('tight')
-ax.axis('off')
-table = ax.table(cellText=ate_error_df.values,
-         colLabels=ate_error_df.columns,
-         loc='center')
-
-for (row, col), cell in table.get_celld().items():
-    if col >= 3 and row - 1 == min_vals_ate[col - 3]:
-        cell.set_text_props(fontproperties=fm.FontProperties(weight='bold'))
-
-fig.tight_layout(pad=0) 
-#fig.savefig(f'./results/ate_{scene_name}.pdf')
-fig.savefig(f'./results/processed_results/ate_{scene_name}.png', dpi=500, bbox_inches='tight', pad_inches=0)
-plt.close()   
-
-
-
+    for (row, col), cell in table.get_celld().items():
+        if row != 0:
+            if min_vals_ids[row - 1] == col:        
+                cell.set_text_props(fontproperties=fm.FontProperties(weight='bold'))
+    
+    fig.tight_layout(pad=0) 
+    fig.savefig(path + file_name, dpi=500, bbox_inches='tight', pad_inches=0)
+    plt.close()   
