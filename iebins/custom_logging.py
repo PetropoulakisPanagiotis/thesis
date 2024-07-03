@@ -54,7 +54,8 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
                     colormap(
                         torch.sum(uncertainty_maps_list[ii][i, :, :, :] * instances[i, :, :, :],
                                   dim=0).unsqueeze(0).data), global_step)
-
+                t = torch.sum(uncertainty_maps_list[ii][i, :, :, :] * instances[i, :, :, :],
+                                  dim=0)
             # Expensive visualization
             if expensive_viz:
                 max_viz_instances = 5

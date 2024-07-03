@@ -375,7 +375,7 @@ class ToTensorCustom(object):
 
             num_zeros_needed = self.max_instances - instances_masks.shape[0]
             zero_tensors = [
-                -1 * torch.ones(1, *instances_masks.shape[1:], dtype=torch.int32) for _ in range(num_zeros_needed)
+                torch.zeros(1, *instances_masks.shape[1:], dtype=torch.int32) for _ in range(num_zeros_needed)
             ]
             instances_masks = torch.cat([instances_masks] + zero_tensors, dim=0)
 
@@ -504,18 +504,6 @@ def load_image_annotations_nyu(json_file_path):
 
 
 def load_image_annotations_scannet(dataset_path, filename, mapping_40_to_13, num_classes=14):
-
-    # Extrinsics #
-    extr_path = dataset_path + "extrinsics/" + filename + ".json"
-    with open(extr_path, 'r') as f:
-        extr = json.load(f)
-
-    rotation_matrix = Rotation.from_quat([extr['quat_x'], extr['quat_y'], extr['quat_z'], extr['quat_w']]).as_matrix()
-    transformation_matrix = np.eye(4)
-    transformation_matrix[:3, :3] = rotation_matrix
-    transformation_matrix[:3, 3] = [extr['x'], extr['y'], extr['z']]
-    extrinsics = transformation_matrix
-
     seg_map, instances_map, boxes = None, None, None
     if 'test/' not in dataset_path:
         # Segmentation #

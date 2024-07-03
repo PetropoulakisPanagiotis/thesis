@@ -68,7 +68,7 @@ class NewCRFDepth(nn.Module):
         if self.upsample_type == 1:
             print("Uncertainty upsampling type: vanilla")
         else:        
-            print("Uncertainty upsampling type: use squre weight of canonical depth")
+            print("Uncertainty upsampling type: use square weight of canonical depth")
         print("Number of bins (canonical): ", self.bin_num)
         print("Number of bins (scale): ", self.bins_scale)
        

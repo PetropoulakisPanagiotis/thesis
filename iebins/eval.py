@@ -207,16 +207,15 @@ def eval_func(model, dataloader_eval):
             gt_canonical = eval_sample_batched['depth'].to(result["pred_scale_list"][-1].device).repeat(1, ins_num,  1, 1) / \
                            result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)
             gt_canonical = torch.sum(gt_canonical * instances, dim=1).cpu().numpy().squeeze().squeeze()
-            
             pred_canonical = result["pred_depths_r_list"][-1] / result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)
-            pred_canonical = torch.sum(pred_canonical * instances, dim=1).cpu().numpy().squeeze().squeeze()
+            pred_canonical = torch.sum(pred_canonical * instances, dim=1).cpu().numpy().squeeze().squeeze()   
 
             gt_canonical = np.clip(gt_canonical[valid_mask] , a_min=0.0001, a_max=1.0)
             pred_canonical = np.clip(pred_depth[valid_mask], a_min=0.0001, a_max=1.0)
 
             canonical_errors = compute_canonical_errors(gt_canonical, pred_canonical)
             eval_measures_canonical += torch.tensor(canonical_errors).cuda()       
-        
+
         elif args.segmentation:
             
             b, seg_num, h, w = result["pred_depths_r_list"][-1].shape

@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .depth_update import padding_global
 from .utils import *
 """
 Canonical/Depth and scale/shift heads

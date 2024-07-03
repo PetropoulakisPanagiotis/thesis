@@ -2,8 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-padding_global = 0
-
 from .depth_update_heads import *
 from .utils import *
 from torchvision.ops import RoIAlign
@@ -434,11 +432,7 @@ class PerInstanceScale(nn.Module):
         self.bins_type = bins_type
         self.bins_type_scale = bins_type_scale
         self.roi_align = roi_align
-
-        global padding_global
-
         self.padding_instances = padding_instances
-        padding_global = padding_instances
             
 
         print("PerInstanceScale: padding set to: " + str(self.padding_instances) + "\n") 
@@ -509,7 +503,7 @@ class PerInstanceScale(nn.Module):
 
             input_feature_map_instances_roi = self.roiAlign(input_feature_map, boxes_roi)
         else:
-            input_feature_map_instances_roi = roi_select_features(input_feature_map, boxes, labels)
+            input_feature_map_instances_roi = roi_select_features(input_feature_map, boxes, labels, padding=self.padding_instances)
         
         # Canonical 
         if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 1:
@@ -530,6 +524,7 @@ class PerInstanceScale(nn.Module):
             uncertainty_map_current = torch.sqrt(
                 (instances_canonical_prob * ((bins_map.detach() - depth_rc.repeat(1, bin_num, 1, 1))**2)).sum(
                     1, keepdim=True))
+            
             uncertainty_map = uncertainty_map_current
 
             # Labels #
@@ -537,9 +532,9 @@ class PerInstanceScale(nn.Module):
             depth_c = (torch.gather(bins_map.detach(), 1, pred_label.detach()))
 
             # Fill full instances map canonical #
-            canonical_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device)
-            uncertainty_maps_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device)
-            depth_c_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device)
+            canonical_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device).clamp(min=1e-3)
+            uncertainty_maps_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device).clamp(min=1e-3)
+            depth_c_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device).clamp(min=1e-3)
 
             valid_boxes = labels.view(batch_size * max_instances_size, 1)
             valid_boxes = torch.nonzero(valid_boxes != -1)
@@ -549,7 +544,7 @@ class PerInstanceScale(nn.Module):
 
             uncertainty_maps_full[valid_boxes[:, 0]] = uncertainty_map
             uncertainty_map = uncertainty_maps_full.view(batch_size, max_instances_size, h, w)
-
+            
             depth_c_full[valid_boxes[:, 0]] = depth_c
             depth_c = depth_c_full.view(batch_size, max_instances_size, h, w)
 
@@ -566,7 +561,7 @@ class PerInstanceScale(nn.Module):
 
             boxes_valid_idx = get_valid_boxes_idx(boxes, labels)
 
-            canonical_full = torch.zeros((batch_size * self.num_instances, 1, h, w)).to(instances_canonical.device)
+            canonical_full = torch.zeros((batch_size * self.num_instances, 1, h, w)).to(instances_canonical.device).clamp(min=1e-3)
             canonical_full[boxes_valid_idx[:, 0]] = instances_canonical
 
             canonical_full = canonical_full.view(batch_size, self.num_instances, h, w)
@@ -593,9 +588,9 @@ class PerInstanceScale(nn.Module):
         else:
             instances_scale = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
             instances_scale = mask_predictions_to_true_class(instances_scale, labels)
-            pred_scale_list.append(scale)
-            uncertainty_maps_scale_list.append(torch.zeros_like(scale))
-            pred_depths_scale_c_list.append(torch.zeros_like(scale))
+            pred_scale_list.append(instances_scale)
+            uncertainty_maps_scale_list.append(torch.zeros_like(instances_scale))
+            pred_depths_scale_c_list.append(torch.zeros_like(instances_scale))
 
         # Metric
         if self.loss_type == 0:
