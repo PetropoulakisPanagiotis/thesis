@@ -158,8 +158,15 @@ file_names = [
 'relative_rot_max.png'
 ]
 
+remove_gt = True
+
 # Find the row with the lowest value after column 4
 for df, file_name in zip(dfs, file_names):
+
+    if remove_gt:    
+        df.drop('virtual-gt', axis=1, inplace=True)
+        df.drop('mono-gt', axis=1, inplace=True)
+
     df_ = df.iloc[:, 1:]
     min_vals = df_.idxmin(axis=1)
     min_vals_ids = [df.columns.get_loc(min_val) for min_val in min_vals] # Per row find the min col 
