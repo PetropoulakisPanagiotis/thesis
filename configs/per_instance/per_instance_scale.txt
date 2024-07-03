@@ -34,13 +34,13 @@
 --exp_name per-instance-scale
 
 
---bins_type 0
---bins_type_scale 0
+--bins_type 1
+--bins_type_scale 1
 
 --eigen_crop
 
 --update_block 3
---virtual_depth_variation 0
+--virtual_depth_variation 3
 
 --loss_type 1
 
@@ -52,5 +52,6 @@
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
+--upsample_type 2
 
 --bins_scale 40

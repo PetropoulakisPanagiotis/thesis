@@ -1,5 +1,5 @@
 import os, sys
-
+import time
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 import torch
@@ -49,7 +49,8 @@ def eval_func(model, dataloader_eval):
 
     writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
 
-    scales = []
+    excecution_times = []
+
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         with torch.no_grad():
             # Init
@@ -73,21 +74,16 @@ def eval_func(model, dataloader_eval):
                 continue
 
             # Predict
+            start_time = time.time()
             if args.instances:
                 result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
-                for scale in result['pred_scale_list'][-1]:
-                    for scale_s in scale:
-                        scales.append(float(scale_s.cpu().numpy()))
             elif args.segmentation:
                 result = model(image, masks=segmentation_map)
-                for scale in result['pred_scale_list'][-1]:
-                    for scale_s in scale:
-                        scales.append(float(scale_s.cpu().numpy()))
             else:
                 result = model(image)
-                if args.update_block != 0:
-                    for scale in result['pred_scale_list'][-1]:
-                        scales.append(float(scale.cpu().numpy()))
+            end_time = time.time()
+            
+            excecution_times.append(end_time - start_time)
 
             if False:
                 debug_result(result, gt_depth)
@@ -103,50 +99,34 @@ def eval_func(model, dataloader_eval):
                 pred_depths_c_list = result["pred_depths_c_list"]
                 uncertainty_maps_list = result["uncertainty_maps_list"]
 
+            # Depth #
             if args.instances:
-                # Fair comparison segmentation - instances: use eval_per_class.sh script
-                if args.pick_class != 0:
-                    non_class = torch.nonzero(labels[0] != args.pick_class)
-                    if non_class.shape[0] == 63:
-                        continue
-                    instances[0, non_class] = torch.zeros_like(instances[0, non_class])
-
                 pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
-
-                mask = torch.sum(instances, dim=1).unsqueeze(0).to(torch.bool).cpu()
-                gt_depth = (gt_depth * mask)
             elif args.segmentation:
-
                 pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
-
-                if args.eval_unc:
-                    if args.unc_head:
-                        sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
-                                                                        result["unc_c"][-1],
-                                                                        result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
-                                                                        result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
-                        sigma_m = torch.sum((sigma_m * segmentation_map), dim=1).unsqueeze(1)
-                    else:
-                        # uncertainty of canonical is std --> convert to variance
-                        sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
-                                                                        result['uncertainty_maps_list'][-1]**2,
-                                                                        result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
-                                                                        (result["uncertainty_maps_scale_list"][-1]**2), args)
-                        sigma_m = torch.sum((sigma_m * segmentation_map), dim=1).unsqueeze(1)
             else: # Global
                 pred_depth = pred_depths_r_list[-1]
 
-                if args.eval_unc:
-                    if args.unc_head:
-                        sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
-                                                                        result["unc_c"][-1],
-                                                                        result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
-                                                                        result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
-                    else: # Convert std to variance
-                        sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
+            # Unc #
+            if args.eval_unc:
+                if args.unc_head:
+                    sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
+                                                                    result["unc_c"][-1],
+                                                                    result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
+                                                                    result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
+                else:
+                    # uncertainty of canonical is std --> convert to variance
+                    sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
                                                                     result['uncertainty_maps_list'][-1]**2,
                                                                     result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
-                                                                    (result["uncertainty_maps_scale_list"][-1]**2).unsqueeze(-1).unsqueeze(-1), args)
+                                                                    (result["uncertainty_maps_scale_list"][-1]**2), args)
+                if args.instances:
+                    sigma_m = torch.sum((sigma_m * instances), dim=1).unsqueeze(1)
+                elif args.segmentation:
+                    sigma_m = torch.sum((sigma_m * segmentation_map), dim=1).unsqueeze(1)
+                else:
+                    pass
+
             # Tensorboard
             if args.eval_unc:
                 tb_visualization_d3vo(writer, global_step=step, args=args, current_loss_d3vo=None, current_lr=None, var_sum=None, var_cnt=None, \
@@ -232,8 +212,6 @@ def eval_func(model, dataloader_eval):
             canonical_errors = compute_canonical_errors(gt_canonical, pred_canonical)
             eval_measures_canonical += torch.tensor(canonical_errors).cuda()
         else:
-            scale = scales[0]
-
             gt_canonical = np.clip(gt_depth[valid_mask] / scale, a_min=0.0001, a_max=1.0)
             pred_canonical = np.clip(pred_depth[valid_mask] / scale, a_min=0.0001, a_max=1.0)
             canonical_errors = compute_canonical_errors(gt_canonical, pred_canonical)
@@ -241,13 +219,6 @@ def eval_func(model, dataloader_eval):
 
         eval_measures[:9] += torch.tensor(measures[:9]).cuda()
         eval_measures[9] += 1
-
-    if False:
-        scales = np.array(scales)
-        print("Mean scale: ", scales.mean())
-        print("Std scale: ", scales.std())
-        print("Max scale: ", scales.max())
-        print("Min scale: ", scales.min())
 
     eval_measures_cpu = eval_measures.cpu()
     cnt = eval_measures_cpu[9].item()
@@ -281,6 +252,9 @@ def eval_func(model, dataloader_eval):
         print("e_metric^2/variance: ", eval_measures[10].cpu().numpy() / cnt)
         print("SCC: ", scc_total / cnt)
 
+    excecution_times = np.asarray(excecution_times)
+    print(f'Excecutation time : {excecution_times.mean()} seconds')
+    
     return eval_measures_cpu, unc_error, eval_canonical_cpu
 
 

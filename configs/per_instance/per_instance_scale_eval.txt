@@ -35,6 +35,4 @@
 
 --bins_scale 40
 
-
-
---checkpoint_path /usr/stud/petp/code/thesis/tmp/per-instance-scale/nyu/model-14-best_silog_17.00311
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/per-instance-scale/nyu/model-22-best_silog_14.69983

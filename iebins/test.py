@@ -72,35 +72,13 @@ def predict(model, dataloader_eval) -> None:
                 result = model(image)
 
             # Unpack result
-            if args.instances:
-                pred_depths_r_list = result["pred_depths_instances_r_list"]
-
-                pred_depths_instances_rc_list = result["pred_depths_instances_rc_list"]
-                pred_depths_instances_r_list = result["pred_depths_instances_r_list"]
-            else:
-                pred_depths_r_list = result["pred_depths_r_list"]
-                # Canonical segmentation/single scale #
-                if args.update_block != 0 and args.update_block != 4 and args.update_block != 3:
-                    pred_depths_rc_list = result["pred_depths_rc_list"]
-
-            # Uncertainty bins #
-            if args.update_block == 0 or args.update_block == 3 or args.update_block == 1 \
-               or args.update_block == 18 or args.update_block == 2:
-                pred_depths_c_list = result["pred_depths_c_list"]
-                uncertainty_maps_list = result["uncertainty_maps_list"]
+            pred_depths_r_list = result["pred_depths_r_list"]
+            # Canonical segmentation/single scale #
+            if args.update_block != 0:
+                pred_depths_rc_list = result["pred_depths_rc_list"]
 
             if args.instances:
-                # Fair comparison segmentation - instances: use eval_per_class.sh script
-                if args.pick_class != 0:
-                    non_class = torch.nonzero(labels[0] != args.pick_class)
-                    if non_class.shape[0] == 63:
-                        continue
-                    instances[0, non_class] = torch.zeros_like(instances[0, non_class])
-
                 pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
-
-                mask = torch.sum(instances, dim=1).unsqueeze(0).to(torch.bool).cpu()
-                gt_depth = (gt_depth * mask)
             elif args.segmentation:
                 pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
             else:
@@ -121,9 +99,10 @@ def predict(model, dataloader_eval) -> None:
 
         cv2.imwrite(args.save_dir + 'depth/' + filename, map_float_data_to_int(pred_depth, normalization_const_depth),
                     [cv2.IMWRITE_PNG_COMPRESSION, 9])
+
         if args.instances:
             # Scale #
-            scale = result['pred_scale_instances_list'][-1].cpu().numpy()[0].tolist()
+            scale = result['pred_scale_list'][-1].cpu().numpy()[0].tolist()
             scale_data = {'scale': scale, 'scale_type': 'per-instance'}
             scale_idx = [i for i in range(len(scale))]
 
@@ -138,27 +117,26 @@ def predict(model, dataloader_eval) -> None:
             scale_data['valid'] = [1 if scale_idx_item in valid_scales else 0 for scale_idx_item in scale_idx]
 
             # Canonical #
-            canonical = torch.sum((instances * result["pred_depths_instances_rc_list"][-1]), dim=1)
+            canonical = torch.sum((instances * result["pred_depths_rc_list"][-1]), dim=1)
             canonical = canonical.cpu().numpy().squeeze()
 
             cv2.imwrite(args.save_dir + 'canonical/' + filename,
                         map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
-            """
             # Uncertainty canonical and scale #
-            if args.d3vo:
-                if args.d3vo_c:
-                    canonical_unc = result["unc_d3vo_c"].squeeze(0).squeeze(0)
-                else:
-                    canonical_unc = result["uncertainty_maps_list"].squeeze(0).squeeze(0)**2
+            if args.unc_head:
+                canonical_unc = result["unc_c"][-1]
+                scale_unc = result["unc_s"][-1]  
+            elif args.virtual_depth_variation == 0:
+                canonical_unc = result["uncertainty_maps_list"][-1]**2 # to variance
+                scale_unc = result["uncertainty_maps_scale_list"][-1]**2 # to variance
+            else:
+                raise ValueError("Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n")
+            
+            scale_unc = scale_unc.view(num_instances).cpu().numpy().tolist()
+            scale_data['scale_uncertainty'] = scale_unc
 
-                scale_unc = result["unc_d3vo"].squeeze(0).cpu().numpy().tolist()
-                scale_data['scale_uncertainty'] = scale_unc
-
-                canonical_unc = canonical_unc.cpu().numpy()
-
-                np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
-            """
-
+            canonical_unc = canonical_unc.cpu().numpy()
+            np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
                 json.dump(scale_data, file, indent=4)
 

@@ -14,23 +14,29 @@
 --max_depth_eval 10
 --eigen_crop
 
---bins_type 0
---bins_type_scale 0
+--bins_type 1
+--bins_type_scale 1
 
 --eigen_crop
 
---update_block 2
+--update_block 3
 --virtual_depth_variation 0
 
 --loss_type 1
+
 --segmentation
---concat_masks
+--instances
+--padding_instances 10
+--roi_align
 --bin_num 40
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
+--upsample_type 0
 
 --bins_scale 40
---eval_unc
 --unc_head
---checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale-scannet-unc/nyu/model-50-best_unc_d3vo_0.03439
+--eval_unc
+
+
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/per-instance-scale-scannet-unc/nyu/model-100-best_unc_d3vo_1.82981
