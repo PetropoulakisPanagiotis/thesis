@@ -209,6 +209,16 @@ def compute_errors(gt, pred, var=None):
     return [silog, abs_rel, log10, rms, sq_rel, log_rms, d1, d2, d3]
 
 
+def compute_canonical_errors(gt, pred):
+    rms = (gt - pred)**2
+    rms = np.sqrt(rms.mean())
+    
+    abs_rel = np.mean(np.abs(gt - pred) / gt)
+    
+    sq_rel = np.mean(((gt - pred)**2) / gt)
+
+    return [rms, abs_rel, sq_rel]
+
 def compute_error_uncertainty(depth_est, depth_gt, unc, beta=0.5, original=False):
     if original:
         unc_error = np.mean((((np.abs(depth_est - depth_gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))))

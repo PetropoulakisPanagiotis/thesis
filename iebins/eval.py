@@ -18,7 +18,7 @@ from dataloaders.dataloader import DataLoaderCustom
 from networks.NewCRFDepth import NewCRFDepth
 from parser_options import convert_arg_line_to_args, eval_parser
 from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
-from utils import compute_errors, sigma_metric_from_canonical_and_scale
+from utils import compute_errors, compute_canonical_errors, sigma_metric_from_canonical_and_scale
 from aucs import compute_aucs, SCC
 
 # Parse config file #
@@ -35,6 +35,7 @@ else:
 
 def eval_func(model, dataloader_eval):
     eval_measures = torch.zeros(11).cuda()
+    eval_measures_canonical = torch.zeros(3).cuda()
 
     uncertainty_metrics = ["abs_rel", "rmse", "a1"]
     aucs = {"abs_rel": [], "rmse": [], "a1": []}
@@ -142,7 +143,6 @@ def eval_func(model, dataloader_eval):
                                                                         result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
                                                                         result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
                     else: # Convert std to variance
-                        print((result["uncertainty_maps_scale_list"][-1]**2).unsqueeze(-1).unsqueeze(-1).shape)
                         sigma_m = sigma_metric_from_canonical_and_scale(result['pred_depths_rc_list'][-1],
                                                                     result['uncertainty_maps_list'][-1]**2,
                                                                     result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
@@ -200,6 +200,46 @@ def eval_func(model, dataloader_eval):
         else:
             measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
 
+        if args.instances:
+
+            b, ins_num, h, w = result["pred_depths_r_list"][-1].shape
+            
+            gt_canonical = eval_sample_batched['depth'].to(result["pred_scale_list"][-1].device).repeat(1, ins_num,  1, 1) / \
+                           result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)
+            gt_canonical = torch.sum(gt_canonical * instances, dim=1).cpu().numpy().squeeze().squeeze()
+            
+            pred_canonical = result["pred_depths_r_list"][-1] / result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)
+            pred_canonical = torch.sum(pred_canonical * instances, dim=1).cpu().numpy().squeeze().squeeze()
+
+            gt_canonical = np.clip(gt_canonical[valid_mask] , a_min=0.0001, a_max=1.0)
+            pred_canonical = np.clip(pred_depth[valid_mask], a_min=0.0001, a_max=1.0)
+
+            canonical_errors = compute_canonical_errors(gt_canonical, pred_canonical)
+            eval_measures_canonical += torch.tensor(canonical_errors).cuda()       
+        
+        elif args.segmentation:
+            
+            b, seg_num, h, w = result["pred_depths_r_list"][-1].shape
+
+            gt_canonical = eval_sample_batched['depth'].to(result["pred_scale_list"][-1].device).repeat(1, seg_num, 1, 1) / result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)
+            gt_canonical = torch.sum(gt_canonical * segmentation_map, dim=1).cpu().numpy().squeeze().squeeze()
+
+            pred_canonical = result["pred_depths_r_list"][-1] / result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)
+            pred_canonical = torch.sum(pred_canonical * segmentation_map, dim=1).cpu().numpy().squeeze().squeeze()
+
+            gt_canonical = np.clip(gt_canonical[valid_mask], a_min=0.0001, a_max=1.0)
+            pred_canonical = np.clip(pred_depth[valid_mask], a_min=0.0001, a_max=1.0)
+
+            canonical_errors = compute_canonical_errors(gt_canonical, pred_canonical)
+            eval_measures_canonical += torch.tensor(canonical_errors).cuda()
+        else:
+            scale = scales[0]
+
+            gt_canonical = np.clip(gt_depth[valid_mask] / scale, a_min=0.0001, a_max=1.0)
+            pred_canonical = np.clip(pred_depth[valid_mask] / scale, a_min=0.0001, a_max=1.0)
+            canonical_errors = compute_canonical_errors(gt_canonical, pred_canonical)
+            eval_measures_canonical += torch.tensor(canonical_errors).cuda()
+
         eval_measures[:9] += torch.tensor(measures[:9]).cuda()
         eval_measures[9] += 1
 
@@ -209,16 +249,25 @@ def eval_func(model, dataloader_eval):
         print("Std scale: ", scales.std())
         print("Max scale: ", scales.max())
         print("Min scale: ", scales.min())
-    scales = np.array(scales)
+
     eval_measures_cpu = eval_measures.cpu()
     cnt = eval_measures_cpu[9].item()
     eval_measures_cpu /= cnt
+
+    eval_canonical_cpu = eval_measures_canonical.cpu()
+    eval_canonical_cpu /= cnt    
+    
     print('Computing errors for {} eval samples'.format(int(cnt)))
     print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format('silog', 'abs_rel', 'log10', 'rms',
                                                                                  'sq_rel', 'log_rms', 'd1', 'd2', 'd3'))
     for i in range(8):
         print('{:7.4f}, '.format(eval_measures_cpu[i]), end='')
     print('{:7.4f}'.format(eval_measures_cpu[8]))
+
+    print('Canonical errors: '.format(int(cnt)))
+    print("{:>7}, {:>7}, {:>7}".format('abs_rel', 'rms', 'sq_rel'))
+    for i in range(3):
+        print('{:7.4f}, '.format(eval_canonical_cpu[i]), end='')
 
     if args.eval_unc:
 
@@ -233,7 +282,7 @@ def eval_func(model, dataloader_eval):
         print("e_metric^2/variance: ", eval_measures[10].cpu().numpy() / cnt)
         print("SCC: ", scc_total / cnt)
 
-    return eval_measures_cpu, unc_error
+    return eval_measures_cpu, unc_error, eval_canonical_cpu
 
 
 def main_worker(args):
@@ -276,7 +325,7 @@ def main_worker(args):
     # Evaluate #
     model.eval()
     with torch.no_grad():
-        eval_measures, eval_measures_unc = eval_func(model, dataloader_eval)
+        eval_measures, eval_measures_unc, _ = eval_func(model, dataloader_eval)
 
 
 def main():
