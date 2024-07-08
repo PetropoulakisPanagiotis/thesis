@@ -104,13 +104,11 @@ class MapViewer(object):
                 lines.append(([*kf.position, *kf.loop_keyframe.position], 2))
         self.q_graph.put(lines)
 
-        
         if refresh:
             cameras = []
             for kf in self.system.graph.keyframes():
                 cameras.append(kf.pose.matrix())
             self.q_camera.put(cameras)
-
 
             points = []
             colors = []

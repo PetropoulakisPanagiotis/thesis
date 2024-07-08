@@ -385,8 +385,6 @@ def main_loop(args):
             if success == False:
                 return None, None
                 ptam.stop()
-            if not args.no_viz:
-                viewer.stop()
 
         duration = time.time() - time_start
         durations.append(duration)
@@ -527,10 +525,10 @@ if __name__ == '__main__':
     args.no_viz = True
 
     scenes = ['scene0655_01']
-    scenes = [
-    'scene0025_01',  'scene0077_00',  'scene0100_00', 'scene0169_01',  'scene0300_01',  'scene0474_04', 'scene0553_00',  'scene0568_02',  'scene0598_02',  'scene0647_00',  'scene0684_00',  'scene0693_01',
-    'scene0064_00',  'scene0086_02',  'scene0153_00',  'scene0203_01',  'scene0314_00',  'scene0527_00',  'scene0558_02',  'scene0574_01',  'scene0609_03',  'scene0664_02',  'scene0685_01',  
-        ]
+    #scenes = [
+    #'scene0025_01',  'scene0077_00',  'scene0100_00', 'scene0169_01',  'scene0300_01',  'scene0474_04', 'scene0553_00',  'scene0568_02',  'scene0598_02',  'scene0647_00',  'scene0684_00',  'scene0693_01',
+    #'scene0064_00',  'scene0086_02',  'scene0153_00',  'scene0203_01',  'scene0314_00',  'scene0527_00',  'scene0558_02',  'scene0574_01',  'scene0609_03',  'scene0664_02',  'scene0685_01',  
+    #    ]
     methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global', 'per-class']
     #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global']
 
@@ -603,9 +601,19 @@ if __name__ == '__main__':
         mono_relative_means_df.to_csv(mono_relative_error_mean_path)
         mono_ate_means_df.to_csv(mono_ate_error_mean_path)
 
+        mono_relative_stds_df = mono_relative_df.std(axis=1).to_frame().T
+        mono_ate_stds_df = mono_ate_df.std(axis=1).to_frame().T
+
+        mono_relative_error_std_path = args.out_path + args.optimization_base_type + '_gt/' + '/relative_error_std.csv'
+        mono_ate_error_std_path = args.out_path + args.optimization_base_type + '_gt' + '/ate_error_std.csv'
+        mono_relative_stds_df.to_csv(mono_relative_error_std_path)
+        mono_ate_stds_df.to_csv(mono_ate_error_std_path)
+
         print(durations_avg_df)
         print(mono_ate_means_df)
         print(mono_relative_means_df)
+        print(mono_ate_stds_df)
+        print(mono_relative_stds_df)
 
         relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
@@ -667,9 +675,19 @@ if __name__ == '__main__':
         mono_relative_means_df.to_csv(mono_relative_error_mean_path)
         mono_ate_means_df.to_csv(mono_ate_error_mean_path)
 
+        mono_relative_stds_df = mono_relative_df.std(axis=1).to_frame().T
+        mono_ate_stds_df = mono_ate_df.std(axis=1).to_frame().T
+
+        mono_relative_error_std_path = args.out_path + args.optimization_base_type + '/relative_error_std.csv'
+        mono_ate_error_std_path = args.out_path + args.optimization_base_type + '/ate_error_std.csv'
+        mono_relative_stds_df.to_csv(mono_relative_error_std_path)
+        mono_ate_stds_df.to_csv(mono_ate_error_std_path)
+
         print(durations_avg_df)
         print(mono_ate_means_df)
         print(mono_relative_means_df)
+        print(mono_ate_stds_df)
+        print(mono_relative_stds_df)
 
         relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
@@ -732,9 +750,19 @@ if __name__ == '__main__':
         mono_relative_means_df.to_csv(mono_relative_error_mean_path)
         mono_ate_means_df.to_csv(mono_ate_error_mean_path)
 
+        mono_relative_stds_df = mono_relative_df.std(axis=1).to_frame().T
+        mono_ate_stds_df = mono_ate_df.std(axis=1).to_frame().T
+
+        mono_relative_error_std_path = args.out_path + args.optimization_base_type + '_gt' + '/relative_error_std.csv'
+        mono_ate_error_std_path = args.out_path + args.optimization_base_type + '_gt' + '/ate_error_std.csv'
+        mono_relative_stds_df.to_csv(mono_relative_error_std_path)
+        mono_ate_stds_df.to_csv(mono_ate_error_mean_path)
+
         print(durations_avg_df)
         print(mono_ate_means_df)
         print(mono_relative_means_df)
+        print(mono_ate_stds_df)
+        print(mono_relative_stds_df)
 
         relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
@@ -797,9 +825,19 @@ if __name__ == '__main__':
         mono_relative_means_df.to_csv(mono_relative_error_mean_path)
         mono_ate_means_df.to_csv(mono_ate_error_mean_path)
 
+        mono_relative_stds_df = mono_relative_df.std(axis=1).to_frame().T
+        mono_ate_stds_df = mono_ate_df.std(axis=1).to_frame().T
+
+        mono_relative_error_std_path = args.out_path + args.optimization_base_type + '/relative_error_std.csv'
+        mono_ate_error_std_path = args.out_path + args.optimization_base_type + '/ate_error_std.csv'
+        mono_relative_stds_df.to_csv(mono_relative_error_std_path)
+        mono_ate_stds_df.to_csv(mono_ate_error_std_path)
+
         print(durations_avg_df)
         print(mono_ate_means_df)
         print(mono_relative_means_df)
+        print(mono_ate_stds_df)
+        print(mono_relative_stds_df)
 
         relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
@@ -864,9 +902,19 @@ if __name__ == '__main__':
         mono_relative_means_df.to_csv(mono_relative_error_mean_path)
         mono_ate_means_df.to_csv(mono_ate_error_mean_path)
 
+        mono_relative_stds_df = mono_relative_df.std(axis=1).to_frame().T
+        mono_ate_stds_df = mono_ate_df.std(axis=1).to_frame().T
+
+        mono_relative_error_std_path = args.out_path + args.optimization_type + '/relative_error_std.csv'
+        mono_ate_error_std_path = args.out_path + args.optimization_type + '/ate_error_std.csv'
+        mono_relative_stds_df.to_csv(mono_relative_error_std_path)
+        mono_ate_stds_df.to_csv(mono_ate_error_std_path)
+
         print(durations_avg_df)
         print(mono_ate_means_df)
         print(mono_relative_means_df)
+        print(mono_ate_stds_df)
+        print(mono_relative_stds_df)
 
         relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
@@ -930,15 +978,25 @@ if __name__ == '__main__':
         mono_relative_means_df.to_csv(mono_relative_error_mean_path)
         mono_ate_means_df.to_csv(mono_ate_error_mean_path)
 
+        mono_relative_stds_df = mono_relative_df.std(axis=1).to_frame().T
+        mono_ate_stds_df = mono_ate_df.std(axis=1).to_frame().T
+
+        mono_relative_error_mean_path = args.out_path + args.optimization_type + '/relative_error_std.csv'
+        mono_ate_error_mean_path = args.out_path + args.optimization_type + '/ate_error_std.csv'
+        mono_relative_stds_df.to_csv(mono_relative_error_std_path)
+        mono_ate_stds_df.to_csv(mono_ate_error_std_path)
+
         print(durations_avg_df)
         print(mono_ate_means_df)
         print(mono_relative_means_df)
+        print(mono_ate_stds_df)
+        print(mono_relative_stds_df)
 
         relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
         print('-----------------------------------------\n')
 
-        try:        
+        try: 
             print('[final results]')
             print(relative_df)
             relative_df.insert(0, 'method', methods_names[::-1])
@@ -955,7 +1013,7 @@ if __name__ == '__main__':
             print(ate_df)
             print('[duration (sec)]')
             print(durations_df)
-            
+
             relative_df_path = args.out_path + '/relative_error.csv'
             relative_df.to_csv(relative_df_path)
 

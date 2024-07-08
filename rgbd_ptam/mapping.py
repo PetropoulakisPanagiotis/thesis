@@ -92,6 +92,13 @@ class Mapping(object):
                 if (n > 0 and ck not in adjust_keyframes and self.is_safe(ck) and ck < kf):
                     fixed_keyframes.add(ck)
 
+        if(len(fixed_keyframes) == 1 and self.args.optimization_base_type == 'mono' and len(adjust_keyframes) > 1):
+            adjust_keyframes = set()
+            for kf in keyframes[1:]:
+                if not kf.is_fixed():
+                    adjust_keyframes.add(kf)
+            fixed_keyframes.add(keyframes[0])
+
         self.optimizer.set_data(adjust_keyframes, fixed_keyframes)
         completed = self.optimizer.optimize(self.params.ba_max_iterations)
         self.optimizer.update_poses()

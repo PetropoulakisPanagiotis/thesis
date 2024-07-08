@@ -299,7 +299,9 @@ class ScanNetDataset(object):
     cam = namedtuple('camera', 'fx fy cx cy scale')(577.5906635802469, 576.3481987847223, 319.15804639274694,
                                                     241.9392752941744, 1000)
 
-    def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True, optimization_type='global', max_var=50.0, min_var=1e-4, network_depth=True, total=None):
+    def __init__(self, path, scene='scene0191_00', split='train',
+            scale_aware=True, optimization_type='global', max_var=50.0,
+            min_var=1e-4, network_depth=True, total=None, local=True):
         self.scale_aware = scale_aware
         path = os.path.expanduser(path)
         self.max_var = max_var
@@ -319,26 +321,27 @@ class ScanNetDataset(object):
         rgb_ids = [path + '/' + split + '/rgb/' + scene + "/" + str(item) + '.jpg' for item in ids]
 
         if self.scale_aware:
-            path = path.replace('/scannet/data_converted','')
-
-            """
-            depth_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png' for item in ids]
-            canonical_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/canonical/" + str(item) + '.png' for item in ids]
-            canonical_unc_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/canonical_unc/" + str(item) + '.npy' for item in ids]
-            scales_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/scale/" + str(item) + '.json' for item in ids]
-            pixel_to_scale_map_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/scale_map/" + str(item) + '.png' for item in ids]
-            """
-            depth_ids = [path + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png' for item in ids]
-            canonical_ids = [path + '/predictions/' + scene + '/' + optimization_type + "/canonical/" + str(item) + '.png' for item in ids]
-            canonical_unc_ids = [path + '/predictions/' + scene + '/' + optimization_type + "/canonical_unc/" + str(item) + '.npy' for item in ids]
-            scales_ids = [path + '/predictions/' + scene + '/' + optimization_type + "/scale/" + str(item) + '.json' for item in ids]
-            pixel_to_scale_map_ids = [path + '/predictions/' + scene + '/' + optimization_type + "/scale_map/" + str(item) + '.png' for item in ids]
+            if local:
+                depth_ids = [path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png' for item in ids]
+                canonical_ids = [path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/canonical/" + str(item) + '.png' for item in ids]
+                canonical_unc_ids = [path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/canonical_unc/" + str(item) + '.npy' for item in ids]
+                scales_ids = [path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/scale/" + str(item) + '.json' for item in ids]
+                pixel_to_scale_map_ids = [path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/scale_map/" + str(item) + '.png' for item in ids]
+            else:
+                path = path.replace('/scannet/data_converted','')
+                depth_ids = [path + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png' for item in ids]
+                canonical_ids = [path + '/predictions/' + scene + '/' + optimization_type + "/canonical/" + str(item) + '.png' for item in ids]
+                canonical_unc_ids = [path + '/predictions/' + scene + '/' + optimization_type + "/canonical_unc/" + str(item) + '.npy' for item in ids]
+                scales_ids = [path + '/predictions/' + scene + '/' + optimization_type + "/scale/" + str(item) + '.json' for item in ids]
+                pixel_to_scale_map_ids = [path + '/predictions/' + scene + '/' + optimization_type + "/scale_map/" + str(item) + '.png' for item in ids]
 
         else:
             if network_depth:
-                path = path.replace('/scannet/data_converted','')
-                #depth_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png' for item in ids]
-                depth_ids = [path + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png' for item in ids]
+                if local:
+                    depth_ids = [path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png' for item in ids]
+                else:
+                    path = path.replace('/scannet/data_converted', '')
+                    depth_ids = [path + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png' for item in ids]
             else:
                 depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
 
