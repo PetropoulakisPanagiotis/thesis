@@ -3,17 +3,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .utils import *
+
 """
-Canonical/Depth and scale/shift heads
-"""
-"""
-PHead: propabilities bin prediction
+Prediction heads for metric, canonical and scale 
 """
 
-
-class PHead(nn.Module):
+"""
+ProbCanonicalHead: propabilities head for bin prediction
+"""
+class ProbCanonicalHead(nn.Module):
     def __init__(self, input_dim=128, hidden_dim=128, bin_num=16):
-        super(PHead, self).__init__()
+        super(ProbCanonicalHead, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
         self.conv2 = nn.Conv2d(hidden_dim, bin_num, 3, padding=1)
 
@@ -23,90 +23,62 @@ class PHead(nn.Module):
 
 
 """
-SigmoidHead: regression canonical prediction [0,1]
+RegressCanonicalHead: regression head for canonical prediction [0,1]
 """
-
-
-class SigmoidHead(nn.Module):
-    def __init__(self, input_dim=128, hidden_dim=128, num_classes=1):
-        super(SigmoidHead, self).__init__()
+class RegressCanonicalHead(nn.Module):
+    def __init__(self, input_dim=128, hidden_dim=128):
+        super(RegressCanonicalHead, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
-        self.conv2 = nn.Conv2d(hidden_dim, num_classes, 3, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, 1, 3, padding=1)
 
     def forward(self, x):
         out = torch.sigmoid(self.conv2(F.relu(self.conv1(x))))
         return out
 
-
 """
-RegressionHead: regression prediction [-inf, inf]
+RegressScaleHead: scale regression head
+Out: 1-dim scale
 """
-
-
-class RegressionHead(nn.Module):
-    def __init__(self, input_dim=128, hidden_dim=128, num_classes=1):
-        super(RegressionHead, self).__init__()
-        self.conv1 = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
-        self.conv2 = nn.Conv2d(hidden_dim, num_classes, 3, padding=1)
-
-    def forward(self, x):
-        out = self.conv2(F.relu(self.conv1(x)))
-        return out
-
-
-"""
-SSHead: scale and shift regression head - single per image 
-"""
-
-
-class SSHead(nn.Module):
-    def __init__(self, input_dim=128, num_out=1):
-        super(SSHead, self).__init__()
+class RegressScaleHead(nn.Module):
+    def __init__(self, input_dim=128):
+        super(RegressScaleHead, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, 1, kernel_size=1)
-        self.pool = nn.AdaptiveAvgPool2d(88)
-        self.fc1 = nn.Linear(88 * 88, num_out)
+        self.pool = nn.AdaptiveAvgPool2d(64)
+        self.fc1 = nn.Linear(64 * 64, 1)
 
     def forward(self, x):
         out = F.relu(self.pool(self.conv1(x)))
         out = torch.flatten(out, 1)
-        out = F.relu(self.fc1(out)).clamp(min=1e-3)
-
+        out = F.relu(self.fc1(out)).clamp(min=1e-4)
         return out
 
 
 """
-SHead: scale head bins - single per image 
+ProbScaleHead: scale head bins
+Out: 1-dim scale
 """
-
-
-class SHead(nn.Module):
+class ProbScaleHead(nn.Module):
     def __init__(self, input_dim=128, num_bins=50):
-        super(SHead, self).__init__()
+        super(ProbScaleHead, self).__init__()
         self.conv1 = nn.Conv2d(input_dim, 1, kernel_size=1)
-        self.pool = nn.AdaptiveAvgPool2d(88)
-        self.fc1 = nn.Linear(88 * 88, num_bins)
+        self.pool = nn.AdaptiveAvgPool2d(64)
+        self.fc1 = nn.Linear(64 * 64, num_bins)
 
     def forward(self, x):
         out = F.relu(self.pool(self.conv1(x)))
         out = torch.flatten(out, 1)
         out = self.fc1(out)
         out = torch.softmax(out, axis=1)
-
         return out
 
 
-""""
-ROISelectScale start
 """
-
+Scale prediction per instance via bins
+Also concat the bbox into the features
 """
-Predict scale with bins for a ROI with bbox concat
-"""
-
-
-class ROISelectScaleBins(nn.Module):
+class ProbScaleInstancesHead(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=13, num_bins=50, min_scale=0, max_scale=15):
-        super(ROISelectScaleBins, self).__init__()
+        super(ProbScaleInstancesHead, self).__init__()
         self.downsampling = downsampling
         self.num_bins = num_bins
         self.input_dim = input_dim
@@ -115,11 +87,11 @@ class ROISelectScaleBins(nn.Module):
         self.max_scale = max_scale
       
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
-        self.pool = nn.AdaptiveAvgPool2d(70)
+        self.pool = nn.AdaptiveAvgPool2d(64)
 
         self.scale_nets = nn.ModuleList()
         for i in range(num_semantic_classes):
-            self.scale_nets.append(nn.Linear((70 * 70) + 4, self.num_bins))
+            self.scale_nets.append(nn.Linear((64 * 64) + 4, self.num_bins))
 
     def forward(self, x, boxes, labels):
         bins_map_scale, bin_edges_scale = get_uniform_bins(torch.zeros(x.shape[0], 1, 1, 1).to(x.device), self.min_scale, self.max_scale,
@@ -158,16 +130,11 @@ class ROISelectScaleBins(nn.Module):
 
 
 """
-ROISelectScale end
+Shared canonical prediction for instances via bins
 """
-"""
-ROISelectSharedCanonicalUniform start
-"""
-
-
-class ROISelectSharedCanonicalUniform(nn.Module):
+class ProbSharedCanonicalInstancesHead(nn.Module):
     def __init__(self, input_dim=32, hidden_dim=128, bin_num=40):
-        super(ROISelectSharedCanonicalUniform, self).__init__()
+        super(ProbSharedCanonicalInstancesHead, self).__init__()
 
         self.input_dim = input_dim
         self.bin_num = bin_num
@@ -189,18 +156,13 @@ class ROISelectSharedCanonicalUniform(nn.Module):
 
         return out
 
-"""
-ROISelectSharedCanonicalUniform end
-"""
 
 """
-ROISelectSharedCanonical start
+Shared canonical prediction for instances via regression sigmoid
 """
-
-
-class ROISelectSharedCanonical(nn.Module):
+class RegressSharedCanonicalInstancesHead(nn.Module):
     def __init__(self, input_dim=32, num_semantic_classes=14):
-        super(ROISelectSharedCanonical, self).__init__()
+        super(RegressSharedCanonicalInstancesHead, self).__init__()
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
@@ -223,23 +185,21 @@ class ROISelectSharedCanonical(nn.Module):
         return out
 
 """
-ROISelectScaleModule start
+Predict scales per instance via regression sigmoid 
 """
-
-
-class ROISelectScaleModule(nn.Module):
+class RegressScaleInstancesHead(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
-        super(ROISelectScaleModule, self).__init__()
+        super(RegressScaleInstancesHead, self).__init__()
         self.downsampling = downsampling
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
 
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
-        self.pool = nn.AdaptiveAvgPool2d(70)
+        self.pool = nn.AdaptiveAvgPool2d(64)
 
         self.scale_nets = nn.ModuleList()
         for i in range(num_semantic_classes):
-            self.scale_nets.append(nn.Linear((70 * 70) + 4, 1))
+            self.scale_nets.append(nn.Linear((64 * 64) + 4, 1))
 
     def forward(self, x, boxes, labels):
 
@@ -263,8 +223,6 @@ class ROISelectScaleModule(nn.Module):
 """
 Other
 """
-
-
 class SepConvGRU(nn.Module):
     def __init__(self, hidden_dim=128, input_dim=128 + 192):
         super(SepConvGRU, self).__init__()

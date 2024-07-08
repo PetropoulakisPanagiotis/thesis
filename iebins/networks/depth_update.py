@@ -20,7 +20,7 @@ class IEBINS(nn.Module):
 
         self.gru = SepConvGRU(hidden_dim=hidden_dim, input_dim=self.encoder_project.out_chs + context_dim)
 
-        self.p_head = PHead(hidden_dim, hidden_dim, bin_num)
+        self.p_head = ProbCanonicalHead(hidden_dim, hidden_dim, bin_num)
 
     def forward(self, depth, context, gru_hidden, bin_num, min_depth, max_depth, max_tree_depth=6):
 
@@ -102,20 +102,20 @@ class GlobalScale(nn.Module):
             print("GlobalScale: log bins for scale\n")
 
         if self.virtual_depth_variation == 0:
-            self.c_head = PHead(hidden_dim, hidden_dim, bin_num) # Propabilities canonical
-            self.s_head = SHead(hidden_dim, num_bins=bins_scale) # Bins scale
+            self.c_head = ProbCanonicalHead(hidden_dim, hidden_dim, bin_num) # Propabilities canonical
+            self.s_head = ProbScaleHead(hidden_dim, num_bins=bins_scale) # Bins scale
             print("GlobalScale: bins for both scale and shift\n") 
         elif self.virtual_depth_variation == 1:
-            self.c_head = PHead(hidden_dim, hidden_dim, bin_num) # Propabilities canonical
-            self.s_head = SSHead(hidden_dim, 1) # Regression scale 
+            self.c_head = ProbCanonicalHead(hidden_dim, hidden_dim, bin_num) # Propabilities canonical
+            self.s_head = RegressScaleHead(hidden_dim) # Regression scale 
             print("GlobalScale: bins for canonical\n") 
         elif self.virtual_depth_variation == 2:
-            self.c_head = RegressionHead(hidden_dim, hidden_dim) # Regression canonical
-            self.s_head = SHead(hidden_dim, num_bins=bins_scale) # Bins scale 
+            self.c_head = RegressCanonicalHead(hidden_dim, hidden_dim) # Regression canonical
+            self.s_head = ProbScaleHead(hidden_dim, num_bins=bins_scale) # Bins scale 
             print("GlobalScale: bins for scale\n") 
         else:
-            self.c_head = RegressionHead(hidden_dim, hidden_dim) # Regression canonical
-            self.s_head = SSHead(hidden_dim, 1) # Regression scale 
+            self.c_head = RegressCanonicalHead(hidden_dim, hidden_dim) # Regression canonical
+            self.s_head = RegressScaleHead(hidden_dim) # Regression scale 
             print("GlobalScale: regression\n") 
 
         self.relu = nn.ReLU(inplace=True)
@@ -197,7 +197,7 @@ class GlobalScale(nn.Module):
 
         # Metric depth
         if self.loss_type == 0:
-            depth_r = (self.relu(depth_rc * pred_scale_list[-1].unsqueeze(1).unsqueeze(1))).clamp(min=1e-3)
+            depth_r = (self.relu(depth_rc * pred_scale_list[-1].unsqueeze(1).unsqueeze(1))).clamp(min=1e-4)
         else:
             depth_r = depth_rc * pred_scale_list[-1].unsqueeze(1).unsqueeze(1)
 
@@ -257,17 +257,17 @@ class PerClassScale(nn.Module):
         self.s_heads = nn.ModuleList()
         for i in range(num_semantic_classes):
             if self.virtual_depth_variation == 0: # Propabilities both scale and canonical
-                self.p_heads.append(PHead(in_dim, 128, bin_num=bin_num))
-                self.s_heads.append(SHead(in_dim, num_bins=self.bins_scale))
+                self.p_heads.append(ProbCanonicalHead(in_dim, 128, bin_num=bin_num))
+                self.s_heads.append(ProbScaleHead(in_dim, num_bins=self.bins_scale))
             elif self.virtual_depth_variation == 1: # Probabilities canonical 
-                self.p_heads.append(PHead(in_dim, 128, bin_num=bin_num))
-                self.s_heads.append(SSHead(in_dim, num_out=1))
+                self.p_heads.append(ProbCanonicalHead(in_dim, 128, bin_num=bin_num))
+                self.s_heads.append(RegressScaleHead(in_dim))
             elif self.virtual_depth_variation == 2: # Probabilities scale 
-                self.p_heads.append(SigmoidHead(in_dim, 128, num_classes=1))
-                self.s_heads.append(SHead(in_dim, num_bins=self.bins_scale))
+                self.p_heads.append(RegressCanonicalHead(in_dim, 128))
+                self.s_heads.append(ProbScaleHead(in_dim, num_bins=self.bins_scale))
             else: # Regression 
-                self.p_heads.append(SigmoidHead(in_dim, 128, num_classes=1))
-                self.s_heads.append(SSHead(in_dim, num_out=1))
+                self.p_heads.append(RegressCanonicalHead(in_dim, 128))
+                self.s_heads.append(RegressScaleHead(in_dim))
 
         self.relu = nn.ReLU(inplace=True)
     
@@ -389,7 +389,7 @@ class PerClassScale(nn.Module):
         
         # Metric depth
         if self.loss_type == 0:
-            depth_r = (self.relu(depth_rc * pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+            depth_r = (self.relu(depth_rc * pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-4)
         else:
             depth_r = depth_rc * pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1)
 
@@ -448,24 +448,24 @@ class PerInstanceScale(nn.Module):
             print("PerInstanceScale: using RoIScale\n") 
             
         if self.virtual_depth_variation == 0: # Probabilities canonical/scale
-            self.instances_canonical = ROISelectSharedCanonicalUniform(128, bin_num=bin_num)
-            self.instances_scale_and_shift = ROISelectScaleBins(128, downsampling=4,
+            self.instances_canonical = ProbSharedCanonicalInstancesHead(128, bin_num=bin_num)
+            self.instances_scale_and_shift = ProbScaleInstancesHead(128, downsampling=4,
                                                                 num_semantic_classes=self.num_semantic_classes,
                                                                 num_bins=self.bins_scale)
             print("PerInstanceScale: bins for both scale and shift\n") 
         elif self.virtual_depth_variation == 1: # Propabilities canonical 
-            self.instances_canonical = ROISelectSharedCanonicalUniform(128, bin_num=bin_num)
-            self.instances_scale_and_shift = ROISelectScaleModule(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+            self.instances_canonical = ProbSharedCanonicalInstancesHead(128, bin_num=bin_num)
+            self.instances_scale_and_shift = RegressScaleInstancesHead(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
             print("PerInstanceScale: bins for canonical\n") 
         elif self.virtual_depth_variation == 2: # Propabilities scale
-            self.instances_canonical = ROISelectSharedCanonical(128, num_semantic_classes=1)
-            self.instances_scale_and_shift = ROISelectScaleBins(128, downsampling=4,
+            self.instances_canonical = RegressSharedCanonicalInstancesHead(128, num_semantic_classes=1)
+            self.instances_scale_and_shift = ProbScaleInstancesHead(128, downsampling=4,
                                                                 num_semantic_classes=self.num_semantic_classes,
                                                                 num_bins=self.bins_scale)
             print("PerInstanceScale: bins for scale\n") 
         else: # Regression
-            self.instances_canonical = ROISelectSharedCanonical(128, num_semantic_classes=1)
-            self.instances_scale_and_shift = ROISelectScaleModule(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
+            self.instances_canonical = RegressSharedCanonicalInstancesHead(128, num_semantic_classes=1)
+            self.instances_scale_and_shift = RegressScaleInstancesHead(128, downsampling=4, num_semantic_classes=self.num_semantic_classes)
             print("PerInstanceScale: regression\n") 
 
         self.relu = nn.ReLU(inplace=True)
@@ -532,9 +532,9 @@ class PerInstanceScale(nn.Module):
             depth_c = (torch.gather(bins_map.detach(), 1, pred_label.detach()))
 
             # Fill full instances map canonical #
-            canonical_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device).clamp(min=1e-3)
-            uncertainty_maps_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device).clamp(min=1e-3)
-            depth_c_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device).clamp(min=1e-3)
+            canonical_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device).clamp(min=1e-4)
+            uncertainty_maps_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device).clamp(min=1e-4)
+            depth_c_full = torch.zeros((batch_size * max_instances_size, 1, h, w)).to(depth_rc.device).clamp(min=1e-4)
 
             valid_boxes = labels.view(batch_size * max_instances_size, 1)
             valid_boxes = torch.nonzero(valid_boxes != -1)
@@ -561,7 +561,7 @@ class PerInstanceScale(nn.Module):
 
             boxes_valid_idx = get_valid_boxes_idx(boxes, labels)
 
-            canonical_full = torch.zeros((batch_size * self.num_instances, 1, h, w)).to(instances_canonical.device).clamp(min=1e-3)
+            canonical_full = torch.zeros((batch_size * self.num_instances, 1, h, w)).to(instances_canonical.device).clamp(min=1e-4)
             canonical_full[boxes_valid_idx[:, 0]] = instances_canonical
 
             canonical_full = canonical_full.view(batch_size, self.num_instances, h, w)
@@ -594,7 +594,7 @@ class PerInstanceScale(nn.Module):
 
         # Metric
         if self.loss_type == 0:
-            depth_instances_r = (self.relu(depth_rc * instances_scale.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-3)
+            depth_instances_r = (self.relu(depth_rc * instances_scale.unsqueeze(-1).unsqueeze(-1))).clamp(min=1e-4)
         else:
             depth_instances_r = depth_rc * instances_scale.unsqueeze(-1).unsqueeze(-1)
 
