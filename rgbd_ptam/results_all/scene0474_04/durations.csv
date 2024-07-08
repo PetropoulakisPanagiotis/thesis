@@ -1,7 +1,0 @@
-,method,mean,std,max,min,scene
-0,mono-gt,,,,,scene0474_04
-1,mono,,,,,scene0474_04
-2,virtual-gt,,,,,scene0474_04
-3,virtual,,,,,scene0474_04
-4,global,,,,,scene0474_04
-5,per-class,,,,,scene0474_04

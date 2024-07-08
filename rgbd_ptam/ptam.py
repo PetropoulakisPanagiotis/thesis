@@ -318,17 +318,13 @@ class RGBDPTAM(object):
                 path_scale_map = args.scale_path + str(
                     f'{int(keyframe.rgb.timestamp):05}') + '_scale_map.png'
                 scale_map = np.zeros((keyframe.rgb.image.shape[:2]))
-                #depth_map = np.zeros((keyframe.rgb.image.shape[:2]))
-                #path_depth_map = args.out_path + args.optimization_type + '/optimized_scale/' + str(f'{int(keyframe.rgb.timestamp):05}') + '_depth_map.png'
 
                 total_mappoints += len(keyframe.measurements())
                 for m in keyframe.measurements():
                     xy = [int(item) for item in m.xy]
                     scale_map[xy[1], xy[0]] = 1
-                    #depth_map[xy[1], xy[0]] = keyframe.transform(m.mappoint.position)[2] / 1000
 
                 cv2.imwrite(path_scale_map, scale_map, [cv2.IMWRITE_PNG_COMPRESSION, 9])
-                #cv2.imwrite(path_depth_map, depth_map, [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
         print("results saved...")
 
@@ -401,8 +397,6 @@ def main_loop(args):
 
     print("saving results...")
     ptam.save_results()
-
-    ptam.mapping.create_map(args.result_path + 'map.pcd')
 
     ptam.stop()
     if not args.no_viz:
@@ -501,7 +495,7 @@ if __name__ == '__main__':
                         help='use uncertainties during optimization')
     parser.add_argument('--optimization_type', type=str, default='global',
                         choices=['global', 'per_class', 'per_instance'], help='Scale-Aware variation')
-    parser.add_argument('--out_path', type=str, default='./results_all/', help='Folder to save results')
+    parser.add_argument('--out_path', type=str, default='./results/', help='Folder to save results')
     parser.add_argument('--total', type=int, default=None, help='Total number of frame')
 
     parser.add_argument('--exp_name', type=str, default='exp_1', help='Experiment name')
@@ -530,7 +524,7 @@ if __name__ == '__main__':
     #'scene0064_00',  'scene0086_02',  'scene0153_00',  'scene0203_01',  'scene0314_00',  'scene0527_00',  'scene0558_02',  'scene0574_01',  'scene0609_03',  'scene0664_02',  'scene0685_01',  
     #    ]
     methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global', 'per-class']
-    #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global']
+    #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global', 'per-class', 'per-instance']
 
     initial_path = args.out_path
     for scene in scenes:
@@ -542,6 +536,8 @@ if __name__ == '__main__':
 
         relative_df = pd.DataFrame()
         ate_df = pd.DataFrame()
+        relative_std_df = pd.DataFrame()
+        ate_std_df = pd.DataFrame()
         durations_df = pd.DataFrame(columns=['mean', 'std', 'max', 'min'])
 
         # Monocular SLAM with gt depth #
@@ -617,6 +613,9 @@ if __name__ == '__main__':
 
         relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
+
+        relative_std_df = pd.concat([mono_relative_stds_df, relative_std_df], axis=0, ignore_index=True)
+        ate_std_df = pd.concat([mono_ate_stds_df, ate_std_df], axis=0, ignore_index=True)
         print('-----------------------------------------\n')
 
         # Monocular SLAM #
@@ -691,6 +690,9 @@ if __name__ == '__main__':
 
         relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
+
+        relative_std_df = pd.concat([mono_relative_stds_df, relative_std_df], axis=0, ignore_index=True)
+        ate_std_df = pd.concat([mono_ate_stds_df, ate_std_df], axis=0, ignore_index=True)
         print('-----------------------------------------\n')
 
         # Virtual SLAM with gt depth #
@@ -766,6 +768,8 @@ if __name__ == '__main__':
 
         relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
+        relative_std_df = pd.concat([mono_relative_stds_df, relative_std_df], axis=0, ignore_index=True)
+        ate_std_df = pd.concat([mono_ate_stds_df, ate_std_df], axis=0, ignore_index=True)
         print('-----------------------------------------\n')
 
         # Virtual SLAM #
@@ -841,6 +845,8 @@ if __name__ == '__main__':
 
         relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
+        relative_std_df = pd.concat([mono_relative_stds_df, relative_std_df], axis=0, ignore_index=True)
+        ate_std_df = pd.concat([mono_ate_stds_df, ate_std_df], axis=0, ignore_index=True)
         print('-----------------------------------------\n')
 
         # Global scale SLAM #
@@ -858,7 +864,7 @@ if __name__ == '__main__':
             print(f'[iteration {i+1}]')
 
             args.exp_name = args.optimization_type + '/' + args.optimization_type + '_' + str(i) + '/'
-            args.scale_path = args.optimization_type + '/' + args.optimization_type + '_' + str(i) + '/optimized_scale/'
+            args.scale_path = args.out_path + '/' + args.optimization_type + '/' + args.optimization_type + '_' + str(i) + '/optimized_scale/'
             args.result_path = args.out_path + args.exp_name
             slam_path, durations_dict = main_loop(args)
             if slam_path == None:
@@ -918,6 +924,8 @@ if __name__ == '__main__':
 
         relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
+        relative_std_df = pd.concat([mono_relative_stds_df, relative_std_df], axis=0, ignore_index=True)
+        ate_std_df = pd.concat([mono_ate_stds_df, ate_std_df], axis=0, ignore_index=True)
         print('-----------------------------------------\n')
 
         # Per-Class SLAM #
@@ -934,7 +942,7 @@ if __name__ == '__main__':
             print(f'[iteration {i+1}]')
 
             args.exp_name = args.optimization_type + '/' + args.optimization_type + '_' + str(i) + '/'
-            args.scale_path = args.optimization_type + '/' + args.optimization_type + '_' + str(i) + '/optimized_scale/'
+            args.scale_path = args.out_path + '/' + args.optimization_type + '/' + args.optimization_type + '_' + str(i) + '/optimized_scale/'
             args.result_path = args.out_path + args.exp_name
             slam_path, durations_dict = main_loop(args)
             if slam_path == None:
@@ -981,8 +989,8 @@ if __name__ == '__main__':
         mono_relative_stds_df = mono_relative_df.std(axis=1).to_frame().T
         mono_ate_stds_df = mono_ate_df.std(axis=1).to_frame().T
 
-        mono_relative_error_mean_path = args.out_path + args.optimization_type + '/relative_error_std.csv'
-        mono_ate_error_mean_path = args.out_path + args.optimization_type + '/ate_error_std.csv'
+        mono_relative_error_std_path = args.out_path + args.optimization_type + '/relative_error_std.csv'
+        mono_ate_error_std_path = args.out_path + args.optimization_type + '/ate_error_std.csv'
         mono_relative_stds_df.to_csv(mono_relative_error_std_path)
         mono_ate_stds_df.to_csv(mono_ate_error_std_path)
 
@@ -994,13 +1002,97 @@ if __name__ == '__main__':
 
         relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
         ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
+        relative_std_df = pd.concat([mono_relative_stds_df, relative_std_df], axis=0, ignore_index=True)
+        ate_std_df = pd.concat([mono_ate_stds_df, ate_std_df], axis=0, ignore_index=True)
         print('-----------------------------------------\n')
+
+        """
+        # Per-Instance SLAM #
+        args.scale_aware = True
+        args.network_depth = True
+        args.optimization_type = 'per_instance'
+        mono_relative_list = []
+        mono_ate_list = []
+        durations_list = []
+
+        print('[running per-instance SLAM]')
+        for i in range(total_runs):
+            print('\n')
+            print(f'[iteration {i+1}]')
+
+            args.exp_name = args.optimization_type + '/' + args.optimization_type + '_' + str(i) + '/'
+            args.scale_path = args.out_path + '/' + args.optimization_type + '/' + args.optimization_type + '_' + str(i) + '/optimized_scale/'
+            args.result_path = args.out_path + args.exp_name
+            slam_path, durations_dict = main_loop(args)
+            if slam_path == None:
+                result_dict = {}
+                result_ate_dict = {}
+                durations_list.append({})
+            else:
+                eval_path = args.out_path + args.exp_name + 'evaluation.txt'
+                result_dict, result_ate_dict = evaluate(slam_path, gt_path)
+                durations_list.append(durations_dict)
+
+            mono_relative_error_path = args.result_path + 'relative_error_' + str(i) + '.csv'
+            result_df = pd.DataFrame.from_dict(result_dict, orient='index')
+
+            mono_ate_error_path = args.result_path + 'ate_error_' + str(i) + '.csv'
+            result_ate_df = pd.DataFrame.from_dict(result_ate_dict, orient='index')
+
+            result_df.to_csv(mono_relative_error_path)
+            result_ate_df.to_csv(mono_ate_error_path)
+
+            mono_relative_list.append(result_df)
+            mono_ate_list.append(result_ate_df)
+
+        mono_relative_df = pd.concat(mono_relative_list, axis=1, ignore_index=True)
+        mono_ate_df = pd.concat(mono_ate_list, axis=1, ignore_index=True)
+
+        durations = defaultdict(list)
+        for item in durations_list:
+            for key, value in item.items():
+                durations[key].append(value)
+        durations_avg = {key: sum(vals) / len(vals) for key, vals in durations.items()}
+        durations_avg_df = pd.DataFrame.from_dict(durations_avg, orient='index').T
+        durations_df = pd.concat([durations_df, durations_avg_df], axis=0, ignore_index=True)
+
+        # Mean #
+        mono_relative_means_df = mono_relative_df.mean(axis=1).to_frame().T
+        mono_ate_means_df = mono_ate_df.mean(axis=1).to_frame().T
+
+        mono_relative_error_mean_path = args.out_path + args.optimization_type + '/relative_error.csv'
+        mono_ate_error_mean_path = args.out_path + args.optimization_type + '/ate_error.csv'
+        mono_relative_means_df.to_csv(mono_relative_error_mean_path)
+        mono_ate_means_df.to_csv(mono_ate_error_mean_path)
+
+        mono_relative_stds_df = mono_relative_df.std(axis=1).to_frame().T
+        mono_ate_stds_df = mono_ate_df.std(axis=1).to_frame().T
+
+        mono_relative_error_std_path = args.out_path + args.optimization_type + '/relative_error_std.csv'
+        mono_ate_error_std_path = args.out_path + args.optimization_type + '/ate_error_std.csv'
+        mono_relative_stds_df.to_csv(mono_relative_error_std_path)
+        mono_ate_stds_df.to_csv(mono_ate_error_std_path)
+
+        print(durations_avg_df)
+        print(mono_ate_means_df)
+        print(mono_relative_means_df)
+        print(mono_ate_stds_df)
+        print(mono_relative_stds_df)
+
+        relative_df = pd.concat([mono_relative_means_df, relative_df], axis=0, ignore_index=True)
+        ate_df = pd.concat([mono_ate_means_df, ate_df], axis=0, ignore_index=True)
+        relative_std_df = pd.concat([mono_relative_stds_df, relative_std_df], axis=0, ignore_index=True)
+        ate_std_df = pd.concat([mono_ate_stds_df, ate_std_df], axis=0, ignore_index=True)
+        print('-----------------------------------------\n')
+        """ 
 
         try: 
             print('[final results]')
-            print(relative_df)
             relative_df.insert(0, 'method', methods_names[::-1])
             ate_df.insert(0, 'method', methods_names[::-1])
+            relative_std_df.insert(0, 'method', methods_names[::-1])
+            ate_std_df.insert(0, 'method', methods_names[::-1])
+
             durations_df.insert(0, 'method', methods_names)
 
             relative_df['scene'] = scene
@@ -1016,9 +1108,13 @@ if __name__ == '__main__':
 
             relative_df_path = args.out_path + '/relative_error.csv'
             relative_df.to_csv(relative_df_path)
+            relative_std_df_path = args.out_path + '/relative_error_std.csv'
+            relative_std_df.to_csv(relative_std_df_path)
 
             ate_df_path = args.out_path + '/ate_error.csv'
             ate_df.to_csv(ate_df_path)
+            ate_std_df_path = args.out_path + '/ate_error_std.csv'
+            ate_std_df.to_csv(ate_std_df_path)
 
             durations_df_path = args.out_path + '/durations.csv'
             durations_df.to_csv(durations_df_path)
