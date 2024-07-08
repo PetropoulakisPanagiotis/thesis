@@ -4,9 +4,10 @@ models/
 helpers/nyu_depth_v2_labeled.mat
 iebins/eval/
 rgbd_ptam/results/
-
 *.swp
 *.png
+.ruff_cache/
+.mypy_cache/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

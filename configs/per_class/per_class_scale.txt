@@ -49,4 +49,3 @@
 --max_tree_depth 1
 
 --bins_scale 40
---unc_head

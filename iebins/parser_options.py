@@ -41,7 +41,6 @@ train_parser.add_argument('--do_random_rotate', help='if set, will perform rando
                           action='store_true')
 train_parser.add_argument('--degree', type=float, help='random rotation maximum degree', default=2.5)
 
-
 # Multi-gpu training #
 train_parser.add_argument('--num_threads', type=int, help='number of threads to use for data loading', default=1)
 train_parser.add_argument('--world_size', type=int, help='number of nodes for distributed training', default=1)
@@ -74,7 +73,6 @@ train_parser.add_argument('--eval_freq', type=int, help='online evaluation frequ
 train_parser.add_argument('--eval_summary_directory', type=str, help='output directory for eval summary,'
                           'if empty outputs to checkpoint folder', default='')
 
-
 # Ranges: depth and image #
 train_parser.add_argument('--input_height', type=int, help='input height', default=480)
 train_parser.add_argument('--input_width', type=int, help='input width', default=640)
@@ -82,17 +80,23 @@ train_parser.add_argument('--max_depth', type=float, help='maximum depth in esti
 train_parser.add_argument('--min_depth', type=float, help='minimum depth in estimation', default=0.1)
 
 # Architecture #
-train_parser.add_argument('--update_block', type=int, help='0 IEBINS, 1 global scale, 2 semantics scale, 3 instance scale (block type)', default='1')
+train_parser.add_argument('--update_block', type=int,
+                          help='0 IEBINS, 1 global scale, 2 semantics scale, 3 instance scale (block type)',
+                          default='1')
 
-# -> Bins # 
+# -> Bins #
 train_parser.add_argument('--max_tree_depth', type=int, help='max GRU iterations (only used in IEBINS)', default='6')
 train_parser.add_argument('--bin_num', type=int, help='number of bins', default='16')
 train_parser.add_argument('--bins_scale', type=int, help='Bins for scale', default='100')
-train_parser.add_argument('--virtual_depth_variation', type=int,
-                          help='0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonica', default='0')
+train_parser.add_argument(
+    '--virtual_depth_variation', type=int, help=
+    '0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonica',
+    default='0')
 
 # -> Uncertainty #
-train_parser.add_argument('--unc_head', dest='unc_head', help='predict uncertainty for scale and canonical using additional heads', action='store_true')
+train_parser.add_argument('--unc_head', dest='unc_head',
+                          help='predict uncertainty for scale and canonical using additional heads',
+                          action='store_true')
 train_parser.add_argument('--d3vo_original', dest='d3vo_original', help='use original d3vo loss with no beta',
                           action='store_true')
 train_parser.add_argument(
@@ -100,11 +104,12 @@ train_parser.add_argument(
     help='0 for torch, 1 for custom bilinear interpolation, 2 custom and weight**2 for uncertainty', default='1')
 
 train_parser.add_argument('--bins_type', type=int, help='0 for uniform, 1 for logarithmic', default='0')
-train_parser.add_argument('--bins_type_scale', type=int, help='0 for uniform, 0 for logarithmic',
-                          default='1')
+train_parser.add_argument('--bins_type_scale', type=int, help='0 for uniform, 0 for logarithmic', default='1')
 # -> Segmentation #
 train_parser.add_argument('--segmentation', dest='segmentation', help='segmentation variation', action='store_true')
-train_parser.add_argument('--concat_masks', dest='concat_masks', help='if enabled, concatenate segmentation mask for canonical/scale prediction', action='store_true')
+train_parser.add_argument('--concat_masks', dest='concat_masks',
+                          help='if enabled, concatenate segmentation mask for canonical/scale prediction',
+                          action='store_true')
 
 # -> Instances #
 train_parser.add_argument('--instances', dest='instances', help='instances variation', action='store_true')
@@ -112,8 +117,7 @@ train_parser.add_argument('--padding_instances', type=int, help='how many pixels
 train_parser.add_argument('--roi_align', dest='roi_align', help='use roi align', action='store_true')
 train_parser.add_argument('--roi_align_size', type=int, help='size of roi align', default='32')
 
-
-# Training hparams # 
+# Training hparams #
 train_parser.add_argument('--train_decoder', type=int, help='how many layers to train from the decoder', default=1)
 train_parser.add_argument('--weight_decay', type=float, help='weight decay factor for optimization', default=1e-2)
 train_parser.add_argument('--loss_type', type=int, help='0 for silog, 1 for l1', default=0)
@@ -126,12 +130,11 @@ train_parser.add_argument('--variance_focus', type=float,
                           help='lambda in paper: [0, 1], higher value more focus on minimizing variance of error',
                           default=0.85)
 
-
-
 ###############
 # Eval parser #
 ###############
-eval_parser = argparse.ArgumentParser(description='Scale-Aware SLAM PyTorch implementation (eval).', fromfile_prefix_chars='@')
+eval_parser = argparse.ArgumentParser(description='Scale-Aware SLAM PyTorch implementation (eval).',
+                                      fromfile_prefix_chars='@')
 eval_parser.convert_arg_line_to_args = convert_arg_line_to_args
 
 # General #
@@ -144,7 +147,7 @@ eval_parser.add_argument('--pretrain', type=str, help='path of pretrained encode
 eval_parser.add_argument('--dataset', type=str, help='dataset to train on, scannet or nyu', default='nyu')
 eval_parser.add_argument('--data_path', type=str, help='path to the data', required=True)
 
-# Preprocessing # 
+# Preprocessing #
 eval_parser.add_argument('--do_random_rotate', help='if set, will perform random rotation for augmentation',
                          action='store_true')
 eval_parser.add_argument('--degree', type=float, help='random rotation maximum degree', default=2.5)
@@ -156,37 +159,42 @@ eval_parser.add_argument('--max_depth', type=float, help='maximum depth in estim
 eval_parser.add_argument('--min_depth', type=float, help='minimum depth in estimation', default=0)
 
 # Architecture #
-eval_parser.add_argument('--update_block', type=int, help='0 IEBINS, 1 global scale, 2 semantics scale, 3 instance scale (block type)', default='1')
+eval_parser.add_argument('--update_block', type=int,
+                         help='0 IEBINS, 1 global scale, 2 semantics scale, 3 instance scale (block type)', default='1')
 
-# -> Bins # 
+# -> Bins #
 eval_parser.add_argument('--max_tree_depth', type=int, help='max GRU iterations (only used in IEBINS)', default='6')
 eval_parser.add_argument('--bin_num', type=int, help='number of bins', default='16')
 eval_parser.add_argument('--bins_scale', type=int, help='Bins for scale', default='100')
-eval_parser.add_argument('--virtual_depth_variation', type=int,
-                          help='0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonica', default='0')
+eval_parser.add_argument(
+    '--virtual_depth_variation', type=int, help=
+    '0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonica',
+    default='0')
 
 # -> Uncertainty #
 eval_parser.add_argument('--eval_unc', dest='eval_unc', help='evaluate uncertainty', action='store_true')
-eval_parser.add_argument('--unc_head', dest='unc_head', help='predict uncertainty for scale and canonical using additional heads', action='store_true')
+eval_parser.add_argument('--unc_head', dest='unc_head',
+                         help='predict uncertainty for scale and canonical using additional heads', action='store_true')
 eval_parser.add_argument('--d3vo_original', dest='d3vo_original', help='use original d3vo loss with no beta',
-                          action='store_true')
+                         action='store_true')
 eval_parser.add_argument(
     '--upsample_type', type=int,
     help='0 for torch, 1 for custom bilinear interpolation, 2 custom and weight**2 for uncertainty', default='1')
 
 eval_parser.add_argument('--bins_type', type=int, help='0 for IEBINS, 1 for uniform, 2 for logarithmic', default='1')
 eval_parser.add_argument('--bins_type_scale', type=int, help='0 for IEBINS, 1 for uniform, 2 for logarithmic',
-                          default='1')
+                         default='1')
 # -> Segmentation #
 eval_parser.add_argument('--segmentation', dest='segmentation', help='segmentation variation', action='store_true')
-eval_parser.add_argument('--concat_masks', dest='concat_masks', help='if enabled, concatenate segmentation mask for canonical/scale prediction', action='store_true')
+eval_parser.add_argument('--concat_masks', dest='concat_masks',
+                         help='if enabled, concatenate segmentation mask for canonical/scale prediction',
+                         action='store_true')
 
 # -> Instances #
 eval_parser.add_argument('--instances', dest='instances', help='instances variation', action='store_true')
 eval_parser.add_argument('--padding_instances', type=int, help='how many pixels to pad the bbox', default='0')
 eval_parser.add_argument('--roi_align', dest='roi_align', help='use roi align', action='store_true')
 eval_parser.add_argument('--roi_align_size', type=int, help='size of roi align', default='32')
-
 
 # Eval settings #
 eval_parser.add_argument('--log_directory', type=str, help='directory to save checkpoints and summaries', default='.')
@@ -201,7 +209,7 @@ eval_parser.add_argument('--max_depth_eval', type=float, help='maximum depth for
 eval_parser.add_argument('--eigen_crop', help='if set, crops according to Eigen NIPS14', action='store_true')
 eval_parser.add_argument('--pick_class', type=int, help='evaluate single class for debug', default=0)
 
-# Eval hparams # 
+# Eval hparams #
 eval_parser.add_argument('--loss_type', type=int, help='0 for silog, 1 for l1', default=0)
 
 ###############
@@ -227,37 +235,43 @@ test_parser.add_argument('--max_depth', type=float, help='maximum depth in estim
 test_parser.add_argument('--min_depth', type=float, help='minimum depth in estimation', default=0)
 
 # Architecture #
-test_parser.add_argument('--update_block', type=int, help='0 IEBINS, 1 global scale, 2 semantics scale, 3 instance scale (block type)', default='1')
+test_parser.add_argument('--update_block', type=int,
+                         help='0 IEBINS, 1 global scale, 2 semantics scale, 3 instance scale (block type)', default='1')
 
-# -> Bins # 
+# -> Bins #
 test_parser.add_argument('--max_tree_depth', type=int, help='max GRU iterations (only used in IEBINS)', default='6')
 test_parser.add_argument('--bin_num', type=int, help='number of bins', default='16')
 test_parser.add_argument('--bins_scale', type=int, help='Bins for scale', default='100')
-test_parser.add_argument('--virtual_depth_variation', type=int,
-                          help='0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonica', default='0')
+test_parser.add_argument(
+    '--virtual_depth_variation', type=int, help=
+    '0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonica',
+    default='0')
 
 # -> Uncertainty #
-test_parser.add_argument('--predict_unc', dest='predict_unc', help='predict uncertainty and estimate loss', action='store_true')
-test_parser.add_argument('--unc_head', dest='unc_head', help='predict uncertainty for scale and canonical using additional heads', action='store_true')
+test_parser.add_argument('--predict_unc', dest='predict_unc', help='predict uncertainty and estimate loss',
+                         action='store_true')
+test_parser.add_argument('--unc_head', dest='unc_head',
+                         help='predict uncertainty for scale and canonical using additional heads', action='store_true')
 test_parser.add_argument('--d3vo_original', dest='d3vo_original', help='use original d3vo loss with no beta',
-                          action='store_true')
+                         action='store_true')
 test_parser.add_argument(
     '--upsample_type', type=int,
     help='0 for torch, 1 for custom bilinear interpolation, 2 custom and weight**2 for uncertainty', default='1')
 
 test_parser.add_argument('--bins_type', type=int, help='0 for IEBINS, 1 for uniform, 2 for logarithmic', default='1')
 test_parser.add_argument('--bins_type_scale', type=int, help='0 for IEBINS, 1 for uniform, 2 for logarithmic',
-                          default='1')
+                         default='1')
 # -> Segmentation #
 test_parser.add_argument('--segmentation', dest='segmentation', help='segmentation variation', action='store_true')
-test_parser.add_argument('--concat_masks', dest='concat_masks', help='if enabled, concatenate segmentation mask for canonical/scale prediction', action='store_true')
+test_parser.add_argument('--concat_masks', dest='concat_masks',
+                         help='if enabled, concatenate segmentation mask for canonical/scale prediction',
+                         action='store_true')
 
 # -> Instances #
 test_parser.add_argument('--instances', dest='instances', help='instances variation', action='store_true')
 test_parser.add_argument('--padding_instances', type=int, help='how many pixels to pad the bbox', default='0')
 test_parser.add_argument('--roi_align', dest='roi_align', help='use roi align', action='store_true')
 test_parser.add_argument('--roi_align_size', type=int, help='size of roi align', default='32')
-
 
 # Test settings #
 test_parser.add_argument('--save_dir', type=str, help='path to save predicted data', required=True)
@@ -268,5 +282,5 @@ test_parser.add_argument('--filenames_file_eval', type=str, help='path to the fi
 test_parser.add_argument('--min_depth_test', type=float, help='minimum depth for evaluation', default=1e-3)
 test_parser.add_argument('--max_depth_test', type=float, help='maximum depth for evaluation', default=80)
 
-# Testing hparams # 
+# Testing hparams #
 test_parser.add_argument('--loss_type', type=int, help='0 for silog, 1 for l1', default=0)

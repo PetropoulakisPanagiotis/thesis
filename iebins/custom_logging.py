@@ -54,8 +54,7 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
                     colormap(
                         torch.sum(uncertainty_maps_list[ii][i, :, :, :] * instances[i, :, :, :],
                                   dim=0).unsqueeze(0).data), global_step)
-                t = torch.sum(uncertainty_maps_list[ii][i, :, :, :] * instances[i, :, :, :],
-                                  dim=0)
+            
             # Expensive visualization
             if expensive_viz:
                 max_viz_instances = 5
@@ -127,7 +126,7 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
                                           colormap(torch.log10((pred_depths_rc_list[ii][i, j, :, :] * segmentation_map[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), \
                                           name='magma'), global_step)
 
-    else: # Single
+    else:  # Single
         for i in range(num_images):
 
             writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
@@ -152,8 +151,7 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
                                  name='magma'), global_step)
 
                 writer.add_image('uncer_bins_est{}/image/{}'.format(ii, i),
-                                 colormap(uncertainty_maps_list[ii][i, :, :, :].clamp(min=1e-3).data),
-                                 global_step)
+                                 colormap(uncertainty_maps_list[ii][i, :, :, :].clamp(min=1e-3).data), global_step)
 
 
 def tb_visualization_d3vo(writer, global_step, args, current_loss_d3vo, current_lr, var_sum, var_cnt, num_images,

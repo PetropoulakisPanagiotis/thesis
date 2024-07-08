@@ -22,7 +22,6 @@ class ProjectionInputDepth(nn.Module):
         d = F.relu(self.convd2(d))
         d = F.relu(self.convd3(d))
         d = F.relu(self.convd4(d))
-
         return d
 
 
@@ -60,35 +59,35 @@ class ProjectionV2(nn.Module):
 
 
 def bilinear_weights(height, width, scale_factor, device):
-    grid_y, grid_x = torch.meshgrid(
-        torch.arange(0, height * scale_factor) / scale_factor,
-        torch.arange(0, width * scale_factor) / scale_factor)
-    grid_x = grid_x.to(device)
-    grid_y = grid_y.to(device)
+    with torch.no_grad():
+        grid_y, grid_x = torch.meshgrid(torch.arange(0, height * scale_factor) / scale_factor, \
+                                        torch.arange(0, width * scale_factor) / scale_factor)
+        grid_x = grid_x.to(device)
+        grid_y = grid_y.to(device)
 
-    x1 = torch.floor(grid_x).long()
-    y1 = torch.floor(grid_y).long()
-    x2 = torch.ceil(grid_x).long()
-    y2 = torch.ceil(grid_y).long()
+        x1 = torch.floor(grid_x).long()
+        y1 = torch.floor(grid_y).long()
+        x2 = torch.ceil(grid_x).long()
+        y2 = torch.ceil(grid_y).long()
 
-    x1 = torch.clamp(x1, 0, width - 2)
-    y1 = torch.clamp(y1, 0, height - 2)
-    x2 = torch.clamp(x2, 1, width - 1)
-    y2 = torch.clamp(y2, 1, height - 1)
+        x1 = torch.clamp(x1, 0, width - 2)
+        y1 = torch.clamp(y1, 0, height - 2)
+        x2 = torch.clamp(x2, 1, width - 1)
+        y2 = torch.clamp(y2, 1, height - 1)
 
-    # Compute the distances
-    dx = grid_x - x1.float()
-    dy = grid_y - y1.float()
+        # Compute the distances
+        dx = grid_x - x1.float()
+        dy = grid_y - y1.float()
 
-    # Compute the complementary distances
-    dx1 = 1 - dx
-    dy1 = 1 - dy
+        # Compute the complementary distances
+        dx1 = 1 - dx
+        dy1 = 1 - dy
 
-    # Compute the weights
-    w00 = dx1 * dy1
-    w01 = dx * dy1
-    w10 = dx1 * dy
-    w11 = dx * dy
+        # Compute the weights
+        w00 = dx1 * dy1
+        w01 = dx * dy1
+        w10 = dx1 * dy
+        w11 = dx * dy
 
     return w00, w01, w10, w11, x1, y1, x2, y2
 
@@ -110,7 +109,7 @@ def upsample_custom(x, scale_factor=2, uncertainty=False):
 
 
 """
-Upsample input tensor by a factor of 2
+Upsample input tensor
 """
 
 
@@ -121,16 +120,18 @@ def upsample(x, scale_factor=2, mode="bilinear", align_corners=False, upsample_t
     elif upsample_type == 1:
         return upsample_custom(x, scale_factor, False)
     else:
-        if uncertainty:
-            return upsample_custom(x, scale_factor, True)
-        else:
-            return upsample_custom(x, scale_factor, False)
+        return upsample_custom(x, scale_factor, True) if uncertainty else upsample_custom(x, scale_factor, False)
+
+
+"""
+sid: use log space Fu et. al. 2018 
+"""
 
 
 def get_uniform_bins(feature_map, min_depth=0, max_depth=0, bin_num=5, sid=True):
     with torch.no_grad():
         b, _, h, w = feature_map.shape
-        if sid:  # Logarithmic scale
+        if sid:
             xi = torch.tensor(1 - min_depth).to(feature_map.device)
             beta_star = max_depth + xi
 
@@ -148,7 +149,7 @@ def get_uniform_bins(feature_map, min_depth=0, max_depth=0, bin_num=5, sid=True)
             bin_edges = torch.cumsum(interval, 1).clamp(min_depth, max_depth)
             bins = 0.5 * (bin_edges[:, :-1] + bin_edges[:, 1:])
 
-    return bins, bin_edges
+    return bins.detach(), bin_edges.detach()
 
 
 def get_iebins(feature_map, min_depth=0, max_depth=0, bin_num=5):
@@ -164,6 +165,11 @@ def get_iebins(feature_map, min_depth=0, max_depth=0, bin_num=5):
         bins = 0.5 * (bin_edges[:, :-1] + bin_edges[:, 1:])
 
     return bins, bin_edges
+
+
+"""
+Update bin canditates based on the target bin and predicted variance
+"""
 
 
 def update_bins(bin_edges, target_bin_left, target_bin_right, depth_r, pred_label, bin_num, min_depth, max_depth,
@@ -212,6 +218,11 @@ def normalize_box(box, height=480, width=640):
     with torch.no_grad():
         return torch.stack(((box[:, 0] / width).float(), (box[:, 1] / height).float(), (box[:, 2] / width).float(),
                             (box[:, 3] / height).float()), dim=1)
+
+
+"""
+h, w should be divisible by downsampling
+"""
 
 
 def project_box_to_feature_map(box, downsampling, height=480, width=640, padding=0):
@@ -282,11 +293,16 @@ def get_valid_num_instances_per_batch(boxes, labels):
 Boxes operations end
 """
 """
-Select features operations start
+Maskout feature that do not belong to the given box
+This is done for every instance
 """
 
 
 def roi_select_features(feature_map, boxes, labels, downsampling=4, padding=0):
+    """
+        feature_map: [batch_size, c, h, w]
+        masked_feature_map: [num_valid_instances, c, h, w]
+    """
     with torch.no_grad():
         height, width = feature_map.shape[2:]
 
@@ -315,7 +331,7 @@ def roi_select_features(feature_map, boxes, labels, downsampling=4, padding=0):
             feature_map[i, :, :, :].unsqueeze(0).repeat(times, 1, 1, 1) for i, times in enumerate(instances_per_batch)
         ], dim=0) * masks
 
-        if False:
+        if False:  # Debug viz
             for i in range(masked_feature_map.shape[0]):
                 x = upsample(masked_feature_map[i, :, :, :].unsqueeze(1), 4)
                 x = x[i, 0, :, :].unsqueeze(0).permute(1, 2, 0)
@@ -327,42 +343,30 @@ def roi_select_features(feature_map, boxes, labels, downsampling=4, padding=0):
 
         return masked_feature_map
 
-"""
-Select features operations end
-"""
-"""
-Select out operations start
-"""
-
 
 """
-Only scale
+In: [num_valid_instances, num_classes]
+Out: [batch_size, max_instances]
 """
 
 
 def mask_predictions_to_true_class(prediction_estimate, labels):
-
-    batch_size, labels_max_size = labels.shape[0:2]
-
+    # Get valid labels #
     with torch.no_grad():
+        batch_size, labels_max_size = labels.shape[0:2]
         labels_reshaped = labels.view(batch_size * labels_max_size)
         labels_valid_idx = torch.nonzero(labels_reshaped != -1)
-        labels_valid_num = labels_valid_idx.shape[0]
 
+        labels_valid_num = labels_valid_idx.shape[0]
         labels_valid = labels_reshaped[labels_valid_idx[:, 0]]
 
-    # Pick scale/shift that corresponds to the correct class #
+    # Pick prediction that corresponds to the correct class #
     prediction_estimate = prediction_estimate[torch.arange(labels_valid_num), labels_valid].unsqueeze(-1)
 
-    prediction_estimate_full = torch.zeros((batch_size * labels_max_size, 1)).to(prediction_estimate.device).clamp(min=1e-3)
-
+    # For empty instances fill with zero #
+    prediction_estimate_full = torch.zeros(
+        (batch_size * labels_max_size, 1)).to(prediction_estimate.device).clamp(min=1e-3)
     prediction_estimate_full[labels_valid_idx[:, 0]] = prediction_estimate
-
     prediction_estimate_full = prediction_estimate_full.view(batch_size, labels_max_size)
 
     return prediction_estimate_full
-
-
-"""
-Select out operations end
-"""

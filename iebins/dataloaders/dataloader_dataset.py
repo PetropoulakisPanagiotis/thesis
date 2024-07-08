@@ -2,16 +2,17 @@ import os
 import json
 import random
 
+import copy
+
 import cv2
 import numpy as np
-from scipy.spatial.transform import Rotation
 from PIL import Image
 
 import torch
 from torchvision import transforms
 from torch.utils.data import Dataset
 
-from utils import _is_pil_image, _is_numpy_image, custom_cmap_instances
+from utils import _is_pil_image, _is_numpy_image
 
 
 class DatasetPreprocess(Dataset):
@@ -116,7 +117,7 @@ class DatasetPreprocess(Dataset):
                 image, depth_gt = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width)
 
             # General augmentations
-            if self.args.dataset != 'nyu' or self.args.segmentation == False:
+            if self.args.dataset != 'nyu' or not self.args.segmentation:
                 image, depth_gt = self.train_preprocess(image, depth_gt, self.args)
             else:
                 image, depth_gt = self.train_preprocess(image, depth_gt, self.args, segmentation_map)

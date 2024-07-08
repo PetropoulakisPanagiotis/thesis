@@ -1,6 +1,5 @@
 import json
 
-from PIL import Image
 from scipy.io import loadmat
 import numpy as np
 

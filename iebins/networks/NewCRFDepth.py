@@ -20,9 +20,9 @@ class NewCRFDepth(nn.Module):
                     unc_head=False, virtual_depth_variation=0, upsample_type=0, bins_type=1, \
                     bin_num=16, bins_scale=50, bins_type_scale=1, **kwargs):
         super().__init__()
-       
+
         self.freeze_backbone = True
-        self.train_decoder = train_decoder # train the last layer of the decoder
+        self.train_decoder = train_decoder  # train the last layer of the decoder
 
         # IEBINS, global, per class or per instance scale #
         self.update_block = update_block
@@ -35,12 +35,12 @@ class NewCRFDepth(nn.Module):
         # regression scale/canonical #
         ##############################
         self.virtual_depth_variation = virtual_depth_variation
-        
+
         self.max_tree_depth = max_tree_depth
         self.bin_num = bin_num
         self.bins_type = bins_type
         self.min_depth = min_depth
-        self.max_depth = max_depth # metric or canonical 
+        self.max_depth = max_depth  # metric or canonical
         self.bins_scale = bins_scale
         self.bins_type_scale = bins_type_scale
 
@@ -48,7 +48,7 @@ class NewCRFDepth(nn.Module):
         self.num_semantic_classes = num_semantic_classes
         self.segmentation_active = segmentation_active
         self.concat_masks = concat_masks
-        
+
         # Instances #
         self.instances_active = instances_active
         self.num_instances = num_instances
@@ -56,18 +56,18 @@ class NewCRFDepth(nn.Module):
         self.roi_align = roi_align
         self.roi_align_size = roi_align_size
 
-        self.unc_head = unc_head # Uncertainty prediction via additional heads
-        
+        self.unc_head = unc_head  # Uncertainty prediction via additional heads
+
         #############################################################
         # 0: Torch, 1: custom bilinear                              #
         # 2: for uncertainty weights^2 --> see Rosinol et. al. 2023 #
         #############################################################
         self.upsample_type = upsample_type
         self.loss_type = loss_type
-        
+
         # Print some info to console #
         self.network_info_print()
-        
+
         # Backbone dims #
         if version[:-2] == 'base':
             embed_dim = 128
@@ -91,7 +91,7 @@ class NewCRFDepth(nn.Module):
         ##############################################
         # Set update block for depth prediction head #
         ##############################################
-        
+
         ##########
         # IEBINS #
         ##########
@@ -101,7 +101,7 @@ class NewCRFDepth(nn.Module):
             print("[VARIATION IEBINS]")
 
         ################
-        # Global scale #   
+        # Global scale #
         ################
         elif self.update_block == 1:
             self.update = GlobalScale(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, bins_scale=bins_scale, \
@@ -115,7 +115,7 @@ class NewCRFDepth(nn.Module):
         elif self.update_block == 2:
             self.update = PerClassScale(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, \
                                                                    loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, bins_scale=bins_scale, \
-                                                                   virtual_depth_variation=self.virtual_depth_variation, upsample_type=self.upsample_type, bins_type=self.bins_type, 
+                                                                   virtual_depth_variation=self.virtual_depth_variation, upsample_type=self.upsample_type, bins_type=self.bins_type,
                                                                    bins_type_scale=self.bins_type_scale, concat_masks=self.concat_masks)
             print("[VARIATION PerClassScale]")
 
@@ -172,7 +172,7 @@ class NewCRFDepth(nn.Module):
                 num_predictions_unc = self.num_instances
             elif self.segmentation_active:
                 num_predictions_unc = self.num_semantic_classes
-            else: # Global scale 
+            else:  # Global scale
                 num_predictions_unc = 1
 
             self.unc_head_s = UncertaintyScaleHead(input_dim=crf_dims[0], num_predictions=num_predictions_unc)
@@ -195,9 +195,9 @@ class NewCRFDepth(nn.Module):
             if self.train_decoder == 0 or self.unc_head:
                 for param in self.crf1.parameters():
                     param.requires_grad = False
-            else: # Do not freeze the last decoder layer
+            else:  # Do not freeze the last decoder layer
                 print("[Train last layer of decoder (crf1)]")
-        
+
             # Freeze complete network from uncertainties #
             if self.unc_head:
                 for param in self.project.parameters():
@@ -207,26 +207,25 @@ class NewCRFDepth(nn.Module):
 
     def network_info_print(self):
         if self.loss_type == 0:
-            print("Using silog loss") 
+            print("Using silog loss")
         else:
-            print("Using l1 loss") 
-    
+            print("Using l1 loss")
+
         if self.update_block == 0:
             if self.loss_type != 0:
                 raise ValueError("IEBINS can only be used with silog loss")
-            if self.bin_num != 16: 
+            if self.bin_num != 16:
                 raise ValueError("IEBINS can only be used with 16 bins")
-    
+
         if self.upsample_type == 1:
             print("Uncertainty upsampling type: vanilla")
-        else:        
+        else:
             print("Uncertainty upsampling type: Rosinol et. al. 2023")
 
         if self.update_block != 0:
             print("Number of bins (canonical): ", self.bin_num)
             print("Number of bins (scale): ", self.bins_scale)
 
-    
     def set_to_eval_unc(self):
         """
             Set some layers to eval mode while training the uncertainty heads
@@ -253,11 +252,12 @@ class NewCRFDepth(nn.Module):
 
     def forward(self, imgs, masks=None, instances=None, boxes=None, labels=None):
 
-        if self.segmentation_active and masks == None:
+        if self.segmentation_active and masks is None:
             print("Model mode == Segmentation. Please provide segmentation masks")
             exit()
 
-        if self.instances_active and (not self.segmentation_active or instances == None or boxes == None or labels == None):
+        if self.instances_active and (not self.segmentation_active or instances is None or boxes is None
+                                      or labels is None):
             print("Model mode == Instances. Please provide instance masks")
             exit()
 
@@ -274,7 +274,7 @@ class NewCRFDepth(nn.Module):
         e1 = nn.PixelShuffle(2)(e1)
         e0 = self.project(e1)  # To hidden_dim
 
-        # Uncertainty predictions using additional heads 
+        # Uncertainty predictions using additional heads
         if self.unc_head:
             unc_s = self.unc_head_s(e0)
             unc_c = self.unc_head_c(e0)
@@ -284,26 +284,27 @@ class NewCRFDepth(nn.Module):
 
         # Ealry feature map - backbone #
         context = feats[0]
-        
+
         # From crf #
         input_feature_map = torch.tanh(e0)
 
         #################################################
         # Pass to update_block to predict the depth map #
         #################################################
-        result = {} # result dict
-        
+        result = {}  # result dict
+
         # Per-Instance or Per-Class #
         if self.segmentation_active or self.instances_active:
 
-            masks = upsample(masks, scale_factor=1/4) # Downsample masks to feature map dim
+            masks = upsample(masks, scale_factor=1 / 4)  # Downsample masks to feature map dim
             if self.instances_active:
-                instances = upsample(instances, scale_factor=1/4)
+                instances = upsample(instances, scale_factor=1 / 4)
                 result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, self.max_depth, \
                                      masks, instances, boxes, labels)
             else:
-                result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, self.max_depth, masks)
-        else: # Global or IEBINS
+                result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, self.max_depth,
+                                     masks)
+        else:  # Global or IEBINS
             result = self.update(depth, context, input_feature_map, self.bin_num, self.min_depth, \
                                  self.max_depth, max_tree_depth=self.max_tree_depth)
 
@@ -318,12 +319,12 @@ class NewCRFDepth(nn.Module):
 """
 Uncertainty heads 
 """
-
-
 """
 In: typically 128x120x160
 Out: 1xnum_scales
 """
+
+
 class UncertaintyScaleHead(nn.Module):
     def __init__(self, input_dim=128, num_predictions=1):
         super(UncertaintyScaleHead, self).__init__()
@@ -337,9 +338,12 @@ class UncertaintyScaleHead(nn.Module):
         x = F.relu(self.fc1(x)).clamp(min=1e-4)
         return x
 
+
 """
 Out: hxw
 """
+
+
 class UncertaintyHead(nn.Module):
     def __init__(self, input_dim=128):
         super(UncertaintyHead, self).__init__()

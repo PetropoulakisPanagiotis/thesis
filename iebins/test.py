@@ -125,13 +125,15 @@ def predict(model, dataloader_eval) -> None:
             # Uncertainty canonical and scale #
             if args.unc_head:
                 canonical_unc = result["unc_c"][-1]
-                scale_unc = result["unc_s"][-1]  
+                scale_unc = result["unc_s"][-1]
             elif args.virtual_depth_variation == 0:
-                canonical_unc = result["uncertainty_maps_list"][-1]**2 # to variance
-                scale_unc = result["uncertainty_maps_scale_list"][-1]**2 # to variance
+                canonical_unc = result["uncertainty_maps_list"][-1]**2  # to variance
+                scale_unc = result["uncertainty_maps_scale_list"][-1]**2  # to variance
             else:
-                raise ValueError("Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n")
-            
+                raise ValueError(
+                    "Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n"
+                )
+
             scale_unc = scale_unc.view(num_instances).cpu().numpy().tolist()
             scale_data['scale_uncertainty'] = scale_unc
 
@@ -167,12 +169,14 @@ def predict(model, dataloader_eval) -> None:
             # Uncertainty canonical and scale #
             if args.unc_head:
                 canonical_unc = result["unc_c"][-1]
-                scale_unc = result["unc_s"][-1]  
+                scale_unc = result["unc_s"][-1]
             elif args.virtual_depth_variation == 0:
-                canonical_unc = result["uncertainty_maps_list"][-1]**2 # to variance
-                scale_unc = result["uncertainty_maps_scale_list"][-1]**2 # to variance
+                canonical_unc = result["uncertainty_maps_list"][-1]**2  # to variance
+                scale_unc = result["uncertainty_maps_scale_list"][-1]**2  # to variance
             else:
-                raise ValueError("Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n")
+                raise ValueError(
+                    "Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n"
+                )
             scale_unc = scale_unc.view(num_semantic_classes).cpu().numpy().tolist()
             scale_data['scale_uncertainty'] = scale_unc
 
@@ -200,17 +204,19 @@ def predict(model, dataloader_eval) -> None:
             # Uncertainty canonical and scale #
             if args.unc_head:
                 canonical_unc = result["unc_c"][-1]
-                scale_unc = result["unc_s"][-1]   
+                scale_unc = result["unc_s"][-1]
             elif args.virtual_depth_variation == 0:
-                canonical_unc = result["uncertainty_maps_list"][-1]**2 # to variance
-                scale_unc = result["uncertainty_maps_scale_list"][-1]**2 # to variance
+                canonical_unc = result["uncertainty_maps_list"][-1]**2  # to variance
+                scale_unc = result["uncertainty_maps_scale_list"][-1]**2  # to variance
             else:
-                raise ValueError("Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n")
+                raise ValueError(
+                    "Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n"
+                )
             scale_unc = scale_unc.squeeze(0).cpu().numpy().tolist()
             scale_data["scale_uncertainty"] = scale_unc
 
             canonical_unc = canonical_unc.cpu().numpy()
-            
+
             np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
 
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:

@@ -212,12 +212,13 @@ def compute_errors(gt, pred, var=None):
 def compute_canonical_errors(gt, pred):
     rms = (gt - pred)**2
     rms = np.sqrt(rms.mean())
-    
+
     abs_rel = np.mean(np.abs(gt - pred) / gt)
-    
+
     sq_rel = np.mean(((gt - pred)**2) / gt)
 
     return [rms, abs_rel, sq_rel]
+
 
 def compute_error_uncertainty(depth_est, depth_gt, unc, beta=0.5, original=False):
     if original:
@@ -264,8 +265,7 @@ class d3vo_loss(nn.Module):
 
 # Variance decomposition: get variance of metric depth from canonical and scale #
 def sigma_metric_from_canonical_and_scale(depth_c, unc_c, scale, unc_scale, args):
-    sigma_metric = F.relu(depth_c**2 * unc_scale +
-                          scale**2 * unc_c).clamp(min=1e-4)
+    sigma_metric = F.relu(depth_c**2 * unc_scale + scale**2 * unc_c).clamp(min=1e-4)
     return sigma_metric
 
 

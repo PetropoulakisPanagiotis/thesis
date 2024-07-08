@@ -194,15 +194,18 @@ def main_worker(gpu, ngpus_per_node, args):
 
             # Unpack result #
             pred_depths_r_list = result["pred_depths_r_list"]
-            pred_scale_list = result["pred_scale_list"]
-            if args.update_block != 0:
-                pred_depths_rc_list = result["pred_depths_rc_list"]
+            pred_depths_c_list = result["pred_depths_c_list"]
 
             # Uncertainty bins #
-            pred_depths_c_list = result["pred_depths_c_list"]
             uncertainty_maps_list = result["uncertainty_maps_list"]
 
-            if args.unc_head:  # scale unc
+            # Get scale and canonical #
+            if args.update_block != 0:
+                pred_scale_list = result["pred_scale_list"]
+                pred_depths_rc_list = result["pred_depths_rc_list"]
+
+            # Get uncertainties from extra heads
+            if args.unc_head:
                 unc_c = result["unc_c"][-1]
                 unc_s = result["unc_s"][-1]
 
@@ -213,9 +216,9 @@ def main_worker(gpu, ngpus_per_node, args):
 
             # Train only uncertainty decoder, most of the weights are frozen #
             if args.unc_head:
-                sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1],
-                                                                     unc_c,
-                                                                     pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1), unc_s.unsqueeze(-1).unsqueeze(-1), args)
+                sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1], unc_c,
+                                                                     pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1),
+                                                                     unc_s.unsqueeze(-1).unsqueeze(-1), args)
                 if args.instances:
                     sigma_metric = torch.sum(sigma_metric * instances, dim=1).unsqueeze(1)
                     pred_d = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(1)
@@ -232,8 +235,7 @@ def main_worker(gpu, ngpus_per_node, args):
             else:  # Depth loss #
                 for curr_tree_depth in range(args.max_tree_depth):
                     if args.instances:
-                        pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * instances),
-                                           dim=1).unsqueeze(1)
+                        pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
                     elif args.segmentation:
                         pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * segmentation_map), dim=1).unsqueeze(1)
                     else:
@@ -385,15 +387,16 @@ def main_worker(gpu, ngpus_per_node, args):
                             torch.save(checkpoint, args.log_directory + '/' + args.model_name + model_save_name)
 
                     eval_summary_writer.flush()
-                    
+
                     print("Best evals at global step: " + str(global_step))
-                    best_evals_list = best_eval_measures_lower_better.cpu().numpy().tolist() + best_eval_measures_higher_better.cpu().numpy().tolist()
+                    best_evals_list = best_eval_measures_lower_better.cpu().numpy().tolist(
+                    ) + best_eval_measures_higher_better.cpu().numpy().tolist()
                     print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format(
-                           'silog', 'abs_rel', 'log10', 'rms', 'sq_rel', 'log_rms', 'd1', 'd2', 'd3'))
+                        'silog', 'abs_rel', 'log10', 'rms', 'sq_rel', 'log_rms', 'd1', 'd2', 'd3'))
                     for i in range(8):
                         print('{:7.4f}, '.format(best_evals_list[i]), end='')
                     print('{:7.4f}'.format(best_evals_list[-1]))
-                    
+
                     if args.unc_head:
                         print("Best eval for uncertainty decoder: " + str(best_unc))
 

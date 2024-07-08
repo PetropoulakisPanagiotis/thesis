@@ -57,17 +57,17 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
             pred_depth = pred_depth.cpu().numpy().squeeze()
 
             if args.unc_head:
-                sigma_metric = sigma_metric_from_canonical_and_scale(result["pred_depths_rc_list"][-1],
-                                                                     result["unc_c"][-1],
-                                                                     result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1),
-                                                                     result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)   
+                sigma_metric = sigma_metric_from_canonical_and_scale(
+                    result["pred_depths_rc_list"][-1], result["unc_c"][-1],
+                    result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1),
+                    result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
                 if args.instances:
                     sigma_metric = torch.sum((sigma_metric * instances), dim=1).squeeze(0).cpu().numpy()
                 elif args.segmentation:
                     sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).squeeze(0).cpu().numpy()
                 else:
                     sigma_metric = sigma_metric.squeeze(0).squeeze(0).cpu().numpy()
-            
+
             gt_depth = gt_depth.cpu().numpy().squeeze()
 
             # Filter predicted depth #
