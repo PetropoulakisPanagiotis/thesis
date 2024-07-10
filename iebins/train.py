@@ -1,28 +1,24 @@
-import os, sys, time, gc
-from datetime import datetime
-from telnetlib import IP
+import os
+import sys
+import time
+import gc
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import torch
-import torch.nn as nn
-import torch.nn.utils as utils
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from tensorboardX import SummaryWriter
 
-import argparse
-import random
 import numpy as np
-import cv2
 
 from dataloaders.dataloader import DataLoaderCustom
 from networks.NewCRFDepth import NewCRFDepth
 from parser_options import train_parser
 from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
 from online_eval import online_eval
-from utils import silog_loss, l1_loss, d3vo_loss, compute_errors, \
+from utils import silog_loss, l1_loss, d3vo_loss, \
                     eval_metrics, block_print, enable_print, load_checkpoint_skip_update_project, load_checkpoint, \
                     set_hparams_dict, sigma_metric_from_canonical_and_scale
 
@@ -162,6 +158,7 @@ def main_worker(gpu, ngpus_per_node, args):
         pred_depths_u_list = [], [], [], [], []
     
     segmentation_map, instances, labels, unc_decoder = None, None, None, None
+    model_just_loaded = True
 
     while epoch < args.num_epochs:
         if args.distributed: # Do proper shuffling
@@ -173,7 +170,6 @@ def main_worker(gpu, ngpus_per_node, args):
             before_op_time = time.time()
             current_loss_depth = 0
             current_loss_unc_decoder = 0
-            current_loss_d3vo = 0
 
             image = torch.autograd.Variable(sample_batched['image'].cuda(args.gpu, non_blocking=True))
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
@@ -235,7 +231,8 @@ def main_worker(gpu, ngpus_per_node, args):
                 else:
                     pred_d = pred_depths_r_list[-1]
 
-                loss = d3vo_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))
+                loss = d3vo_criterion.forward(pred_d[0], depth_gt[0], sigma_metric[0], mask.to(torch.bool)[0])
+
             # Network is trained to optimize depth #
             else:
                 for curr_tree_depth in range(args.max_tree_depth):

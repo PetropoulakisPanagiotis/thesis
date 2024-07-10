@@ -226,12 +226,27 @@ def compute_canonical_errors(gt, pred):
     return [rms, abs_rel, sq_rel]
 
 
-def compute_error_uncertainty(depth_est, depth_gt, unc, beta=0.5, original=False):
-    if original:
+def compute_error_uncertainty(depth_est, depth_gt, unc, beta=0.5, original_d3vo=False):
+    if original_d3vo:
         unc_error = np.mean((((np.abs(depth_est - depth_gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))))
     else:
         unc_error = np.mean((((np.abs(depth_est - depth_gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))) * (unc**beta))
     return unc_error
+
+
+class d3vo_loss(nn.Module):
+    def __init__(self, beta=0.5, original=False):
+        super(d3vo_loss, self).__init__()
+        self.beta = beta
+        self.original = original
+
+    def forward(self, depth_est, depth_gt, unc, mask):
+        if self.original:
+            return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) +
+                               (math.log(2 * math.pi))))
+        else: # Seitzer et. al. 2022
+            return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) +
+                               (math.log(2 * math.pi))) * (unc[mask].detach()**self.beta))
 
 
 class silog_loss(nn.Module):
@@ -251,21 +266,6 @@ class l1_loss(nn.Module):
 
     def forward(self, depth_est, depth_gt, mask):
         return torch.mean(torch.abs(depth_est[mask] - depth_gt[mask]))
-
-
-class d3vo_loss(nn.Module):
-    def __init__(self, beta=0.5, original=False):
-        super(d3vo_loss, self).__init__()
-        self.beta = beta
-        self.original = original
-
-    def forward(self, depth_est, depth_gt, unc, mask):
-        if self.original:
-            return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) +
-                               (math.log(2 * math.pi))))
-        else: # Seitzer et. al. 2022
-            return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) +
-                               (math.log(2 * math.pi))) * (unc[mask].detach()**self.beta))
 
 
 # Variance decomposition: get variance of metric depth from canonical and scale #

@@ -95,7 +95,7 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
             eval_measures[measures_size - 1] += 1
             if args.unc_head:
                 eval_d3vo_numpy = compute_error_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask],
-                                                            sigma_metric[valid_mask], original_d3vo)
+                                                            sigma_metric[valid_mask], original_d3vo=original_d3vo)
                 eval_d3vo += torch.tensor(eval_d3vo_numpy).cuda(device=gpu)
 
         # Gather measures from other nodes/gpus #

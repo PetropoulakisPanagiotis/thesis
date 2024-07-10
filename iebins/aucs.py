@@ -119,6 +119,7 @@ def compute_aucs(gt, pred, uncert, intervals=50):
 
         # gain: subtract from random sparsification (first term) the method sparsification (second term)
         AURG[m] = rnd_curve[m][0] - np.trapz(sparse_curve[m], x=plotx)
+    
     # returns a dictionary with AUSE and AURG for each metric
     return {m: [AUSE[m], AURG[m]] for m in uncertainty_metrics}
 
@@ -132,13 +133,10 @@ def SCC(gt, pred, uncertainty_values):
     # Calculate the differences in ranks
     rank_diff = error_ranks - uncertainty_ranks
 
-    # Square the differences
     rank_diff_squared = rank_diff**2
 
-    # Sum of squared differences
     sum_rank_diff_squared = np.sum(rank_diff_squared)
 
-    # Number of observations
     n = len(error_values)
 
     # Calculate Spearman correlation coefficient

@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 import time
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
@@ -9,13 +10,12 @@ import torch.backends.cudnn as cudnn
 from tensorboardX import SummaryWriter
 
 import numpy as np
-import random
 from tqdm import tqdm
 
 from dataloaders.dataloader import DataLoaderCustom
 from networks.NewCRFDepth import NewCRFDepth
 from parser_options import eval_parser
-from custom_logging import debug_result, tb_visualization, tb_visualization_d3vo
+from custom_logging import tb_visualization, tb_visualization_d3vo
 from utils import compute_errors, compute_canonical_errors, sigma_metric_from_canonical_and_scale
 from aucs import compute_aucs, SCC
 
@@ -23,10 +23,6 @@ from aucs import compute_aucs, SCC
 if sys.argv.__len__() == 2:
     arg_filename_with_prefix = '@' + sys.argv[1]
     args = eval_parser.parse_args([arg_filename_with_prefix])
-elif sys.argv.__len__() == 3:
-    arg_filename_with_prefix = '@' + sys.argv[1]
-    args = eval_parser.parse_args([arg_filename_with_prefix])
-    args.pick_class = torch.tensor(int(sys.argv[2]))
 else:
     args = eval_parser.parse_args()
 
@@ -36,27 +32,25 @@ def eval_func(model, dataloader_eval):
     eval_measures_canonical = torch.zeros(3).cuda()
 
     uncertainty_metrics = ["abs_rel", "rmse", "a1"]
-    aucs = {"abs_rel": [], "rmse": [], "a1": []}
-    scc_total = 0  # Spearman correlation coefficient in l1
+    aucs = {"abs_rel": [], "rmse": [], "a1": []}    # Save results 
+    scc_total = 0                                   # Spearman correlation coefficient in L1 score
 
     num_semantic_classes = dataloader_eval.num_semantic_classes
 
     writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
 
     excecution_times = []
-
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         with torch.no_grad():
-            # Init
-            pred_depths_r_list, pred_depths_rc_list, \
-                pred_depths_c_list, uncertainty_maps_list, \
-                pred_depths_u_list = [], [], [], [], []
-            segmentation_map, instances, labels, unc_decoder = None, None, None, None
+            # Init #
+            pred_depths_r_list, pred_depths_u_list =  [], []
+            
+            segmentation_map, instances, labels = None, None, None
 
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
             gt_depth = eval_sample_batched['depth']
 
-            if (args.dataset == 'nyu' or args.dataset == 'scannet') and args.segmentation:
+            if args.segmentation:
                 segmentation_map = torch.autograd.Variable(eval_sample_batched['segmentation_map'].cuda())
                 instances = torch.autograd.Variable(eval_sample_batched['instances_masks'].cuda())
                 boxes = torch.autograd.Variable(eval_sample_batched['instances_bbox'].cuda())
@@ -67,7 +61,7 @@ def eval_func(model, dataloader_eval):
                 print('Invalid depth. continue.')
                 continue
 
-            # Predict
+            # Predict #
             start_time = time.time()
             if args.instances:
                 result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
@@ -76,22 +70,10 @@ def eval_func(model, dataloader_eval):
             else:
                 result = model(image)
             end_time = time.time()
-
             excecution_times.append(end_time - start_time)
 
-            if False:
-                debug_result(result, gt_depth)
-
-            # Unpack result
+            # Unpack result #
             pred_depths_r_list = result["pred_depths_r_list"]
-            if args.update_block != 0:
-                pred_depths_rc_list = result["pred_depths_rc_list"]
-
-            # Uncertainty bins #
-            if args.update_block == 0 or args.update_block == 3 or args.update_block == 1 \
-               or args.update_block == 18 or args.update_block == 2:
-                pred_depths_c_list = result["pred_depths_c_list"]
-                uncertainty_maps_list = result["uncertainty_maps_list"]
 
             # Depth #
             if args.instances:
@@ -101,19 +83,20 @@ def eval_func(model, dataloader_eval):
             else:  # Global
                 pred_depth = pred_depths_r_list[-1]
 
-            # Unc #
+            # Uncertainty #
             if args.eval_unc:
                 if args.unc_head:
                     sigma_m = sigma_metric_from_canonical_and_scale(
                         result['pred_depths_rc_list'][-1], result["unc_c"][-1],
                         result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
                         result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
+                # Uncertainty of bins is std --> convert to variance #
                 else:
-                    # uncertainty of canonical is std --> convert to variance
                     sigma_m = sigma_metric_from_canonical_and_scale(
                         result['pred_depths_rc_list'][-1], result['uncertainty_maps_list'][-1]**2,
                         result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
                         (result["uncertainty_maps_scale_list"][-1]**2), args)
+                # Mask #
                 if args.instances:
                     sigma_m = torch.sum((sigma_m * instances), dim=1).unsqueeze(1)
                 elif args.segmentation:
@@ -121,18 +104,19 @@ def eval_func(model, dataloader_eval):
                 else:
                     pass
 
-            # Tensorboard
+            # Tensorboard #
             if args.eval_unc:
                 tb_visualization_d3vo(writer, global_step=step, current_loss_d3vo=None, current_lr=None, var_sum=None, var_cnt=None, \
                                               num_images=1, sigma_metric=sigma_m)
             else:
                 tb_visualization(writer=writer, global_step=step, args=args, current_loss_depth=None, current_lr=None, current_loss_unc_decoder=None, \
                              var_sum=None, var_cnt=None, num_images=1, depth_gt=gt_depth, image=image, max_tree_depth=args.max_tree_depth, \
-                             pred_depths_r_list=pred_depths_r_list, pred_depths_rc_list=pred_depths_rc_list, \
+                             pred_depths_r_list=pred_depths_r_list, pred_depths_rc_list=result["pred_depths_rc_list"], \
                              num_semantic_classes=num_semantic_classes, instances=instances, segmentation_map=segmentation_map, \
-                             labels=labels, pred_depths_c_list=pred_depths_c_list, uncertainty_maps_list=uncertainty_maps_list, \
+                             labels=labels, pred_depths_c_list=result["pred_depths_c_list"], uncertainty_maps_list=result["uncertainty_maps_list"], \
                              pred_depths_u_list=pred_depths_u_list, unc_decoder=None, expensive_viz=True)
 
+            # To numpy #
             pred_depth = pred_depth.cpu().numpy().squeeze()
             gt_depth = gt_depth.cpu().numpy().squeeze()
             if args.eval_unc:
@@ -147,76 +131,85 @@ def eval_func(model, dataloader_eval):
         if args.eigen_crop:
             gt_height, gt_width = gt_depth.shape
             eval_mask = np.zeros(valid_mask.shape)
-
-            if args.dataset == 'scannet':
-                eval_mask = gt_depth > 0.1
-
-            if args.eigen_crop:
-                if args.dataset == 'nyu':
+            if args.dataset == 'nyu':
                     eval_mask[45:471, 41:601] = 1
+            else:
+                eval_mask = gt_depth > 0.1
 
             valid_mask = np.logical_and(valid_mask, eval_mask)
             if np.all(gt_depth[valid_mask] == 0) or len(gt_depth[valid_mask]) == 1:
                 continue
 
-        # For uncertainty #
+        # Uncertainty eval #
         unc_error = None
 
         if args.eval_unc:
+            # Computer also error^2/var #
             measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
             eval_measures[10] += torch.tensor(measures[-1]).cuda()
 
+            # AUCS + spearman_coefficient # 
             scores = compute_aucs(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
             [aucs[m].append(scores[m]) for m in uncertainty_metrics]
 
             scc_total += SCC(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
-
         else:
             measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
 
+        # Some basic depth metrics #
+        eval_measures[:9] += torch.tensor(measures[:9]).cuda() 
+        eval_measures[9] += 1 # Size of dataset 
+   
+        ######################################
+        # Eval canonical errors              #
+        # d_metric = scale * canonical       #
+        # canonical = d_metric / scale       #
+        # canonical_gt = d_metric_gt / scale #
+        # e = canonical_gt - canonical       #
+        ######################################
         if args.instances:
 
-            b, ins_num, h, w = result["pred_depths_r_list"][-1].shape
+            b, ins_num, h, w = pred_depths_r_list[-1].shape
 
+            # d_metric_gt / scale #
             gt_canonical = eval_sample_batched['depth'].to(result["pred_scale_list"][-1].device).repeat(1, ins_num,  1, 1) / \
                            result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)
             gt_canonical = torch.sum(gt_canonical * instances, dim=1).cpu().numpy().squeeze().squeeze()
-            pred_canonical = result["pred_depths_r_list"][-1] / result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(
+
+            pred_canonical = pred_depths_r_list[-1] / result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(
                 -1)
             pred_canonical = torch.sum(pred_canonical * instances, dim=1).cpu().numpy().squeeze().squeeze()
 
-            gt_canonical = np.clip(gt_canonical[valid_mask], a_min=0.0001, a_max=1.0)
-            pred_canonical = np.clip(pred_depth[valid_mask], a_min=0.0001, a_max=1.0)
+            gt_canonical = np.clip(gt_canonical[valid_mask], a_min=1e-4, a_max=1.0)
+            pred_canonical = np.clip(pred_depth[valid_mask], a_min=1e-4, a_max=1.0)
 
             canonical_errors = compute_canonical_errors(gt_canonical, pred_canonical)
             eval_measures_canonical += torch.tensor(canonical_errors).cuda()
-
         elif args.segmentation:
 
-            b, seg_num, h, w = result["pred_depths_r_list"][-1].shape
+            b, seg_num, h, w = pred_depths_r_list[-1].shape
 
+            # d_metric_gt / scale #
             gt_canonical = eval_sample_batched['depth'].to(result["pred_scale_list"][-1].device).repeat(
                 1, seg_num, 1, 1) / result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1)
             gt_canonical = torch.sum(gt_canonical * segmentation_map, dim=1).cpu().numpy().squeeze().squeeze()
 
-            pred_canonical = result["pred_depths_r_list"][-1] / result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(
+            pred_canonical = pred_depths_r_list[-1] / result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(
                 -1)
             pred_canonical = torch.sum(pred_canonical * segmentation_map, dim=1).cpu().numpy().squeeze().squeeze()
 
-            gt_canonical = np.clip(gt_canonical[valid_mask], a_min=0.0001, a_max=1.0)
-            pred_canonical = np.clip(pred_depth[valid_mask], a_min=0.0001, a_max=1.0)
+            gt_canonical = np.clip(gt_canonical[valid_mask], a_min=1e-4, a_max=1.0)
+            pred_canonical = np.clip(pred_depth[valid_mask], a_min=1e-4, a_max=1.0)
 
             canonical_errors = compute_canonical_errors(gt_canonical, pred_canonical)
             eval_measures_canonical += torch.tensor(canonical_errors).cuda()
         else:
-            gt_canonical = np.clip(gt_depth[valid_mask] / result["pred_scale_list"][-1], a_min=0.0001, a_max=1.0)
-            pred_canonical = np.clip(pred_depth[valid_mask] / result["pred_scale_list"][-1], a_min=0.0001, a_max=1.0)
+            gt_canonical = np.clip(gt_depth[valid_mask] / result["pred_scale_list"][-1], a_min=1e-4, a_max=1.0)
+            pred_canonical = np.clip(pred_depth[valid_mask] / result["pred_scale_list"][-1], a_min=1e-4, a_max=1.0)
             canonical_errors = compute_canonical_errors(gt_canonical, pred_canonical)
             eval_measures_canonical += torch.tensor(canonical_errors).cuda()
 
-        eval_measures[:9] += torch.tensor(measures[:9]).cuda()
-        eval_measures[9] += 1
-
+    # Depth related + optional e^2/variance #
     eval_measures_cpu = eval_measures.cpu()
     cnt = eval_measures_cpu[9].item()
     eval_measures_cpu /= cnt
@@ -237,10 +230,8 @@ def eval_func(model, dataloader_eval):
         print('{:7.4f}, '.format(eval_canonical_cpu[i]), end='')
 
     if args.eval_unc:
-
         for m in uncertainty_metrics:
             aucs[m] = np.array(aucs[m]).mean(0)
-
         print("\n  " + ("{:>8} | " * 6).format("abs_rel", "", "rmse", "", "a1", ""))
         print("  " + ("{:>8} | " * 6).format("AUSE", "AURG", "AUSE", "AURG", "AUSE", "AURG"))
         print(("&{:8.3f}  " * 6).format(*aucs["abs_rel"].tolist() + aucs["rmse"].tolist() + aucs["a1"].tolist()) +
@@ -260,7 +251,8 @@ def main_worker(args):
     dataloader_eval = DataLoaderCustom(args, 'online_eval')
     num_semantic_classes = dataloader_eval.num_semantic_classes
     num_instances = dataloader_eval.num_instances
-    # Depth model
+    
+    # Model #
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type,
                         num_semantic_classes=num_semantic_classes, num_instances=num_instances, \
@@ -279,17 +271,16 @@ def main_worker(args):
     model.cuda()
     print("== Model Initialized")
 
-    if args.checkpoint_path != '':
-        if os.path.isfile(args.checkpoint_path):
-            print("== Loading checkpoint '{}'".format(args.checkpoint_path))
-            checkpoint = torch.load(args.checkpoint_path, map_location='cpu')
-            model.load_state_dict(checkpoint['model'])
-            print("== Loaded checkpoint '{}'".format(args.checkpoint_path))
-            del checkpoint
-        else:
-            print("== No checkpoint found at '{}'".format(args.checkpoint_path))
-            exit()
-
+    if args.checkpoint_path != '' and os.path.isfile(args.checkpoint_path):
+        print("== Loading checkpoint '{}'".format(args.checkpoint_path))
+        checkpoint = torch.load(args.checkpoint_path, map_location='cpu')
+        model.load_state_dict(checkpoint['model'])
+        print("== Loaded checkpoint '{}'".format(args.checkpoint_path))
+        del checkpoint
+    else:
+        print("== No checkpoint found at '{}'".format(args.checkpoint_path))
+        exit()
+    
     cudnn.benchmark = True
 
     # Evaluate #

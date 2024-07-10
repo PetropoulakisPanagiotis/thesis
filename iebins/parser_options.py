@@ -210,7 +210,6 @@ eval_parser.add_argument('--filenames_file_eval', type=str, help='path to the fi
 eval_parser.add_argument('--min_depth_eval', type=float, help='minimum depth for evaluation', default=0.1)
 eval_parser.add_argument('--max_depth_eval', type=float, help='maximum depth for evaluation', default=10)
 eval_parser.add_argument('--eigen_crop', help='if set, crops according to Eigen NIPS14', action='store_true')
-eval_parser.add_argument('--pick_class', type=int, help='evaluate single class for debug', default=0)
 
 # Eval hparams #
 eval_parser.add_argument('--loss_type', type=int, help='0 for silog, 1 for l1', default=0)

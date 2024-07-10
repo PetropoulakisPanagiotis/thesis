@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 import json
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
@@ -7,31 +8,21 @@ import torch
 import torch.backends.cudnn as cudnn
 
 import cv2
-import matplotlib.pyplot as plt
-from tensorboardX import SummaryWriter
 
-import argparse
 import numpy as np
-import random
 from tqdm import tqdm
 
 from dataloaders.dataloader import DataLoaderCustom
 from networks.NewCRFDepth import NewCRFDepth
-from parser_options import convert_arg_line_to_args, test_parser
-from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
-from utils import compute_errors, sigma_metric_from_canonical_and_scale, colormap, map_float_data_to_int
-from aucs import compute_aucs, SCC
+from parser_options import test_parser
+from utils import compute_errors, colormap, map_float_data_to_int
 
 # Parse config file #
 if sys.argv.__len__() == 2:
     arg_filename_with_prefix = '@' + sys.argv[1]
     args = test_parser.parse_args([arg_filename_with_prefix])
-elif sys.argv.__len__() == 3:
-    arg_filename_with_prefix = '@' + sys.argv[1]
-    args = eval_parser.parse_args([arg_filename_with_prefix])
-    args.pick_class = torch.tensor(int(sys.argv[2]))
 else:
-    args = eval_parser.parse_args()
+    args = test_parser.parse_args()
 
 
 def predict(model, dataloader_eval) -> None:
@@ -43,12 +34,6 @@ def predict(model, dataloader_eval) -> None:
 
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         with torch.no_grad():
-            # Init
-            pred_depths_r_list, pred_depths_rc_list, pred_depths_instances_r_list, \
-                pred_depths_instances_rc_list, pred_depths_c_list, uncertainty_maps_list, \
-                pred_depths_u_list = [], [], [], [], [], [], []
-            segmentation_map, instances, labels, unc_decoder = None, None, None, None
-
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
             gt_depth = eval_sample_batched['depth']
 
@@ -73,9 +58,6 @@ def predict(model, dataloader_eval) -> None:
 
             # Unpack result
             pred_depths_r_list = result["pred_depths_r_list"]
-            # Canonical segmentation/single scale #
-            if args.update_block != 0:
-                pred_depths_rc_list = result["pred_depths_rc_list"]
 
             if args.instances:
                 pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
@@ -227,12 +209,12 @@ def predict(model, dataloader_eval) -> None:
             gt_depth[gt_depth > args.max_depth_test] = args.max_depth_test
             gt_depth[np.isinf(gt_depth)] = args.max_depth_test
             gt_depth[np.isnan(gt_depth)] = args.min_depth_test
-            valid_mask = np.logical_and(gt_depth > args.min_depth_test, gt_depth < args.max_depth_test)
             cv2.imshow('i', colormap(np.log(pred_depth[np.newaxis, :]), name='magma').transpose(1, 2, 0))
             cv2.imshow('i', colormap(np.log(gt_depth[np.newaxis, :]), name='magma').transpose(1, 2, 0))
             cv2.waitKey(0)
+            valid_mask = np.logical_and(gt_depth > args.min_depth_test, gt_depth < args.max_depth_test)
             measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
-
+            print(measures)
 
 def main_worker(args):
     torch.set_num_threads(16)
