@@ -123,7 +123,7 @@ def eval_func(model, dataloader_eval):
 
             # Tensorboard
             if args.eval_unc:
-                tb_visualization_d3vo(writer, global_step=step, args=args, current_loss_d3vo=None, current_lr=None, var_sum=None, var_cnt=None, \
+                tb_visualization_d3vo(writer, global_step=step, current_loss_d3vo=None, current_lr=None, var_sum=None, var_cnt=None, \
                                               num_images=1, sigma_metric=sigma_m)
             else:
                 tb_visualization(writer=writer, global_step=step, args=args, current_loss_depth=None, current_lr=None, current_loss_unc_decoder=None, \

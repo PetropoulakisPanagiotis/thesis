@@ -26,6 +26,7 @@ from utils import silog_loss, l1_loss, d3vo_loss, compute_errors, \
                     eval_metrics, block_print, enable_print, load_checkpoint_skip_update_project, load_checkpoint, \
                     set_hparams_dict, sigma_metric_from_canonical_and_scale
 
+
 # Parse config file #
 if sys.argv.__len__() == 2:
     arg_filename_with_prefix = '@' + sys.argv[1]
@@ -69,7 +70,8 @@ def main_worker(gpu, ngpus_per_node, args):
                         bins_scale=args.bins_scale, unc_head=args.unc_head, virtual_depth_variation=args.virtual_depth_variation, \
                         upsample_type=args.upsample_type, bins_type=args.bins_type, bins_type_scale=args.bins_type_scale)
     model.train()
-    if args.unc_head:  # Set some layers to eval to train the uncertainty decoder
+    # Set some layers to eval to train the uncertainty decoder #
+    if args.unc_head:  
         model.set_to_eval_unc()
 
     # Print stats #
@@ -90,23 +92,22 @@ def main_worker(gpu, ngpus_per_node, args):
             model.cuda()
             model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
     else:
-        print("== Model Initialized")
+        # Single process, one machine #
+        print("== Model Initialized (DataParallel)")
         model = torch.nn.DataParallel(model)
         model.cuda()
 
-    global_step = 0
-    best_eval_measures_lower_better = torch.zeros(6).cpu() + 1e3
-    best_eval_measures_higher_better = torch.zeros(3).cpu()
-    best_eval_steps = np.zeros(10, dtype=np.int32)
-    best_unc = np.inf  # Best uncertainty value
+
 
     optimizer = torch.optim.Adam([{'params': model.module.parameters()}], lr=args.learning_rate)
 
     # Load checkpoint and print stats #
     if args.unc_head:
         load_checkpoint(args.checkpoint_path, args.gpu, args.retrain, model, optimizer)
-    else:  # IEBINS load checkpoint - skip some layers
-        if 'saved_models' in args.checkpoint_path:  # IEBINS saved models
+    # IEBINS load checkpoint - skip some layers #
+    else:  
+        # IEBINS saved models - these are used for scale variations #
+        if 'saved_models' in args.checkpoint_path:  
             load_checkpoint_skip_update_project(args.checkpoint_path, args.gpu, args.retrain, model, optimizer)
         else:
             load_checkpoint(args.checkpoint_path, args.gpu, args.retrain, model, optimizer)
@@ -118,7 +119,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     cudnn.benchmark = True
 
-    # tb logging #
+    # TB logging #
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank % ngpus_per_node == 0):
         print("Logging dir: " + args.log_directory + '/' + args.model_name + '/summaries')
         writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
@@ -132,32 +133,38 @@ def main_worker(gpu, ngpus_per_node, args):
             eval_summary_writer = SummaryWriter(eval_summary_path, flush_secs=30)
 
         # Log hparams #
-        hparams = set_hparams_dict(args, num_semantic_classes)
+        hparams = set_hparams_dict(args, num_semantic_classes, num_instances)
         writer.add_hparams(hparam_dict=hparams, metric_dict={})
 
     # Losses #
     silog_criterion = silog_loss(variance_focus=args.variance_focus)
     l1_criterion = l1_loss()
-    d3vo_criterion = d3vo_loss(original=args.d3vo_original)
-
-    end_learning_rate = args.end_learning_rate if args.end_learning_rate != -1 else 0.1 * args.learning_rate
+    d3vo_criterion = d3vo_loss(original=args.d3vo_original) # For uncertainty
 
     start_time = time.time()
-    duration = 0
     steps_per_epoch = len(dataloader.data)
     num_total_steps = args.num_epochs * steps_per_epoch
-    epoch = global_step // steps_per_epoch
+    epoch = 0
+    global_step = 0
+    duration = 0
 
+    best_eval_measures_lower_better = torch.zeros(6).cpu() + 1e3
+    best_eval_measures_higher_better = torch.zeros(3).cpu()
+    best_eval_steps = np.zeros(10, dtype=np.int32)
+    best_unc = np.inf  
+    
+    end_learning_rate = args.end_learning_rate if args.end_learning_rate != -1 else 0.1 * args.learning_rate
     group = dist.new_group([i for i in range(ngpus_per_node)])
 
-    # Initialize vars
+    # Initialize vars #
     pred_depths_r_list, pred_depths_rc_list, \
         pred_depths_c_list, uncertainty_maps_list, \
         pred_depths_u_list = [], [], [], [], []
+    
     segmentation_map, instances, labels, unc_decoder = None, None, None, None
 
     while epoch < args.num_epochs:
-        if args.distributed:
+        if args.distributed: # Do proper shuffling
             dataloader.train_sampler.set_epoch(epoch)
 
         for step, sample_batched in enumerate(dataloader.data):
@@ -171,16 +178,16 @@ def main_worker(gpu, ngpus_per_node, args):
             image = torch.autograd.Variable(sample_batched['image'].cuda(args.gpu, non_blocking=True))
             depth_gt = torch.autograd.Variable(sample_batched['depth'].cuda(args.gpu, non_blocking=True))
             b, _, h, w = depth_gt.shape
+            num_images = image.shape[0]
 
             if args.segmentation:
                 segmentation_map = torch.autograd.Variable(sample_batched['segmentation_map'].cuda(
                     args.gpu, non_blocking=True))
+
             if args.instances:
                 instances = torch.autograd.Variable(sample_batched['instances_masks'].cuda(args.gpu, non_blocking=True))
                 boxes = torch.autograd.Variable(sample_batched['instances_bbox'].cuda(args.gpu, non_blocking=True))
                 labels = torch.autograd.Variable(sample_batched['instances_labels'].cuda(args.gpu, non_blocking=True))
-
-            num_images = image.shape[0]
 
             # Predict #
             if args.instances:
@@ -190,31 +197,28 @@ def main_worker(gpu, ngpus_per_node, args):
             else:
                 result = model(image, epoch, step)
 
+            #debug_visualize_gt_instances(instances, mask, depth_gt)
             #debug_result(result, depth_gt)
 
+            #################
             # Unpack result #
+            #################
             pred_depths_r_list = result["pred_depths_r_list"]
             pred_depths_c_list = result["pred_depths_c_list"]
-
-            # Uncertainty bins #
             uncertainty_maps_list = result["uncertainty_maps_list"]
-
             # Get scale and canonical #
             if args.update_block != 0:
                 pred_scale_list = result["pred_scale_list"]
                 pred_depths_rc_list = result["pred_depths_rc_list"]
-
-            # Get uncertainties from extra heads
+            # Get uncertainties from extra heads #
             if args.unc_head:
                 unc_c = result["unc_c"][-1]
                 unc_s = result["unc_s"][-1]
 
             # gt_depth masking #
             mask = depth_gt > 0.1
-
-            #debug_visualize_gt_instances(instances, mask, depth_gt)
-
-            # Train only uncertainty decoder, most of the weights are frozen #
+            
+            # Network is trained to optimize canonical and scale uncertainties #
             if args.unc_head:
                 sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1], unc_c,
                                                                      pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1),
@@ -224,15 +228,16 @@ def main_worker(gpu, ngpus_per_node, args):
                     pred_d = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(1)
 
                 elif args.segmentation:
+                    # [batch_size, num_semantic_classes, h, w]
                     sigma_metric = torch.sum(sigma_metric * segmentation_map, dim=1).unsqueeze(1)
+                    # [batch_size, 1, h, w]
                     pred_d = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(1)
                 else:
-
                     pred_d = pred_depths_r_list[-1]
 
                 loss = d3vo_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))
-                current_loss_d3vo = loss
-            else:  # Depth loss #
+            # Network is trained to optimize depth #
+            else:
                 for curr_tree_depth in range(args.max_tree_depth):
                     if args.instances:
                         pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
@@ -243,20 +248,24 @@ def main_worker(gpu, ngpus_per_node, args):
 
                     if args.loss_type == 0:
                         current_loss_depth += silog_criterion.forward(pred_d, depth_gt, mask.to(torch.bool))
-                    elif args.loss_type == 1:
+                    else:
                         current_loss_depth += l1_criterion.forward(pred_d, depth_gt, mask.to(torch.bool))
-
                 loss = current_loss_depth
 
+            ############
             # Optimize #
+            ############
             loss.backward()
             for param_group in optimizer.param_groups:
                 current_lr = (args.learning_rate -
                               end_learning_rate) * (1 - global_step / num_total_steps)**0.9 + end_learning_rate
                 param_group['lr'] = current_lr
             optimizer.step()
+            ###############
 
+            ###############
             # Print stats #
+            ###############
             if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                         and args.rank % ngpus_per_node == 0):
                 if args.unc_head:
@@ -268,15 +277,17 @@ def main_worker(gpu, ngpus_per_node, args):
 
             duration += time.time() - before_op_time
 
-            # Logging #
+            ##############
+            # Logging TB #
+            ##############
             if global_step and global_step % args.log_freq == 0 and not model_just_loaded:
                 var_sum = [var.sum().item() for var in model.parameters() if var.requires_grad]
                 var_cnt = len(var_sum)
                 var_sum = np.sum(var_sum)
 
                 examples_per_sec = args.batch_size / duration * args.log_freq
+                duration = 0 # For the next loop
 
-                duration = 0
                 time_sofar = (time.time() - start_time) / 3600
                 training_time_left = (num_total_steps / global_step - 1.0) * time_sofar
 
@@ -289,27 +300,32 @@ def main_worker(gpu, ngpus_per_node, args):
                     print_string.format(args.gpu, examples_per_sec, loss, var_sum.item(),
                                         var_sum.item() / var_cnt, time_sofar, training_time_left))
 
+                ###################
                 # Tensorboard viz #
+                ###################
                 if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                             and args.rank % ngpus_per_node == 0):
                     if args.unc_head:
-                        tb_visualization_d3vo(writer, global_step, args, current_loss_d3vo, current_lr, var_sum, var_cnt, \
+                        tb_visualization_d3vo(writer, global_step, loss, current_lr, var_sum, var_cnt, \
                                               num_images, sigma_metric)
                     else:
                         tb_visualization(writer, global_step, args, current_loss_depth, current_lr, current_loss_unc_decoder, var_sum, var_cnt,\
                                      num_images, depth_gt, image, args.max_tree_depth, pred_depths_r_list, \
                                      pred_depths_rc_list, num_semantic_classes, \
-                                     instances, segmentation_map, labels, pred_depths_c_list, uncertainty_maps_list, pred_depths_u_list, unc_decoder)
+                                     instances, segmentation_map, labels, pred_depths_c_list, \
+                                     uncertainty_maps_list, pred_depths_u_list, unc_decoder)
 
+            ############
             # Evaluate #
+            ############
             if args.do_online_eval and global_step and global_step % args.eval_freq == 0 and not model_just_loaded:
                 time.sleep(0.1)
                 model.eval()
 
                 eval_measures, unc_error = online_eval(args, model, dataloader_eval, gpu, epoch, ngpus_per_node, group,
                                                        original_d3vo=args.d3vo_original)
-
                 if eval_measures is not None:
+                    # Uncertainty metrics #
                     if args.unc_head:
                         if best_unc > unc_error:
 
@@ -335,22 +351,7 @@ def main_worker(gpu, ngpus_per_node, args):
                             torch.save(checkpoint, args.log_directory + '/' + args.model_name + model_save_name)
                             best_eval_steps[9] = global_step
 
-                    exp_name = args.exp_name
-                    log_txt = os.path.join(args.log_directory + '/' + args.model_name, exp_name + '_logs.txt')
-
-                    # Log eval measures to file #
-                    with open(log_txt, 'a') as txtfile:
-                        txtfile.write(">>>>>>>>>>>>>>>>>>>>>>>>>Step:%d>>>>>>>>>>>>>>>>>>>>>>>>>\n" %
-                                      (int(global_step)))
-                        txtfile.write("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}\n".format(
-                            'silog', 'abs_rel', 'log10', 'rms', 'sq_rel', 'log_rms', 'd1', 'd2', 'd3'))
-                        txtfile.write("depth estimation\n")
-                        line = ''
-                        for i in range(9):
-                            line += '{:7.4f}, '.format(eval_measures[i])
-                        txtfile.write(line + '\n')
-
-                    # Update best #
+                    # Depth metrics #
                     for i in range(9):
                         eval_summary_writer.add_scalar(eval_metrics[i], eval_measures[i].cpu(), int(global_step))
                         measure = eval_measures[i]
@@ -387,7 +388,10 @@ def main_worker(gpu, ngpus_per_node, args):
                             torch.save(checkpoint, args.log_directory + '/' + args.model_name + model_save_name)
 
                     eval_summary_writer.flush()
-
+    
+                    ##############################
+                    # Print current overall best #
+                    ##############################
                     print("Best evals at global step: " + str(global_step))
                     best_evals_list = best_eval_measures_lower_better.cpu().numpy().tolist(
                     ) + best_eval_measures_higher_better.cpu().numpy().tolist()
@@ -398,10 +402,11 @@ def main_worker(gpu, ngpus_per_node, args):
                     print('{:7.4f}'.format(best_evals_list[-1]))
 
                     if args.unc_head:
-                        print("Best eval for uncertainty decoder: " + str(best_unc))
+                        print("Best eval for uncertainty: " + str(best_unc))
 
                 model.train()
-                if args.unc_head:  # Set some layers to eval to train the uncertainty decoder
+                # Set some layers to eval to train the uncertainty decoder #
+                if args.unc_head:  
                     model.module.set_to_eval_unc()
                 block_print()
                 enable_print()
@@ -420,7 +425,7 @@ def main_worker(gpu, ngpus_per_node, args):
     print(best_eval_measures_higher_better)
     print(best_eval_measures_lower_better)
     if args.unc_head:
-        print("Best eval for uncertainty decoder: " + str(best_unc))
+        print("Best eval for uncertainty: " + str(best_unc))
 
 
 def main():
@@ -430,8 +435,7 @@ def main():
     gc.collect()
 
     # Create log dirs #
-    exp_name = args.exp_name
-    args.log_directory = os.path.join(args.log_directory, exp_name)
+    args.log_directory = os.path.join(args.log_directory, args.exp_name)
     command = 'mkdir -p ' + os.path.join(args.log_directory, args.model_name)
     os.system(command)
 

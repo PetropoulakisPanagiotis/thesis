@@ -98,7 +98,7 @@ class NewCRFDepth(nn.Module):
         if self.update_block == 0:
             self.update = IEBINS(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=bin_num,
                                  upsample_type=self.upsample_type)
-            print("[VARIATION IEBINS]")
+            print("[VARIATION IEBINS]\n")
 
         ################
         # Global scale #
@@ -107,7 +107,7 @@ class NewCRFDepth(nn.Module):
             self.update = GlobalScale(hidden_dim=self.hidden_dim, context_dim=self.context_dim, bin_num=self.bin_num, loss_type=self.loss_type, bins_scale=bins_scale, \
                                       virtual_depth_variation=self.virtual_depth_variation, upsample_type=self.upsample_type, \
                                       bins_type=self.bins_type, bins_type_scale=self.bins_type_scale)
-            print("[VARIATION GlobalScale]")
+            print("[VARIATION GlobalScale]\n")
 
         ###################
         # Per-Class scale #
@@ -117,7 +117,7 @@ class NewCRFDepth(nn.Module):
                                                                    loss_type=self.loss_type, num_semantic_classes=self.num_semantic_classes, bins_scale=bins_scale, \
                                                                    virtual_depth_variation=self.virtual_depth_variation, upsample_type=self.upsample_type, bins_type=self.bins_type,
                                                                    bins_type_scale=self.bins_type_scale, concat_masks=self.concat_masks)
-            print("[VARIATION PerClassScale]")
+            print("[VARIATION PerClassScale]\n")
 
         #############
         # Instances #
@@ -129,7 +129,7 @@ class NewCRFDepth(nn.Module):
                                                           roi_align=roi_align, roi_align_size=roi_align_size, bins_scale=bins_scale, \
                                                           virtual_depth_variation=self.virtual_depth_variation, upsample_type=self.upsample_type, \
                                                           bins_type=self.bins_type, bins_type_scale=self.bins_type_scale)
-            print("[VARIATION PerInstanceScale]")
+            print("[VARIATION PerInstanceScale]\n")
 
         else:
             print("No implementation is available for the given value of update_block. Exiting..")

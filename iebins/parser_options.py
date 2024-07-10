@@ -11,7 +11,7 @@ def convert_arg_line_to_args(arg_line):
 ################
 # Train parser #
 ################
-train_parser = argparse.ArgumentParser(description='Scale-Aware SLAM PyTorch implementation (train).',
+train_parser = argparse.ArgumentParser(description='Scale-Aware Depth prediction network PyTorch implementation (train).',
                                        fromfile_prefix_chars='@')
 train_parser.convert_arg_line_to_args = convert_arg_line_to_args
 
@@ -66,8 +66,8 @@ train_parser.add_argument('--gt_path_eval', type=str, help='path to the groundtr
                           required=False)
 train_parser.add_argument('--filenames_file_eval', type=str,
                           help='path to the filenames text file for online evaluation', required=False)
-train_parser.add_argument('--min_depth_eval', type=float, help='minimum depth for evaluation', default=1e-3)
-train_parser.add_argument('--max_depth_eval', type=float, help='maximum depth for evaluation', default=80)
+train_parser.add_argument('--min_depth_eval', type=float, help='minimum depth for evaluation', default=0.1)
+train_parser.add_argument('--max_depth_eval', type=float, help='maximum depth for evaluation', default=10)
 train_parser.add_argument('--eigen_crop', help='if set, crops according to Eigen NIPS14', action='store_true')
 train_parser.add_argument('--eval_freq', type=int, help='online evaluation frequency in global steps', default=500)
 train_parser.add_argument('--eval_summary_directory', type=str, help='output directory for eval summary,'
@@ -87,10 +87,10 @@ train_parser.add_argument('--update_block', type=int,
 # -> Bins #
 train_parser.add_argument('--max_tree_depth', type=int, help='max GRU iterations (only used in IEBINS)', default='6')
 train_parser.add_argument('--bin_num', type=int, help='number of bins', default='16')
-train_parser.add_argument('--bins_scale', type=int, help='Bins for scale', default='100')
+train_parser.add_argument('--bins_scale', type=int, help='Bins for scale', default='50')
 train_parser.add_argument(
     '--virtual_depth_variation', type=int, help=
-    '0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonica',
+    '0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonical',
     default='0')
 
 # -> Uncertainty #
@@ -105,6 +105,7 @@ train_parser.add_argument(
 
 train_parser.add_argument('--bins_type', type=int, help='0 for uniform, 1 for logarithmic', default='0')
 train_parser.add_argument('--bins_type_scale', type=int, help='0 for uniform, 0 for logarithmic', default='1')
+
 # -> Segmentation #
 train_parser.add_argument('--segmentation', dest='segmentation', help='segmentation variation', action='store_true')
 train_parser.add_argument('--concat_masks', dest='concat_masks',
@@ -133,7 +134,7 @@ train_parser.add_argument('--variance_focus', type=float,
 ###############
 # Eval parser #
 ###############
-eval_parser = argparse.ArgumentParser(description='Scale-Aware SLAM PyTorch implementation (eval).',
+eval_parser = argparse.ArgumentParser(description='Scale-Aware Depth prediction network PyTorch implementation (eval).',
                                       fromfile_prefix_chars='@')
 eval_parser.convert_arg_line_to_args = convert_arg_line_to_args
 
@@ -168,7 +169,7 @@ eval_parser.add_argument('--bin_num', type=int, help='number of bins', default='
 eval_parser.add_argument('--bins_scale', type=int, help='Bins for scale', default='100')
 eval_parser.add_argument(
     '--virtual_depth_variation', type=int, help=
-    '0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonica',
+    '0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonical',
     default='0')
 
 # -> Uncertainty #
@@ -181,9 +182,10 @@ eval_parser.add_argument(
     '--upsample_type', type=int,
     help='0 for torch, 1 for custom bilinear interpolation, 2 custom and weight**2 for uncertainty', default='1')
 
-eval_parser.add_argument('--bins_type', type=int, help='0 for IEBINS, 1 for uniform, 2 for logarithmic', default='1')
-eval_parser.add_argument('--bins_type_scale', type=int, help='0 for IEBINS, 1 for uniform, 2 for logarithmic',
-                         default='1')
+eval_parser.add_argument('--bins_type', type=int, help='0 for uniform, 1 for logarithmic', default='0')
+eval_parser.add_argument('--bins_type_scale', type=int, help='0 for uniform, 1 for logarithmic',
+                         default='0')
+
 # -> Segmentation #
 eval_parser.add_argument('--segmentation', dest='segmentation', help='segmentation variation', action='store_true')
 eval_parser.add_argument('--concat_masks', dest='concat_masks',
@@ -204,8 +206,9 @@ eval_parser.add_argument('--data_path_eval', type=str, help='path to the data fo
 eval_parser.add_argument('--gt_path_eval', type=str, help='path to the groundtruth data for evaluation', required=False)
 eval_parser.add_argument('--filenames_file_eval', type=str, help='path to the filenames text file for evaluation',
                          required=False)
-eval_parser.add_argument('--min_depth_eval', type=float, help='minimum depth for evaluation', default=1e-3)
-eval_parser.add_argument('--max_depth_eval', type=float, help='maximum depth for evaluation', default=80)
+
+eval_parser.add_argument('--min_depth_eval', type=float, help='minimum depth for evaluation', default=0.1)
+eval_parser.add_argument('--max_depth_eval', type=float, help='maximum depth for evaluation', default=10)
 eval_parser.add_argument('--eigen_crop', help='if set, crops according to Eigen NIPS14', action='store_true')
 eval_parser.add_argument('--pick_class', type=int, help='evaluate single class for debug', default=0)
 
@@ -215,7 +218,7 @@ eval_parser.add_argument('--loss_type', type=int, help='0 for silog, 1 for l1', 
 ###############
 # Test parser #
 ###############
-test_parser = argparse.ArgumentParser(description='Scale-Aware SLAM PyTorch implementation (test).',
+test_parser = argparse.ArgumentParser(description='Scale-Aware Depth prediction network PyTorch implementation (test).',
                                       fromfile_prefix_chars='@')
 test_parser.convert_arg_line_to_args = convert_arg_line_to_args
 
@@ -241,10 +244,10 @@ test_parser.add_argument('--update_block', type=int,
 # -> Bins #
 test_parser.add_argument('--max_tree_depth', type=int, help='max GRU iterations (only used in IEBINS)', default='6')
 test_parser.add_argument('--bin_num', type=int, help='number of bins', default='16')
-test_parser.add_argument('--bins_scale', type=int, help='Bins for scale', default='100')
+test_parser.add_argument('--bins_scale', type=int, help='Bins for scale', default='40')
 test_parser.add_argument(
     '--virtual_depth_variation', type=int, help=
-    '0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonica',
+    '0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonical',
     default='0')
 
 # -> Uncertainty #
@@ -258,9 +261,10 @@ test_parser.add_argument(
     '--upsample_type', type=int,
     help='0 for torch, 1 for custom bilinear interpolation, 2 custom and weight**2 for uncertainty', default='1')
 
-test_parser.add_argument('--bins_type', type=int, help='0 for IEBINS, 1 for uniform, 2 for logarithmic', default='1')
-test_parser.add_argument('--bins_type_scale', type=int, help='0 for IEBINS, 1 for uniform, 2 for logarithmic',
-                         default='1')
+test_parser.add_argument('--bins_type', type=int, help='0 for uniform, 1 for logarithmic', default='0')
+test_parser.add_argument('--bins_type_scale', type=int, help='0 for uniform, 1 for logarithmic',
+                         default='0')
+
 # -> Segmentation #
 test_parser.add_argument('--segmentation', dest='segmentation', help='segmentation variation', action='store_true')
 test_parser.add_argument('--concat_masks', dest='concat_masks',
@@ -279,8 +283,8 @@ test_parser.add_argument('--data_path_eval', type=str, help='path to the data fo
 test_parser.add_argument('--gt_path_eval', type=str, help='path to the groundtruth data for evaluation', required=True)
 test_parser.add_argument('--filenames_file_eval', type=str, help='path to the filenames text file for evaluation',
                          required=True)
-test_parser.add_argument('--min_depth_test', type=float, help='minimum depth for evaluation', default=1e-3)
-test_parser.add_argument('--max_depth_test', type=float, help='maximum depth for evaluation', default=80)
+test_parser.add_argument('--min_depth_test', type=float, help='minimum depth for evaluation', default=0.1)
+test_parser.add_argument('--max_depth_test', type=float, help='maximum depth for evaluation', default=10)
 
 # Testing hparams #
 test_parser.add_argument('--loss_type', type=int, help='0 for silog, 1 for l1', default=0)

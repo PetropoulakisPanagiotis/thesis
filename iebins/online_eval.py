@@ -44,8 +44,8 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
             else:
                 result = model(image)
 
+            # Metric depth #
             pred_depths_r_list = result["pred_depths_r_list"]
-
             # Mask predictions #
             if args.instances:
                 pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
@@ -53,22 +53,23 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
                 pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
             else:
                 pred_depth = pred_depths_r_list[-1]
-
+            
             pred_depth = pred_depth.cpu().numpy().squeeze()
+            gt_depth = gt_depth.cpu().numpy().squeeze()
 
+            # Uncertainty evaluation via extra heads - d3vo loss #
             if args.unc_head:
                 sigma_metric = sigma_metric_from_canonical_and_scale(
                     result["pred_depths_rc_list"][-1], result["unc_c"][-1],
                     result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1),
                     result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
+                # Mask sum # 
                 if args.instances:
                     sigma_metric = torch.sum((sigma_metric * instances), dim=1).squeeze(0).cpu().numpy()
                 elif args.segmentation:
                     sigma_metric = torch.sum((sigma_metric * segmentation_map), dim=1).squeeze(0).cpu().numpy()
                 else:
                     sigma_metric = sigma_metric.squeeze(0).squeeze(0).cpu().numpy()
-
-            gt_depth = gt_depth.cpu().numpy().squeeze()
 
             # Filter predicted depth #
             pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
@@ -82,19 +83,16 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, original
             if args.eigen_crop:
                 gt_height, gt_width = gt_depth.shape
                 eval_mask = np.zeros(valid_mask.shape)
-
                 if args.dataset == 'nyu':
                     eval_mask[45:471, 41:601] = 1
                 elif args.dataset == 'scannet':
                     eval_mask[:, :] = 1
-
                 valid_mask = np.logical_and(valid_mask, eval_mask)
 
             # Calculate metrics #
             measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
             eval_measures[:measures_size - 1] += torch.tensor(measures).cuda(device=gpu)
             eval_measures[measures_size - 1] += 1
-
             if args.unc_head:
                 eval_d3vo_numpy = compute_error_uncertainty(gt_depth[valid_mask], pred_depth[valid_mask],
                                                             sigma_metric[valid_mask], original_d3vo)

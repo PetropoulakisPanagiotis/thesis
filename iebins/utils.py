@@ -85,6 +85,9 @@ def load_checkpoint_skip_update_project(checkpoint_path, gpu, retrain, model, op
         else:
             print("== No checkpoint found at '{}'".format(checkpoint_path))
             exit()
+    else:
+        print("== No checkpoint found at '{}'".format(checkpoint_path))
+        exit()
 
 
 def load_checkpoint(checkpoint_path, gpu, retrain, model, optimizer):
@@ -112,9 +115,11 @@ def load_checkpoint(checkpoint_path, gpu, retrain, model, optimizer):
         else:
             print("== No checkpoint found at '{}'".format(checkpoint_path))
             exit()
+    else:
+        print("== No checkpoint found at '{}'".format(checkpoint_path))
+        exit()
 
-
-def set_hparams_dict(args, num_semantic_classes):
+def set_hparams_dict(args, num_semantic_classes, num_instances):
     hparams = {
         "epochs": args.num_epochs,
         "loss_type": args.loss_type,
@@ -123,24 +128,25 @@ def set_hparams_dict(args, num_semantic_classes):
         "weight_decay": args.weight_decay,
         "update_block": args.update_block,
         "max_tree_depth": args.max_tree_depth,
-        "bin_num": args.bin_num,
         "min_depth": args.min_depth,
         "max_depth": args.max_depth,
         "train_decoder": args.train_decoder,
         "num_semantic_classes": num_semantic_classes,
+        "num_instances": num_instances,
         "segmentation": args.segmentation,
         "concat_masks": args.concat_masks,
         "instances": args.instances,
         "padding_instances": args.padding_instances,
         "roi_align": args.roi_align,
         "roi_align_size": args.roi_align_size,
+        "bin_num": args.bin_num,
         "bins_scale": args.bins_scale,
+        "bins_type": args.bins_type,
+        "bins_type_scale": args.bins_type_scale,
         "unc_head": args.unc_head,
         "d3vo_original": args.d3vo_original,
         "virtual_depth_variation": args.virtual_depth_variation,
         "upsample_type": args.upsample_type,
-        "bins_type": args.bins_type,
-        "bins_type_scale": args.bins_type_scale,
     }
 
     return hparams
@@ -224,7 +230,7 @@ def compute_error_uncertainty(depth_est, depth_gt, unc, beta=0.5, original=False
     if original:
         unc_error = np.mean((((np.abs(depth_est - depth_gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))))
     else:
-        unc_error = np.mean((((np.abs(depth_est - depth_gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))))
+        unc_error = np.mean((((np.abs(depth_est - depth_gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))) * (unc**beta))
     return unc_error
 
 
@@ -244,7 +250,6 @@ class l1_loss(nn.Module):
         super(l1_loss, self).__init__()
 
     def forward(self, depth_est, depth_gt, mask):
-
         return torch.mean(torch.abs(depth_est[mask] - depth_gt[mask]))
 
 
@@ -258,7 +263,7 @@ class d3vo_loss(nn.Module):
         if self.original:
             return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) +
                                (math.log(2 * math.pi))))
-        else:
+        else: # Seitzer et. al. 2022
             return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) +
                                (math.log(2 * math.pi))) * (unc[mask].detach()**self.beta))
 
@@ -312,7 +317,6 @@ def flip_lr(image):
         image_flipped : torch.Tensor [B,3,H,W]
     """
     assert image.dim() == 4, 'You need to provide a [B,C,H,W] image to flip'
-
     return torch.flip(image, [3])
 
 
