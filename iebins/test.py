@@ -207,7 +207,7 @@ def predict(model, dataloader_eval) -> None:
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
                 json.dump(scale_data, file, indent=4)
         
-        bebug = False
+        debug = False
         if debug:
             gt_depth[gt_depth < args.min_depth_test] = args.min_depth_test
             gt_depth[gt_depth > args.max_depth_test] = args.max_depth_test
@@ -224,7 +224,7 @@ def main_worker(args):
     torch.set_num_threads(16)
     torch.set_num_interop_threads(16)
 
-    dataloader_eval = DataLoaderCustom(args, 'online_eval')
+    dataloader_eval = DataLoaderCustom(args, 'eval')
 
     num_semantic_classes = dataloader_eval.num_semantic_classes
     num_instances = dataloader_eval.num_instances

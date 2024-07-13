@@ -36,11 +36,6 @@ train_parser.add_argument('--data_path', type=str, help='path to the data', requ
 train_parser.add_argument('--gt_path', type=str, help='path to the groundtruth data', required=True)
 train_parser.add_argument('--filenames_file', type=str, help='path to the filenames text file', required=True)
 
-# Preprocessing #
-train_parser.add_argument('--do_random_rotate', help='if set, will perform random rotation for augmentation',
-                          action='store_true')
-train_parser.add_argument('--degree', type=float, help='random rotation maximum degree', default=2.5)
-
 # Multi-gpu training #
 train_parser.add_argument('--num_threads', type=int, help='number of threads to use for data loading', default=1)
 train_parser.add_argument('--world_size', type=int, help='number of nodes for distributed training', default=1)
@@ -147,11 +142,6 @@ eval_parser.add_argument('--pretrain', type=str, help='path of pretrained encode
 # Dataset
 eval_parser.add_argument('--dataset', type=str, help='dataset to train on, scannet or nyu', default='nyu')
 eval_parser.add_argument('--data_path', type=str, help='path to the data', required=True)
-
-# Preprocessing #
-eval_parser.add_argument('--do_random_rotate', help='if set, will perform random rotation for augmentation',
-                         action='store_true')
-eval_parser.add_argument('--degree', type=float, help='random rotation maximum degree', default=2.5)
 
 # Ranges: depth and image #
 eval_parser.add_argument('--input_height', type=int, help='input height', default=480)

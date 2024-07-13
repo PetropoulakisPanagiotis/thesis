@@ -244,7 +244,7 @@ def eval_func(model, dataloader_eval):
 
 def main_worker(args):
 
-    dataloader_eval = DataLoaderCustom(args, 'online_eval')
+    dataloader_eval = DataLoaderCustom(args, 'eval')
     num_semantic_classes = dataloader_eval.num_semantic_classes
     num_instances = dataloader_eval.num_instances
     
