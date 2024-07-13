@@ -50,16 +50,12 @@ def eval_func(model, dataloader_eval):
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
             gt_depth = eval_sample_batched['depth']
 
-            if args.segmentation:
-                segmentation_map = torch.autograd.Variable(eval_sample_batched['segmentation_map'].cuda())
+            if args.instances: 
                 instances = torch.autograd.Variable(eval_sample_batched['instances_masks'].cuda())
                 boxes = torch.autograd.Variable(eval_sample_batched['instances_bbox'].cuda())
                 labels = torch.autograd.Variable(eval_sample_batched['instances_labels'].cuda())
-
-            has_valid_depth = eval_sample_batched['has_valid_depth']
-            if not has_valid_depth:
-                print('Invalid depth. continue.')
-                continue
+            elif args.segmentation:
+                segmentation_map = torch.autograd.Variable(eval_sample_batched['segmentation_map'].cuda())
 
             # Predict #
             start_time = time.time()

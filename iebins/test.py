@@ -29,45 +29,42 @@ def predict(model, dataloader_eval) -> None:
     num_semantic_classes = dataloader_eval.num_semantic_classes
     num_instances = dataloader_eval.num_instances
 
+    # Open test files #
     with open(args.filenames_file_eval, 'r') as f:
         file_id_str = f.read().splitlines()
 
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
-        with torch.no_grad():
-            image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
-            gt_depth = eval_sample_batched['depth']
+        image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
+        gt_depth = eval_sample_batched['depth']
 
-            if (args.dataset == 'nyu' or args.dataset == 'scannet') and args.segmentation:
-                segmentation_map = torch.autograd.Variable(eval_sample_batched['segmentation_map'].cuda())
-                instances = torch.autograd.Variable(eval_sample_batched['instances_masks'].cuda())
-                boxes = torch.autograd.Variable(eval_sample_batched['instances_bbox'].cuda())
-                labels = torch.autograd.Variable(eval_sample_batched['instances_labels'].cuda())
+        if args.instances:
+            instances = torch.autograd.Variable(eval_sample_batched['instances_masks'].cuda())
+            boxes = torch.autograd.Variable(eval_sample_batched['instances_bbox'].cuda())
+            labels = torch.autograd.Variable(eval_sample_batched['instances_labels'].cuda())
+        elif args.segmentation:
+            segmentation_map = torch.autograd.Variable(eval_sample_batched['segmentation_map'].cuda())
 
-            has_valid_depth = eval_sample_batched['has_valid_depth']
-            if not has_valid_depth:
-                print('Invalid depth. continue.')
-                continue
+        # Predict
+        if args.instances:
+            result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
+        elif args.segmentation:
+            result = model(image, masks=segmentation_map)
+        else:
+            result = model(image)
 
-            # Predict
-            if args.instances:
-                result = model(image, masks=segmentation_map, instances=instances, boxes=boxes, labels=labels)
-            elif args.segmentation:
-                result = model(image, masks=segmentation_map)
-            else:
-                result = model(image)
+        # Unpack result #
+        pred_depths_r_list = result["pred_depths_r_list"]
 
-            # Unpack result
-            pred_depths_r_list = result["pred_depths_r_list"]
+        # Depth prediction #
+        if args.instances:
+            pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
+        elif args.segmentation:
+            pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
+        else:
+            pred_depth = pred_depths_r_list[-1]
 
-            if args.instances:
-                pred_depth = torch.sum((pred_depths_r_list[-1] * instances), dim=1).unsqueeze(0)
-            elif args.segmentation:
-                pred_depth = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(0)
-            else:
-                pred_depth = pred_depths_r_list[-1]
-
-            pred_depth = pred_depth.cpu().numpy().squeeze()
-            gt_depth = gt_depth.cpu().numpy().squeeze()
+        pred_depth = pred_depth.cpu().numpy().squeeze()
+        gt_depth = gt_depth.cpu().numpy().squeeze()
 
         pred_depth[pred_depth < args.min_depth_test] = args.min_depth_test
         pred_depth[pred_depth > args.max_depth_test] = args.max_depth_test
@@ -88,13 +85,14 @@ def predict(model, dataloader_eval) -> None:
             scale_data = {'scale': scale, 'scale_type': 'per-instance'}
             scale_idx = [i for i in range(len(scale))]
 
+            # Scale_map: h,w -> scale id
             scale_idx_tensor = torch.tensor(
                 scale_idx, dtype=torch.int16).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).to(device=instances.device)
-
             scale_map = torch.sum((instances * scale_idx_tensor), dim=1).to(torch.int16).squeeze(0)
             cv2.imwrite(args.save_dir + 'scale_map/' + filename,
                         scale_map.cpu().numpy(), [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
+            # Which network scale predictions are valid #
             valid_scales = torch.unique(scale_map).cpu().numpy().tolist()
             scale_data['valid'] = [1 if scale_idx_item in valid_scales else 0 for scale_idx_item in scale_idx]
 
@@ -104,12 +102,15 @@ def predict(model, dataloader_eval) -> None:
 
             cv2.imwrite(args.save_dir + 'canonical/' + filename,
                         map_float_data_to_int(canonical, normalization_const_depth), [cv2.IMWRITE_PNG_COMPRESSION, 9])
+            
             # Uncertainty canonical and scale #
             if args.unc_head:
                 canonical_unc = result["unc_c"][-1]
                 scale_unc = result["unc_s"][-1]
             elif args.virtual_depth_variation == 0:
                 canonical_unc = result["uncertainty_maps_list"][-1]**2  # to variance
+                canonical_unc = torch.sum((instances * canonical_unc), dim=1).to(torch.int16).squeeze(0)
+                
                 scale_unc = result["uncertainty_maps_scale_list"][-1]**2  # to variance
             else:
                 raise ValueError(
@@ -133,7 +134,7 @@ def predict(model, dataloader_eval) -> None:
             scale_idx_tensor = torch.tensor(
                 scale_idx,
                 dtype=torch.int16).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).to(device=segmentation_map.device)
-
+            
             scale_map = torch.sum((segmentation_map * scale_idx_tensor), dim=1).to(torch.int16).squeeze(0)
             cv2.imwrite(args.save_dir + 'scale_map/' + filename,
                         scale_map.cpu().numpy(), [cv2.IMWRITE_PNG_COMPRESSION, 9])
@@ -154,6 +155,8 @@ def predict(model, dataloader_eval) -> None:
                 scale_unc = result["unc_s"][-1]
             elif args.virtual_depth_variation == 0:
                 canonical_unc = result["uncertainty_maps_list"][-1]**2  # to variance
+                canonical_unc = torch.sum((segmentation_map * canonical_unc), dim=1).to(torch.int16).squeeze(0)
+
                 scale_unc = result["uncertainty_maps_scale_list"][-1]**2  # to variance
             else:
                 raise ValueError(
@@ -163,13 +166,13 @@ def predict(model, dataloader_eval) -> None:
             scale_data['scale_uncertainty'] = scale_unc
 
             canonical_unc = canonical_unc.cpu().numpy()
-
             np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
 
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
                 json.dump(scale_data, file, indent=4)
 
-        else:  # Single scale
+        # Global scale #
+        else:  
             # Scale #
             scale = float(result['pred_scale_list'][-1].cpu().numpy().squeeze())
             scale_data = {'scale': [scale], 'scale_type': 'global', 'valid': [1]}
@@ -203,8 +206,9 @@ def predict(model, dataloader_eval) -> None:
 
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
                 json.dump(scale_data, file, indent=4)
-
-        if False:
+        
+        bebug = False
+        if debug:
             gt_depth[gt_depth < args.min_depth_test] = args.min_depth_test
             gt_depth[gt_depth > args.max_depth_test] = args.max_depth_test
             gt_depth[np.isinf(gt_depth)] = args.max_depth_test
@@ -225,7 +229,7 @@ def main_worker(args):
     num_semantic_classes = dataloader_eval.num_semantic_classes
     num_instances = dataloader_eval.num_instances
 
-    # Depth model
+    # Depth model #
     model = NewCRFDepth(version=args.encoder, max_tree_depth=args.max_tree_depth, bin_num=args.bin_num, min_depth=args.min_depth,
                         max_depth=args.max_depth, update_block=args.update_block, loss_type=args.loss_type,
                         num_semantic_classes=num_semantic_classes, num_instances=num_instances, \
@@ -244,16 +248,15 @@ def main_worker(args):
     model.cuda()
     print("== Model Initialized")
 
-    if args.checkpoint_path != '':
-        if os.path.isfile(args.checkpoint_path):
-            print("== Loading checkpoint '{}'".format(args.checkpoint_path))
-            checkpoint = torch.load(args.checkpoint_path, map_location='cpu')
-            model.load_state_dict(checkpoint['model'])
-            print("== Loaded checkpoint '{}'".format(args.checkpoint_path))
-            del checkpoint
-        else:
-            print("== No checkpoint found at '{}'".format(args.checkpoint_path))
-            exit()
+    if args.checkpoint_path != '' and os.path.isfile(args.checkpoint_path):
+        print("== Loading checkpoint '{}'".format(args.checkpoint_path))
+        checkpoint = torch.load(args.checkpoint_path, map_location='cpu')
+        model.load_state_dict(checkpoint['model'])
+        print("== Loaded checkpoint '{}'".format(args.checkpoint_path))
+        del checkpoint
+    else:
+        print("== No checkpoint found at '{}'".format(args.checkpoint_path))
+        exit()
 
     cudnn.benchmark = True
 
