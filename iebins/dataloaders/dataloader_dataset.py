@@ -159,7 +159,7 @@ class DatasetPreprocess(Dataset):
         # ToTensorCustom, also load scannet if dataset == scannet #
         if self.transform:
             sample = self.transform([sample, self.args.dataset])
-
+        
         return sample
 
     # Random gamma, brightness, and color augmentations #

@@ -41,7 +41,8 @@ def predict(model, dataloader_eval) -> None:
             instances = torch.autograd.Variable(eval_sample_batched['instances_masks'].cuda())
             boxes = torch.autograd.Variable(eval_sample_batched['instances_bbox'].cuda())
             labels = torch.autograd.Variable(eval_sample_batched['instances_labels'].cuda())
-        elif args.segmentation:
+        
+        if args.segmentation:
             segmentation_map = torch.autograd.Variable(eval_sample_batched['segmentation_map'].cuda())
 
         # Predict

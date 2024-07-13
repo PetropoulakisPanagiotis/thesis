@@ -18,7 +18,7 @@ from networks.NewCRFDepth import NewCRFDepth
 from parser_options import train_parser
 from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
 from online_eval import online_eval
-from utils import silog_loss, l1_loss, d3vo_loss, \
+from utils import silog_loss, l1_loss, d3vo_loss, canonical_regularization, \
                     eval_metrics, block_print, enable_print, load_checkpoint_skip_update_project, load_checkpoint, \
                     set_hparams_dict, sigma_metric_from_canonical_and_scale
 
@@ -30,6 +30,45 @@ if sys.argv.__len__() == 2:
 else:
     args = train_parser.parse_args()
 
+
+def apply_canonical_regularization_loss(args, canonical_regularization_criterion, result, depth_gt, segmentation_map, instances, mask):
+    if args.instances:
+        b, ins_num, h, w = result['pred_depths_r_list'][-1].shape
+
+        # d_metric_gt / scale #
+        gt_canonical = depth_gt.to(result["pred_scale_list"][-1].device).repeat(1, ins_num,  1, 1) / \
+                       result["pred_scale_list"][-1].detach().unsqueeze(-1).unsqueeze(-1)
+        gt_canonical = torch.sum(gt_canonical * instances, dim=1)
+
+        pred_canonical = result['pred_depths_r_list'][-1] / result["pred_scale_list"][-1].detach().unsqueeze(-1).unsqueeze(
+            -1)
+        pred_canonical = torch.sum(pred_canonical * instances, dim=1)
+
+        gt_canonical = torch.clamp(gt_canonical, min=1e-4, max=1.0).unsqueeze(1)
+        pred_canonical = torch.clamp(pred_canonical, min=1e-4, max=1.0).unsqueeze(1)
+
+    elif args.segmentation:
+        b, seg_num, h, w = result['pred_depths_r_list'][-1].shape
+
+        # d_metric_gt / scale #
+        gt_canonical = depth_gt.to(result["pred_scale_list"][-1].device).repeat(
+            1, seg_num, 1, 1) / result["pred_scale_list"][-1].detach().unsqueeze(-1).unsqueeze(-1)
+        gt_canonical = torch.sum(gt_canonical * segmentation_map, dim=1)
+
+        pred_canonical = result['pred_depths_r_list'][-1] / result["pred_scale_list"][-1].detach().unsqueeze(-1).unsqueeze(
+            -1)
+        pred_canonical = torch.sum(pred_canonical * segmentation_map, dim=1)
+
+        gt_canonical = torch.clamp(gt_canonical, min=1e-4, max=1.0).unsqueeze(1)
+        pred_canonical = torch.clamp(pred_canonical, min=1e-4, max=1.0).unsqueeze(1)
+
+    else:
+        gt_canonical = torch.clamp(depth_gt / result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1).detach(), min=1e-4, max=1.0)
+        pred_canonical = torch.clamp(result['pred_depths_r_list'][-1] / result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1).detach(), min=1e-4, max=1.0)
+    
+    canonical_loss = canonical_regularization_criterion.forward(pred_canonical, gt_canonical, mask.to(torch.bool))
+
+    return canonical_loss
 
 def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
@@ -136,6 +175,7 @@ def main_worker(gpu, ngpus_per_node, args):
     silog_criterion = silog_loss(variance_focus=args.variance_focus)
     l1_criterion = l1_loss()
     d3vo_criterion = d3vo_loss(original=args.d3vo_original) # For uncertainty
+    canonical_regularization_criterion = canonical_regularization() # Canonical regularization
 
     start_time = time.time()
     steps_per_epoch = len(dataloader.data)
@@ -236,6 +276,7 @@ def main_worker(gpu, ngpus_per_node, args):
             # Network is trained to optimize depth #
             else:
                 for curr_tree_depth in range(args.max_tree_depth):
+                    # Depth #
                     if args.instances:
                         pred_d = torch.sum((pred_depths_r_list[curr_tree_depth] * instances), dim=1).unsqueeze(1)
                     elif args.segmentation:
@@ -247,6 +288,12 @@ def main_worker(gpu, ngpus_per_node, args):
                         current_loss_depth += silog_criterion.forward(pred_d, depth_gt, mask.to(torch.bool))
                     else:
                         current_loss_depth += l1_criterion.forward(pred_d, depth_gt, mask.to(torch.bool))
+
+                    # Canonical regularization #
+                    if not np.isclose(args.canonical_regularization, 0.0, rtol=1e-6):
+                        canonical_loss = args.canonical_regularization * apply_canonical_regularization_loss(args, canonical_regularization_criterion, result, depth_gt, segmentation_map, instances, mask)                    
+                        current_loss_depth += canonical_loss
+
                 loss = current_loss_depth
 
             ############

@@ -219,11 +219,9 @@ def compute_canonical_errors(gt, pred):
     rms = (gt - pred)**2
     rms = np.sqrt(rms.mean())
 
-    abs_rel = np.mean(np.abs(gt - pred) / gt)
+    mae = np.mean(np.abs(gt - pred))
 
-    sq_rel = np.mean(((gt - pred)**2) / gt)
-
-    return [rms, abs_rel, sq_rel]
+    return [rms, mae]
 
 
 def compute_error_uncertainty(depth_est, depth_gt, unc, beta=0.5, original_d3vo=False):
@@ -267,6 +265,12 @@ class l1_loss(nn.Module):
     def forward(self, depth_est, depth_gt, mask):
         return torch.mean(torch.abs(depth_est[mask] - depth_gt[mask]))
 
+class canonical_regularization(nn.Module):
+    def __init__(self):
+        super(canonical_regularization, self).__init__()
+
+    def forward(self, depth_est, depth_gt, mask):
+        return torch.mean(torch.abs(depth_est[mask] - depth_gt[mask]))
 
 # Variance decomposition: get variance of metric depth from canonical and scale #
 def sigma_metric_from_canonical_and_scale(depth_c, unc_c, scale, unc_scale, args):

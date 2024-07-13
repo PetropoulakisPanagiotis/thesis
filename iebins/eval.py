@@ -29,7 +29,7 @@ else:
 
 def eval_func(model, dataloader_eval):
     eval_measures = torch.zeros(11).cuda()
-    eval_measures_canonical = torch.zeros(3).cuda()
+    eval_measures_canonical = torch.zeros(2).cuda()
 
     uncertainty_metrics = ["abs_rel", "rmse", "a1"]
     aucs = {"abs_rel": [], "rmse": [], "a1": []}    # Save results 
@@ -54,7 +54,7 @@ def eval_func(model, dataloader_eval):
                 instances = torch.autograd.Variable(eval_sample_batched['instances_masks'].cuda())
                 boxes = torch.autograd.Variable(eval_sample_batched['instances_bbox'].cuda())
                 labels = torch.autograd.Variable(eval_sample_batched['instances_labels'].cuda())
-            elif args.segmentation:
+            if args.segmentation:
                 segmentation_map = torch.autograd.Variable(eval_sample_batched['segmentation_map'].cuda())
 
             # Predict #
@@ -177,7 +177,7 @@ def eval_func(model, dataloader_eval):
             pred_canonical = torch.sum(pred_canonical * instances, dim=1).cpu().numpy().squeeze().squeeze()
 
             gt_canonical = np.clip(gt_canonical[valid_mask], a_min=1e-4, a_max=1.0)
-            pred_canonical = np.clip(pred_depth[valid_mask], a_min=1e-4, a_max=1.0)
+            pred_canonical = np.clip(pred_canonical[valid_mask], a_min=1e-4, a_max=1.0)
 
             canonical_errors = compute_canonical_errors(gt_canonical, pred_canonical)
             eval_measures_canonical += torch.tensor(canonical_errors).cuda()
@@ -195,16 +195,19 @@ def eval_func(model, dataloader_eval):
             pred_canonical = torch.sum(pred_canonical * segmentation_map, dim=1).cpu().numpy().squeeze().squeeze()
 
             gt_canonical = np.clip(gt_canonical[valid_mask], a_min=1e-4, a_max=1.0)
-            pred_canonical = np.clip(pred_depth[valid_mask], a_min=1e-4, a_max=1.0)
+            pred_canonical = np.clip(pred_canonical[valid_mask], a_min=1e-4, a_max=1.0)
 
             canonical_errors = compute_canonical_errors(gt_canonical, pred_canonical)
             eval_measures_canonical += torch.tensor(canonical_errors).cuda()
         else:
-            gt_canonical = np.clip(gt_depth[valid_mask] / result["pred_scale_list"][-1], a_min=1e-4, a_max=1.0)
-            pred_canonical = np.clip(pred_depth[valid_mask] / result["pred_scale_list"][-1], a_min=1e-4, a_max=1.0)
+            gt_canonical = (eval_sample_batched['depth'].to(result["pred_scale_list"][-1].device) / result["pred_scale_list"][-1]).cpu().numpy()
+            gt_canonical = np.clip(gt_canonical, a_min=1e-4, a_max=1.0)
+
+            pred_canonical = (pred_depths_r_list[-1] / result["pred_scale_list"][-1]).cpu().numpy()
+            pred_canonical = np.clip(pred_canonical, a_min=1e-4, a_max=1.0)
             canonical_errors = compute_canonical_errors(gt_canonical, pred_canonical)
             eval_measures_canonical += torch.tensor(canonical_errors).cuda()
-
+    
     # Depth related + optional e^2/variance #
     eval_measures_cpu = eval_measures.cpu()
     cnt = eval_measures_cpu[9].item()
@@ -221,8 +224,8 @@ def eval_func(model, dataloader_eval):
     print('{:7.4f}'.format(eval_measures_cpu[8]))
 
     print('Canonical errors: '.format(int(cnt)))
-    print("{:>7}, {:>7}, {:>7}".format('abs_rel', 'rms', 'sq_rel'))
-    for i in range(3):
+    print("{:>7},{:>7}".format('rms', 'mae'))
+    for i in range(2):
         print('{:7.4f}, '.format(eval_canonical_cpu[i]), end='')
 
     if args.eval_unc:
