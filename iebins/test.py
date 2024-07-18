@@ -272,29 +272,62 @@ def main():
     args.distributed = False
     ngpus_per_node = torch.cuda.device_count()
 
-    assert args.dataset == 'scannet', "Only scannet support for test.py"
+    init_save_dir = args.save_dir 
+    init_filenames_file_eval = args.filenames_file_eval
+    if '.txt' not in args.filenames_file_eval:
 
-    args.save_dir += args.filenames_file_eval.split('/')[-1].split('.')[0] + '/'
-    if args.instances:
-        args.save_dir += 'per_instance/'
-    elif args.segmentation:
-        args.save_dir += 'per_class/'
+        scenes = [f for f in os.listdir(args.filenames_file_eval) if f.startswith('scene')]
+
+        for scene in tqdm(scenes, total=len(scenes)):
+            args.save_dir = init_save_dir + scene.split('.')[0] + '/'
+
+            args.filenames_file_eval = init_filenames_file_eval + '/' + scene
+
+            if args.instances:
+                args.save_dir += 'per_instance/'
+            elif args.segmentation:
+                args.save_dir += 'per_class/'
+            else:
+                args.save_dir += 'global/'
+
+            print('Save dir: ', args.save_dir)
+            os.makedirs(args.save_dir, exist_ok=True)
+            os.makedirs(args.save_dir + 'depth/', exist_ok=True)
+            os.makedirs(args.save_dir + 'scale/', exist_ok=True)
+            os.makedirs(args.save_dir + 'scale_map/', exist_ok=True)
+            os.makedirs(args.save_dir + 'canonical/', exist_ok=True)
+            os.makedirs(args.save_dir + 'canonical_unc/', exist_ok=True)
+
+            if ngpus_per_node > 1:
+                print("This machine has more than 1 gpu. Please set \'CUDA_VISIBLE_DEVICES=0\'")
+                return -1
+            
+            main_worker(args)
+
     else:
-        args.save_dir += 'global/'
+        args.save_dir += args.filenames_file_eval.split('/')[-1].split('.')[0] + '/'
 
-    print('Save dir: ', args.save_dir)
-    os.makedirs(args.save_dir, exist_ok=True)
-    os.makedirs(args.save_dir + 'depth/', exist_ok=True)
-    os.makedirs(args.save_dir + 'scale/', exist_ok=True)
-    os.makedirs(args.save_dir + 'scale_map/', exist_ok=True)
-    os.makedirs(args.save_dir + 'canonical/', exist_ok=True)
-    os.makedirs(args.save_dir + 'canonical_unc/', exist_ok=True)
+        if args.instances:
+            args.save_dir += 'instances/'
+        elif args.segmentation:
+            args.save_dir += 'segmentation/'
+        else:
+            args.save_dir += 'single/'
 
-    if ngpus_per_node > 1:
-        print("This machine has more than 1 gpu. Please set \'CUDA_VISIBLE_DEVICES=0\'")
-        return -1
+        print('Save dir: ', args.save_dir)
+        os.makedirs(args.save_dir, exist_ok=True)
+        os.makedirs(args.save_dir + 'depth/', exist_ok=True)
+        os.makedirs(args.save_dir + 'scale/', exist_ok=True)
+        os.makedirs(args.save_dir + 'scale_map/', exist_ok=True)
+        os.makedirs(args.save_dir + 'canonical/', exist_ok=True)
+        os.makedirs(args.save_dir + 'canonical_unc/', exist_ok=True)
 
-    main_worker(args)
+        if ngpus_per_node > 1:
+            print("This machine has more than 1 gpu. Please set \'CUDA_VISIBLE_DEVICES=0\'")
+            return -1
+        
+        main_worker(args)
+
 
 
 if __name__ == '__main__':

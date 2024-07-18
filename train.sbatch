@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name="shift-ins-2"
-#SBATCH --nodelist=node[13,14]
+#SBATCH --job-name="per-class-scale-scannet-unc-3"
+#SBATCH --nodelist=node[12,16,17]
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:2,VRAM:48G
 #SBATCH --mem=24G
-#SBATCH --time=50:00:00
+#SBATCH --time=70:00:00
 #SBATCH --mail-type=NONE
-#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-shift-ins-2-%j.out
-#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-shift-ins-2-%j.out
-srun python /usr/stud/petp/code/thesis/iebins/train.py /usr/stud/petp/code/thesis/configs/shift_ins_2.txt
+#SBATCH --output=/usr/stud/petp/storage/slurm/logs/slurm-per-class-scale-scannet-unc-3-%j.out
+#SBATCH --error=/usr/stud/petp/storage/slurm/logs/slurm-per-class-scale-scannet-unc-3-%j.out
+srun python /usr/stud/petp/code/thesis/iebins/train.py /usr/stud/petp/code/thesis/configs/per_class/per_class_scale_scannet_unc_3.txt
 
 # SBATCH --nodelist=node[12,14,15,16,17,18]
 # SBATCH --nodelist=node[11,12,13,16,17,18]

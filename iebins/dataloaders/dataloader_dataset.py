@@ -100,7 +100,7 @@ class DatasetPreprocess(Dataset):
                 depth_gt = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED).astype(np.float32)
                 has_valid_depth = True
             else: # NYU
-                data_path = self.args.data_path
+                data_path = self.args.data_path_eval
                 image_path = os.path.join(data_path, sample_path.split()[0])
 
                 # Normalize #

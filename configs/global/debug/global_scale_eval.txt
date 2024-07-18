@@ -4,7 +4,6 @@
 --input_height 480
 --input_width 640
 
---log_directory /usr/stud/petp/code/thesis/tmp/
 --data_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
 
 --data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
@@ -14,22 +13,21 @@
 --max_depth_eval 10
 --eigen_crop
 
---bins_type 0
---bins_type_scale 0
-
---eigen_crop
-
---update_block 2
---virtual_depth_variation 0
+--update_block 1
 
 --loss_type 1
---segmentation
---concat_masks
+
+--bin_num 40
+--min_depth 0
+--max_depth 1
+--max_tree_depth 1
+--virtual_depth_variation 0
 --bin_num 40
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
 
---bins_scale 40
 --eval_unc
---checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale/nyu/model-500-best_silog_4.30353
+--bins_scale 40
+
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/global-scale/nyu/model-30-best_silog_8.43905

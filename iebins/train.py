@@ -3,7 +3,7 @@ import sys
 import time
 import gc
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import torch
 import torch.backends.cudnn as cudnn

@@ -1,4 +1,3 @@
---retrain
 --pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
 --checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale-scannet/nyu/model-5-best_silog_23.75261
 
@@ -32,7 +31,9 @@
 
 --eigen_crop
 
---exp_name per-class-scale-scannet
+--exp_name per-class-scale-scannet-unc
+
+--unc_head
 
 --bins_type 0
 --bins_type_scale 0
@@ -49,5 +50,5 @@
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
-
+--d3vo_original
 --bins_scale 40

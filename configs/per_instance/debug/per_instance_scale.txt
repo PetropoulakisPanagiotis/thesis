@@ -5,26 +5,24 @@
 --dataset nyu
 --data_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
 --gt_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
---filenames_file /usr/stud/petp/code/thesis/data_splits/nyudepthv2_train_files_with_gt.txt
+--filenames_file /usr/stud/petp/code/thesis/data_splits/nyudepthv2_debug_test.txt
 
 --do_online_eval
---log_freq 100
---eval_freq 350
+--log_freq 5
+--eval_freq 5
 --log_directory /usr/stud/petp/code/thesis/tmp/
---data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
---gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
---filenames_file_eval /usr/stud/petp/code/thesis/data_splits/nyudepthv2_test_files_with_gt.txt
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
+--filenames_file_eval /usr/stud/petp/code/thesis/data_splits/nyudepthv2_debug_test.txt
 --min_depth_eval 1e-3
 --max_depth_eval 10
-
---exp_name per-class-scale-bins
 
 --input_height 480
 --input_width 640
 
---batch_size 8
---num_epochs 250
---learning_rate 2e-4
+--batch_size 2
+--num_epochs 31
+--learning_rate 3.5e-4
 --weight_decay 1e-2
 --adam_eps 1e-3
 
@@ -32,20 +30,27 @@
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2345
 
+
+--exp_name per-instance-scale
+
+
 --bins_type 0
---bins_type_scale 1
+--bins_type_scale 0
 
 --eigen_crop
 
---update_block 2
+--update_block 3
 --virtual_depth_variation 0
-
+--roi_align
 --loss_type 1
+
 --segmentation
---concat_masks
+--instances
+--padding_instances 10
 --bin_num 40
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
+--upsample_type 2
 
---bins_scale 60
+--bins_scale 40

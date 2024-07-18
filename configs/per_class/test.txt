@@ -4,8 +4,8 @@
 --input_height 480
 --input_width 640
 
---data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
---gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
 --filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test
 
 --min_depth_test 1e-3
@@ -26,6 +26,6 @@
 --bins_scale 100
 --unc_head
 --d3vo_original
---checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale-scannet/nyu/model-5-best_silog_23.75261
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale-scannet-unc-2/nyu/model-15750-best_unc_d3vo_1.51916
 
 --save_dir /usr/stud/petp/storage/user/petp/datasets/predictions/
