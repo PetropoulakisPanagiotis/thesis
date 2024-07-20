@@ -11,9 +11,6 @@ from collections import defaultdict
 
 from optimization import LocalBA, LocalBAScaleAware
 from components import Measurement
-
-
-
 """
 Map used in MappingThread - is-a
 """
@@ -91,6 +88,13 @@ class Mapping(object):
             for ck, n in kf.covisibility_keyframes().items():
                 if (n > 0 and ck not in adjust_keyframes and self.is_safe(ck) and ck < kf):
                     fixed_keyframes.add(ck)
+
+        if (len(fixed_keyframes) == 1 and self.args.optimization_base_type == 'mono' and len(adjust_keyframes) > 1):
+            adjust_keyframes = set()
+            for kf in keyframes[1:]:
+                if not kf.is_fixed():
+                    adjust_keyframes.add(kf)
+            fixed_keyframes.add(keyframes[0])
 
         self.optimizer.set_data(adjust_keyframes, fixed_keyframes)
         completed = self.optimizer.optimize(self.params.ba_max_iterations)
@@ -311,19 +315,3 @@ class MappingThread(Mapping):
 
     def interrupt_ba(self):
         self.optimizer.abort()
-
-
-    def create_map(self, save_file: str):
-        mappoints = list(set(chain(*[kf.mappoints() for kf in self.graph.keyframes()])))
-        print("saving map pcd...")
-        print("total mappoints", len(mappoints))
-        points = []
-        colors = []
-        for mappoint in mappoints:
-            points.append(mappoint.position.tolist())
-            colors.append(mappoint.color)
-
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points)
-        pcd.colors = o3d.utility.Vector3dVector(colors)
-        o3d.io.write_point_cloud(save_file, pcd)

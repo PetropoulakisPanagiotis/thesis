@@ -25,8 +25,9 @@ class ScaleReader(object):
             scale, scale_unc, scale_type = [], [], []
             with open(id, 'r') as json_file:
                 data = json.load(json_file)
-                scale = data['scale'] # This is a list
-                scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), a_min=self.min_var, a_max=self.max_var).tolist()
+                scale = data['scale']  # This is a list
+                scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), a_min=self.min_var,
+                                    a_max=self.max_var).tolist()
                 scale_type = data['scale_type']
                 scale_valid = data['valid'] if not scale_type == 'single' else [1]
                 self.cache[idx] = (scale, scale_unc, scale_type, scale_valid)
@@ -35,8 +36,9 @@ class ScaleReader(object):
         scale, scale_unc, scale_type = [], [], []
         with open(path, 'r') as json_file:
             data = json.load(json_file)
-            scale = data['scale'] # This is a list
-            scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), a_min=self.min_var, a_max=self.max_var).tolist()
+            scale = data['scale']  # This is a list
+            scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), a_min=self.min_var,
+                                a_max=self.max_var).tolist()
             scale_type = data['scale_type']
             scale_valid = data['valid'] if not scale_type == 'single' else [1]
 
@@ -64,12 +66,12 @@ class ScaleReader(object):
 
 
 class UncertaintyReader(object):
-    def __init__(self, ids, timestamps=None, min_var=1e-4, max_var=50):
+    def __init__(self, ids, timestamps=None, min_var=1e-4, max_var=50, optimization_type='per_class'):
         self.ids = ids
         self.timestamps = timestamps
         self.max_var = max_var
         self.min_var = min_var
-
+        self.optimization_type = optimization_type
         self.cache = dict()
 
         self.preload()
@@ -77,11 +79,16 @@ class UncertaintyReader(object):
     def preload(self):
         for idx, id in enumerate(self.ids):
             canonical_uncertainty = np.load(id)
+            if 'per_class' or 'per_instance' in self.optimization_type:
+                canonical_uncertainty = canonical_uncertainty.squeeze(0).squeeze(0)
+
             self.cache[idx] = np.clip(canonical_uncertainty, self.min_var, self.max_var)
 
     def read(self, path):
         canonical_uncertainty = np.load(path)
         canonical_uncertainty = np.clip(canonical_uncertainty, self.min_var, self.max_var)
+        if 'per_class' or 'per_instance' in self.optimization_type:
+            canonical_uncertainty = canonical_uncertainty.squeeze(0).squeeze(0)
 
         return canonical_uncertainty
 
@@ -299,7 +306,8 @@ class ScanNetDataset(object):
     cam = namedtuple('camera', 'fx fy cx cy scale')(577.5906635802469, 576.3481987847223, 319.15804639274694,
                                                     241.9392752941744, 1000)
 
-    def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True, optimization_type='global', max_var=50.0, min_var=1e-4, network_depth=True, total=None):
+    def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True, optimization_type='global',
+                 max_var=50.0, min_var=1e-4, network_depth=True, total=None, local=False):
         self.scale_aware = scale_aware
         path = os.path.expanduser(path)
         self.max_var = max_var
@@ -319,14 +327,63 @@ class ScanNetDataset(object):
         rgb_ids = [path + '/' + split + '/rgb/' + scene + "/" + str(item) + '.jpg' for item in ids]
 
         if self.scale_aware:
-            depth_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png' for item in ids]
-            canonical_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/canonical/" + str(item) + '.png' for item in ids]
-            canonical_unc_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/canonical_unc/" + str(item) + '.npy' for item in ids]
-            scales_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/scale/" + str(item) + '.json' for item in ids]
-            pixel_to_scale_map_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/scale_map/" + str(item) + '.png' for item in ids]
+            if local:
+                depth_ids = [
+                    path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) +
+                    '.png' for item in ids
+                ]
+                canonical_ids = [
+                    path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/canonical/" + str(item) +
+                    '.png' for item in ids
+                ]
+                canonical_unc_ids = [
+                    path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/canonical_unc/" +
+                    str(item) + '.npy' for item in ids
+                ]
+                scales_ids = [
+                    path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/scale/" + str(item) +
+                    '.json' for item in ids
+                ]
+                pixel_to_scale_map_ids = [
+                    path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/scale_map/" + str(item) +
+                    '.png' for item in ids
+                ]
+            else:
+                path = path.replace('/scannet/data_converted', '')
+                depth_ids = [
+                    path + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png'
+                    for item in ids
+                ]
+                canonical_ids = [
+                    path + '/predictions/' + scene + '/' + optimization_type + "/canonical/" + str(item) + '.png'
+                    for item in ids
+                ]
+                canonical_unc_ids = [
+                    path + '/predictions/' + scene + '/' + optimization_type + "/canonical_unc/" + str(item) + '.npy'
+                    for item in ids
+                ]
+                scales_ids = [
+                    path + '/predictions/' + scene + '/' + optimization_type + "/scale/" + str(item) + '.json'
+                    for item in ids
+                ]
+                pixel_to_scale_map_ids = [
+                    path + '/predictions/' + scene + '/' + optimization_type + "/scale_map/" + str(item) + '.png'
+                    for item in ids
+                ]
+
         else:
             if network_depth:
-                depth_ids = [path + '/' + split + '/network_predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png' for item in ids]
+                if local:
+                    depth_ids = [
+                        path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) +
+                        '.png' for item in ids
+                    ]
+                else:
+                    path = path.replace('/scannet/data_converted', '')
+                    depth_ids = [
+                        path + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png'
+                        for item in ids
+                    ]
             else:
                 depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
 
@@ -339,20 +396,20 @@ class ScanNetDataset(object):
                 pixel_to_scale_map_ids = pixel_to_scale_map_ids[:total]
                 scales_ids = scales_ids[:total]
 
-
         # Read depth #
         self.rgb = ImageReader(rgb_ids, rgb_timestamps)
         self.depth = ImageReader(depth_ids, depth_timestamps)
         if self.scale_aware:
             # Canonical #
             self.canonical = ImageReader(canonical_ids, depth_timestamps)
-            self.canonical_uncertainty = UncertaintyReader(canonical_unc_ids, rgb_timestamps, self.min_var, self.max_var)
+            self.canonical_uncertainty = UncertaintyReader(canonical_unc_ids, rgb_timestamps, self.min_var,
+                                                           self.max_var, optimization_type)
 
             # Map #
             self.pixel_to_scale_map = ImageReader(pixel_to_scale_map_ids, depth_timestamps)
 
             # Scale #
-            self.scale = ScaleReader(scales_ids, rgb_timestamps, self.min_var, self.max_var) 
+            self.scale = ScaleReader(scales_ids, rgb_timestamps, self.min_var, self.max_var)
 
     def __getitem__(self, idx):
         return self.rgb[idx], self.depth[idx]

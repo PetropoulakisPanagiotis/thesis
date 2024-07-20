@@ -8,11 +8,10 @@ import time
 from multiprocessing import Process, Queue
 
 
-
 class DynamicArray(object):
     def __init__(self, shape=3):
         if isinstance(shape, int):
-            shape = (shape,)
+            shape = (shape, )
         assert isinstance(shape, tuple)
 
         self.data = np.zeros((1000, *shape))
@@ -24,21 +23,20 @@ class DynamicArray(object):
 
     def append(self, x):
         self.extend([x])
-    
+
     def extend(self, xs):
         if len(xs) == 0:
             return
         assert np.array(xs[0]).shape == self.shape
 
         if self.ind + len(xs) >= len(self.data):
-            self.data.resize(
-                (2 * len(self.data), *self.shape) , refcheck=False)
+            self.data.resize((2 * len(self.data), *self.shape), refcheck=False)
 
         if isinstance(xs, np.ndarray):
-            self.data[self.ind:self.ind+len(xs)] = xs
+            self.data[self.ind:self.ind + len(xs)] = xs
         else:
             for i, x in enumerate(xs):
-                self.data[self.ind+i] = x
+                self.data[self.ind + i] = x
             self.ind += len(xs)
 
     def array(self):
@@ -54,8 +52,6 @@ class DynamicArray(object):
     def __iter__(self):
         for x in self.data[:self.ind]:
             yield x
-
-
 
 
 class MapViewer(object):
@@ -91,7 +87,7 @@ class MapViewer(object):
         points = []
         for m in self.system.reference.measurements():
             if m.from_triangulation():
-                points.append(m.mappoint.position) 
+                points.append(m.mappoint.position)
         self.q_active.put(points)
 
         lines = []
@@ -104,13 +100,11 @@ class MapViewer(object):
                 lines.append(([*kf.position, *kf.loop_keyframe.position], 2))
         self.q_graph.put(lines)
 
-        
         if refresh:
             cameras = []
             for kf in self.system.graph.keyframes():
                 cameras.append(kf.pose.matrix())
             self.q_camera.put(cameras)
-
 
             points = []
             colors = []
@@ -138,7 +132,6 @@ class MapViewer(object):
                 self.q_points.put((points, 1))
                 self.q_colors.put((colors, 1))
 
-
     def stop(self):
         self.update(refresh=True)
         self.view_thread.join()
@@ -150,13 +143,12 @@ class MapViewer(object):
                     _ = x.get()
         print('viewer stopped')
 
-
     def view(self):
         pangolin.CreateWindowAndBind('Viewer', 1024, 768)
 
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glEnable(gl.GL_BLEND)
-        gl.glBlendFunc (gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+        gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
 
         panel = pangolin.CreatePanel('menu')
         panel.SetBounds(0.5, 1.0, 0.0, 175 / 1024.)
@@ -170,13 +162,13 @@ class MapViewer(object):
 
         # button
         m_replay = pangolin.VarBool('menu.Replay', value=False, toggle=False)
-        m_refresh = pangolin.VarBool('menu.Refresh', False, False)  
+        m_refresh = pangolin.VarBool('menu.Refresh', False, False)
         m_reset = pangolin.VarBool('menu.Reset', False, False)
 
         if self.config is None:
             viewpoint_x = 0
-            viewpoint_y = -500   # -10
-            viewpoint_z = -100   # -0.1
+            viewpoint_y = -500  # -10
+            viewpoint_z = -100  # -0.1
             viewpoint_f = 2000
             camera_width = 1.
             width, height = 350, 250
@@ -189,10 +181,8 @@ class MapViewer(object):
             width = self.config.view_image_width
             height = self.config.view_image_height
 
-        proj = pangolin.ProjectionMatrix(
-            1024, 768, viewpoint_f, viewpoint_f, 512, 389, 0.1, 5000)
-        look_view = pangolin.ModelViewLookAt(
-            viewpoint_x, viewpoint_y, viewpoint_z, 0, 0, 0, 0, -1, 0)
+        proj = pangolin.ProjectionMatrix(1024, 768, viewpoint_f, viewpoint_f, 512, 389, 0.1, 5000)
+        look_view = pangolin.ModelViewLookAt(viewpoint_x, viewpoint_y, viewpoint_z, 0, 0, 0, 0, -1, 0)
 
         # Camera Render Object (for view / scene browsing)
         scam = pangolin.OpenGlRenderState(proj, look_view)
@@ -202,7 +192,6 @@ class MapViewer(object):
         dcam.SetBounds(0.0, 1.0, 175 / 1024., 1.0, -1024 / 768.)
         dcam.SetHandler(pangolin.Handler3D(scam))
 
-
         # image
         dimg = pangolin.Display('image')
         dimg.SetBounds(0, height / 768., 0.0, width / 1024., 1024 / 768.)
@@ -211,19 +200,16 @@ class MapViewer(object):
         texture = pangolin.GlTexture(width, height, gl.GL_RGB, False, 0, gl.GL_RGB, gl.GL_UNSIGNED_BYTE)
         image = np.ones((height, width, 3), 'uint8')
 
-
-
-        pose = pangolin.OpenGlMatrix()   # identity matrix
+        pose = pangolin.OpenGlMatrix()  # identity matrix
         following = True
 
         active = []
         replays = []
         graph = []
         loops = []
-        mappoints = DynamicArray(shape=(3,))
-        colors = DynamicArray(shape=(3,))
+        mappoints = DynamicArray(shape=(3, ))
+        colors = DynamicArray(shape=(3, ))
         cameras = DynamicArray(shape=(4, 4))
-
 
         while not pangolin.ShouldQuit():
 
@@ -240,12 +226,9 @@ class MapViewer(object):
             elif not follow and following:
                 following = False
 
-
-
             gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
             gl.glClearColor(1.0, 1.0, 1.0, 1.0)
             dcam.Activate(scam)
-
 
             # show graph
             if not self.q_graph.empty():
@@ -268,15 +251,14 @@ class MapViewer(object):
                 gl.glVertex3d(pose[0, 3], pose[1, 3], pose[2, 3])
                 gl.glEnd()
 
-
             # Show mappoints
             if not self.q_points.empty():
                 pts, code = self.q_points.get()
                 cls, code = self.q_colors.get()
-                if code == 1:     # append new points
+                if code == 1:  # append new points
                     mappoints.extend(pts)
                     colors.extend(cls)
-                elif code == 0:   # refresh all points
+                elif code == 0:  # refresh all points
                     mappoints.clear()
                     mappoints.extend(pts)
                     colors.clear()
@@ -284,9 +266,8 @@ class MapViewer(object):
 
             if m_show_points.Get():
                 gl.glPointSize(2)
-                 # easily draw millions of points
+                # easily draw millions of points
                 pangolin.DrawPoints(mappoints.array(), colors.array())
-
 
                 if not self.q_active.empty():
                     active = self.q_active.get()
@@ -298,7 +279,6 @@ class MapViewer(object):
                     gl.glVertex3f(*point)
                 gl.glEnd()
 
-
             if len(replays) > 0:
                 n = 300
                 gl.glPointSize(4)
@@ -309,21 +289,18 @@ class MapViewer(object):
                 gl.glEnd()
                 replays = replays[n:]
 
-
-
             # show cameras
             if not self.q_camera.empty():
                 cams = self.q_camera.get()
                 if len(cams) > 20:
                     cameras.clear()
                 cameras.extend(cams)
-                
+
             if m_show_keyframes.Get():
                 gl.glLineWidth(1)
                 gl.glColor3f(0.0, 0.0, 1.0)
                 pangolin.DrawCameras(cameras.array(), camera_width)
 
-            
             # show image
             if not self.q_image.empty():
                 image = self.q_image.get()
@@ -332,13 +309,12 @@ class MapViewer(object):
                 else:
                     image = np.repeat(image[::-1, :, np.newaxis], 3, axis=2)
                 image = cv2.resize(image, (width, height))
-            if m_show_image.Get():         
+            if m_show_image.Get():
                 texture.Upload(image, gl.GL_RGB, gl.GL_UNSIGNED_BYTE)
                 dimg.Activate()
                 gl.glColor3f(1.0, 1.0, 1.0)
                 texture.RenderToViewport()
 
-    
             if pangolin.Pushed(m_replay):
                 replays = mappoints.array()
 
@@ -352,6 +328,5 @@ class MapViewer(object):
 
             if pangolin.Pushed(m_refresh):
                 self.q_refresh.put(True)
-
 
             pangolin.FinishFrame()

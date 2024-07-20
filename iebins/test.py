@@ -121,7 +121,7 @@ def predict(model, dataloader_eval) -> None:
             scale_unc = scale_unc.view(num_instances).cpu().numpy().tolist()
             scale_data['scale_uncertainty'] = scale_unc
 
-            canonical_unc = canonical_unc.cpu().numpy()
+            canonical_unc = canonical_unc.cpu().numpy().squeeze(0).squeeze(0)
             np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
                 json.dump(scale_data, file, indent=4)
@@ -166,7 +166,7 @@ def predict(model, dataloader_eval) -> None:
             scale_unc = scale_unc.view(num_semantic_classes).cpu().numpy().tolist()
             scale_data['scale_uncertainty'] = scale_unc
 
-            canonical_unc = canonical_unc.cpu().numpy()
+            canonical_unc = canonical_unc.cpu().numpy().squeeze(0).squeeze(0)
             np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
 
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:

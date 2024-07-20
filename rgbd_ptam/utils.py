@@ -2,6 +2,7 @@ import os
 import json
 import numpy as np
 
+
 def read_scannet_json_files(directory):
     entries = []
     for root, _, files in os.walk(directory):
@@ -26,17 +27,48 @@ def read_scannet_json_files(directory):
     entries.sort(key=lambda x: x[0])
     return entries
 
+
 def convet_scannet_to_tum(path, output_file):
     entries = read_scannet_json_files(path)
     with open(output_file, 'w') as txt_file:
         for entry in entries:
-            txt_file.write(' '.join(map(str, entry)) + '\n')  # Joining the tuple elements with space and writing to file
+            txt_file.write(' '.join(map(str, entry)) +
+                           '\n')  # Joining the tuple elements with space and writing to file
 
 
-directory_gt = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/'
-save_dir = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/gt_traj/'
+#directory_gt = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/extrinsics/'
+#save_dir = '/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/gt_traj/'
 
-scenes = ['scene0655_01']
+directory_gt = '/usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/extrinsics/'
+save_dir = '/usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/gt_traj/'
+
+#scenes = ['scene0655_01']
+scenes = [
+    'scene0025_01',
+    'scene0077_00',
+    'scene0100_00',
+    'scene0169_01',
+    'scene0300_01',
+    'scene0474_04',
+    'scene0553_00',
+    'scene0568_02',
+    'scene0598_02',
+    'scene0647_00',
+    'scene0684_00',
+    'scene0693_01',
+    'scene0064_00',
+    'scene0086_02',
+    'scene0153_00',
+    'scene0203_01',
+    'scene0314_00',
+    'scene0527_00',
+    'scene0558_02',
+    'scene0574_01',
+    'scene0609_03',
+    'scene0664_02',
+    'scene0685_01',
+]
+
 for scene in scenes:
     gt_path = directory_gt + scene
 

@@ -4,8 +4,9 @@ import g2o
 
 from components import Camera
 
+
 class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
-    def __init__(self, args, max_frames=50, max_instances=50):
+    def __init__(self, args, max_frames=500, max_instances=100):
         super().__init__()
         self.args = args
 
@@ -79,8 +80,8 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         edge.set_information(information * self.args.weight_camera)
 
         edge.set_id(self.scale_offset + 2 * edge_id)
-        edge.set_vertex(0, self.vertex(self.scale_offset + 2*point_id + 1))
-        edge.set_vertex(1, self.vertex(self.scale_offset + 2*pose_id))
+        edge.set_vertex(0, self.vertex(self.scale_offset + 2 * point_id + 1))
+        edge.set_vertex(1, self.vertex(self.scale_offset + 2 * pose_id))
         kernel = g2o.RobustKernelHuber(np.sqrt(self.args.threshold_camera))
         edge.set_robust_kernel(kernel)
         super().add_edge(edge)
@@ -95,8 +96,8 @@ class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
         # 0 Cam
         # 1 3D point
         # 2 scale
-        edge.set_vertex(0, self.vertex(self.scale_offset + 2*pose_id))
-        edge.set_vertex(1, self.vertex(self.scale_offset + 2*point_id+1))
+        edge.set_vertex(0, self.vertex(self.scale_offset + 2 * pose_id))
+        edge.set_vertex(1, self.vertex(self.scale_offset + 2 * point_id + 1))
         edge.set_vertex(2, self.vertex(scale_id))
         kernel = g2o.RobustKernelHuber(np.sqrt(self.args.threshold_depth_consistency))
         edge.set_robust_kernel(kernel)
@@ -285,9 +286,9 @@ class LocalBAScaleAware(object):
     def __init__(self, args):
         self.optimizer = BundleAdjustmentScaleAware(args=args)
         self.measurements = {}  # Measurements, can be both from optimized non-optimzed pose frames
-        self.keyframes = []     # Frames that their pose is optimized
+        self.keyframes = []  # Frames that their pose is optimized
         self.mappoints = set()  # Only add 3D points that belong to frames that their pose is optimized
-        self.scales_start = [0]  # Each frame has a scale, save indexes for easy mapping 
+        self.scales_start = [0]  # Each frame has a scale, save indexes for easy mapping
 
         self.args = args
 
@@ -301,19 +302,19 @@ class LocalBAScaleAware(object):
             self.keyframes.append(kf)
 
             # Add scales #
-            for ii, (scale, scale_valid) in enumerate(zip(kf.scale_aware_frame.scales, kf.scale_aware_frame.scales_valid)):
+            for ii, (scale,
+                     scale_valid) in enumerate(zip(kf.scale_aware_frame.scales, kf.scale_aware_frame.scales_valid)):
                 if scale_valid == 1:
                     # Scale Id: ii + scale_start
                     self.optimizer.add_scale(self.scales_start[-1] + ii, scale, fixed=False)
 
                     information = np.identity(1)
                     if self.args.use_uncertainties:
-                        information *= 1./kf.scale_aware_frame.scales_uncertainty[ii]
+                        information *= 1. / kf.scale_aware_frame.scales_uncertainty[ii]
 
                     # Edge Id: ii + scale_start
                     self.optimizer.add_scale_edge(self.scales_start[-1] + ii, self.scales_start[-1] + ii, scale,
                                                   information=information)
-
 
             for m in kf.measurements():
                 pt = m.mappoint
@@ -327,22 +328,24 @@ class LocalBAScaleAware(object):
                 # Add pose - 2D measurement constraint alogn with 3D point #
                 edge_id = len(self.measurements)
                 self.optimizer.add_camera_edge(edge_id, pt.id, kf.id, m.xy)
-                self.measurements[2*edge_id + self.optimizer.scale_offset] = m
+                self.measurements[2 * edge_id + self.optimizer.scale_offset] = m
 
                 information = np.identity(1)
                 if self.args.use_uncertainties:
-                    information *= 1./m.covariance_canonical_measurement
+                    information *= 1. / m.covariance_canonical_measurement
 
                 # Edge Id: scale_offset + 2*ii + 1
-                self.optimizer.add_depth_scale_consistency_edge(edge_id, pt.id, kf.id, self.scales_start[-1] + m.scale_id_measurement, m.canonical_measurement,
-                                                                information=information)
+                self.optimizer.add_depth_scale_consistency_edge(edge_id, pt.id, kf.id,
+                                                                self.scales_start[-1] + m.scale_id_measurement,
+                                                                m.canonical_measurement, information=information)
 
             self.scales_start.append(self.scales_start[-1] + len(kf.scale_aware_frame.scales))
         for kf in fixed_keyframes:
             self.optimizer.add_pose(kf.id, kf.pose, kf.cam, fixed=True)
 
             # Add scales #
-            for ii, (scale, scale_valid) in enumerate(zip(kf.scale_aware_frame.scales, kf.scale_aware_frame.scales_valid)):
+            for ii, (scale,
+                     scale_valid) in enumerate(zip(kf.scale_aware_frame.scales, kf.scale_aware_frame.scales_valid)):
                 if scale_valid == 1:
                     # Scale Id: ii + scale_start
                     self.optimizer.add_scale(self.scales_start[-1] + ii, scale, fixed=True)
@@ -353,16 +356,17 @@ class LocalBAScaleAware(object):
                 if m.mappoint in self.mappoints:
                     edge_id = len(self.measurements)
                     self.optimizer.add_camera_edge(edge_id, m.mappoint.id, kf.id, m.xy)
-                    self.measurements[2*edge_id + self.optimizer.scale_offset] = m
+                    self.measurements[2 * edge_id + self.optimizer.scale_offset] = m
                     self.measurements[edge_id] = m
 
                     information = np.identity(1)
                     if self.args.use_uncertainties:
-                        information *= 1./m.covariance_canonical_measurement
+                        information *= 1. / m.covariance_canonical_measurement
 
                     # Edge Id: scale_offset + 2*ii + 1
-                    self.optimizer.add_depth_scale_consistency_edge(edge_id, m.mappoint.id, kf.id, self.scales_start[-1] + m.scale_id_measurement, m.canonical_measurement,
-                                                                    information=information)
+                    self.optimizer.add_depth_scale_consistency_edge(edge_id, m.mappoint.id, kf.id,
+                                                                    self.scales_start[-1] + m.scale_id_measurement,
+                                                                    m.canonical_measurement, information=information)
 
             self.scales_start.append(self.scales_start[-1] + len(kf.scale_aware_frame.scales))
 
