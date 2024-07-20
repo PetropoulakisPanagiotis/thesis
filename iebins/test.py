@@ -222,9 +222,6 @@ def predict(model, dataloader_eval) -> None:
             print(measures)
 
 def main_worker(args):
-    torch.set_num_threads(16)
-    torch.set_num_interop_threads(16)
-
     dataloader_eval = DataLoaderCustom(args, 'eval')
 
     num_semantic_classes = dataloader_eval.num_semantic_classes
@@ -271,6 +268,8 @@ def main():
     torch.cuda.empty_cache()
     args.distributed = False
     ngpus_per_node = torch.cuda.device_count()
+    torch.set_num_threads(16)
+    torch.set_num_interop_threads(16)
 
     init_save_dir = args.save_dir 
     init_filenames_file_eval = args.filenames_file_eval
