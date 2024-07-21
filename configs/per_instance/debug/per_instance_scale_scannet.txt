@@ -30,7 +30,7 @@
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2345
 
---exp_name per-instance-scale-scannet
+--exp_name per-instance-scale-scannet-debug
 
 
 --bins_type 1
@@ -52,5 +52,4 @@
 --max_depth 1
 --max_tree_depth 1
 --upsample_type 0
-
 --bins_scale 40

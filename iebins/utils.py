@@ -62,8 +62,10 @@ def load_checkpoint_skip_update_project(checkpoint_path, gpu, retrain, model, op
             # Skip weights #
             weights_to_remove_1 = "update"
             weights_to_remove_2 = "project"
+            weights_to_remove_3 = "unc_head"
             keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove_1 in key]
             keys_to_remove.extend([key for key in checkpoint['model'].keys() if weights_to_remove_2 in key])
+            keys_to_remove.extend([key for key in checkpoint['model'].keys() if weights_to_remove_3 in key])
 
             for key_to_remove in keys_to_remove:
                 checkpoint['model'].pop(key_to_remove)
@@ -99,6 +101,13 @@ def load_checkpoint(checkpoint_path, gpu, retrain, model, optimizer):
             else:
                 loc = 'cuda:{}'.format(gpu)
                 checkpoint = torch.load(checkpoint_path, map_location=loc)
+
+            # Skip weights #
+            weights_to_remove_1 = "unc_head"
+            keys_to_remove = [key for key in checkpoint['model'].keys() if weights_to_remove_1 in key]
+
+            for key_to_remove in keys_to_remove:
+                checkpoint['model'].pop(key_to_remove)
 
             model.load_state_dict(checkpoint['model'], strict=False)
             if not retrain:
@@ -223,6 +232,15 @@ def compute_canonical_errors(gt, pred):
 
     return [rms, mae]
 
+
+def computer_percentage_errors(gt_c, pred_c, gt_m, pred_m):
+    """
+        canonical and metric
+    """
+    per_error_c = np.mean((np.abs(gt_c - pred_c) / gt_c)) * 100
+    per_error_m = np.mean((np.abs(gt_m - pred_m) / gt_m)) * 100
+
+    return [per_error_c, per_error_m]
 
 def compute_error_uncertainty(depth_est, depth_gt, unc, beta=0.5, original_d3vo=False):
     if original_d3vo:

@@ -417,7 +417,7 @@ Per-Instance scale
 class PerInstanceScale(nn.Module):
     def __init__(self, hidden_dim=128, context_dim=192, bin_num=16, loss_type=0, num_semantic_classes=14, \
                  num_instances=63, padding_instances=0, roi_align=False, roi_align_size=32, bins_scale=150, \
-                 virtual_depth_variation=0, upsample_type=1, bins_type=0, bins_type_scale=0):
+                 virtual_depth_variation=0, upsample_type=1, bins_type=0, bins_type_scale=0, unc_head=False):
         super(PerInstanceScale, self).__init__()
         self.hidden_dim = hidden_dim
         self.loss_type = loss_type
@@ -437,7 +437,7 @@ class PerInstanceScale(nn.Module):
 
         self.roi_align = roi_align
         self.padding_instances = padding_instances
-
+        self.unc_head = unc_head # Predict scales uncertainty with extra head
 
         if self.roi_align:
             output_size = (roi_align_size, roi_align_size)
@@ -454,28 +454,28 @@ class PerInstanceScale(nn.Module):
         # Probabilities canonical/scale #
         if self.virtual_depth_variation == 0:  
             self.instances_canonical = ProbSharedCanonicalInstancesHead(self.hidden_dim, bin_num=bin_num)
-            self.instances_scale_and_shift = ProbScaleInstancesHead(self.hidden_dim, downsampling=4,
+            self.instances_scale = ProbScaleInstancesHead(self.hidden_dim, downsampling=4,
                                                                     num_semantic_classes=self.num_semantic_classes,
-                                                                    num_bins=self.bins_scale, sid=self.sid_scale)
+                                                                    num_bins=self.bins_scale, sid=self.sid_scale, unc_head=unc_head)
             print("PerInstanceScale: bins for both scale and shift")
         # Propabilities canonical #
         elif self.virtual_depth_variation == 1:  
             self.instances_canonical = ProbSharedCanonicalInstancesHead(self.hidden_dim, bin_num=bin_num)
-            self.instances_scale_and_shift = RegressScaleInstancesHead(self.hidden_dim, downsampling=4,
-                                                                       num_semantic_classes=self.num_semantic_classes)
+            self.instances_scale = RegressScaleInstancesHead(self.hidden_dim, downsampling=4,
+                                                                       num_semantic_classes=self.num_semantic_classes, unc_head=unc_head)
             print("PerInstanceScale: bins for canonical")
         # Propabilities scale #
         elif self.virtual_depth_variation == 2:  
             self.instances_canonical = RegressSharedCanonicalInstancesHead(self.hidden_dim, self.hidden_dim)
-            self.instances_scale_and_shift = ProbScaleInstancesHead(self.hidden_dim, downsampling=4,
+            self.instances_scale = ProbScaleInstancesHead(self.hidden_dim, downsampling=4,
                                                                     num_semantic_classes=self.num_semantic_classes,
-                                                                    num_bins=self.bins_scale, sid=self.sid_scale)
+                                                                    num_bins=self.bins_scale, sid=self.sid_scale, unc_head=unc_head)
             print("PerInstanceScale: bins for scale")
         # Regression #
         else:  
             self.instances_canonical = RegressSharedCanonicalInstancesHead(self.hidden_dim, self.hidden_dim)
-            self.instances_scale_and_shift = RegressScaleInstancesHead(self.hidden_dim, downsampling=4,
-                                                                       num_semantic_classes=self.num_semantic_classes)
+            self.instances_scale = RegressScaleInstancesHead(self.hidden_dim, downsampling=4,
+                                                                       num_semantic_classes=self.num_semantic_classes, unc_head=unc_head)
             print("PerInstanceScale: regression")
 
         self.relu = nn.ReLU(inplace=True)
@@ -490,6 +490,7 @@ class PerInstanceScale(nn.Module):
 
         # Scale #
         pred_scale_list = []
+        unc_s_list = []
         pred_depths_scale_c_list = []
 
         # Uncertainty #
@@ -601,27 +602,34 @@ class PerInstanceScale(nn.Module):
         if self.virtual_depth_variation == 0 or self.virtual_depth_variation == 2:
             # Predictions are done internally with ModuleList per class #
             # [num_valid_instances, num_semantic_classes]     
-            instances_scale, unc_scale, scale_labels_bins = self.instances_scale_and_shift(
+            instances_scale, unc_scale, scale_labels_bins, unc_s = self.instances_scale(
                 input_feature_map_instances_roi, boxes, labels)
            
             # Pick correct prediction according to the class of the instance # 
             instances_scale = mask_predictions_to_true_class(instances_scale, labels)
             unc_scale = mask_predictions_to_true_class(unc_scale, labels)
             scale_labels_bins = mask_predictions_to_true_class(scale_labels_bins, labels)
+            if unc_s is not None:
+                unc_s = mask_predictions_to_true_class(unc_s, labels)
 
             pred_scale_list.append(instances_scale)
             uncertainty_maps_scale_list.append(unc_scale)
             pred_depths_scale_c_list.append(scale_labels_bins)
+            unc_s_list.append(unc_s)
+
         # Scale regression #
         else:
-            instances_scale = self.instances_scale_and_shift(input_feature_map_instances_roi, boxes, labels)
+            instances_scale, unc_s = self.instances_scale(input_feature_map_instances_roi, boxes, labels)
             
             # Pick correct prediction according to the class of the instance # 
-            instances_scale = mask_predictions_to_true_class(instances_scale, labels)
-            
+            instances_scale = mask_predictions_to_true_class(instances_scale, labels)            
+            if unc_s is not None:
+                unc_s = mask_predictions_to_true_class(unc_s, labels)
+
             pred_scale_list.append(instances_scale)
             uncertainty_maps_scale_list.append(torch.zeros_like(instances_scale).clamp(min=1e-4))
             pred_depths_scale_c_list.append(torch.zeros_like(instances_scale))
+            unc_s_list.append(unc_s)
 
         # Metric
         if self.loss_type == 0:
@@ -639,7 +647,7 @@ class PerInstanceScale(nn.Module):
 
         result["uncertainty_maps_list"] = uncertainty_maps_list
         result["uncertainty_maps_scale_list"] = uncertainty_maps_scale_list
-
+        result["unc_s"] = unc_s_list
         result["pred_scale_list"] = pred_scale_list
         result["pred_depths_scale_c_list"] = pred_depths_scale_c_list
 

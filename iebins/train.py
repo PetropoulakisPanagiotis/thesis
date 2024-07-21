@@ -132,14 +132,13 @@ def main_worker(gpu, ngpus_per_node, args):
         model = torch.nn.DataParallel(model)
         model.cuda()
 
-
-
     optimizer = torch.optim.Adam([{'params': model.module.parameters()}], lr=args.learning_rate)
 
     # Load checkpoint and print stats #
     if args.unc_head:
         load_checkpoint(args.checkpoint_path, args.gpu, args.retrain, model, optimizer)
-    # IEBINS load checkpoint - skip some layers #
+   
+     # IEBINS load checkpoint - skip some layers #
     else:  
         # IEBINS saved models - these are used for scale variations #
         if 'saved_models' in args.checkpoint_path:  
@@ -266,12 +265,13 @@ def main_worker(gpu, ngpus_per_node, args):
                 elif args.segmentation:
                     # [batch_size, num_semantic_classes, h, w]
                     sigma_metric = torch.sum(sigma_metric * segmentation_map, dim=1).unsqueeze(1)
+                    
                     # [batch_size, 1, h, w]
                     pred_d = torch.sum((pred_depths_r_list[-1] * segmentation_map), dim=1).unsqueeze(1)
                 else:
                     pred_d = pred_depths_r_list[-1]
 
-                loss = d3vo_criterion.forward(pred_d[0], depth_gt[0], sigma_metric[0], mask.to(torch.bool)[0])
+                loss = d3vo_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))
 
             # Network is trained to optimize depth #
             else:
@@ -350,14 +350,17 @@ def main_worker(gpu, ngpus_per_node, args):
                 if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                             and args.rank % ngpus_per_node == 0):
                     if args.unc_head:
-                        tb_visualization_d3vo(writer, global_step, loss, current_lr, var_sum, var_cnt, \
-                                              num_images, sigma_metric)
-                    else:
-                        tb_visualization(writer, global_step, args, current_loss_depth, current_lr, current_loss_unc_decoder, var_sum, var_cnt,\
+                        tb_visualization_d3vo(writer, loss, sigma_metric, global_step, args, current_lr, var_sum, var_cnt,\
                                      num_images, depth_gt, image, args.max_tree_depth, pred_depths_r_list, \
                                      pred_depths_rc_list, num_semantic_classes, \
                                      instances, segmentation_map, labels, pred_depths_c_list, \
-                                     uncertainty_maps_list, pred_depths_u_list, unc_decoder)
+                                     uncertainty_maps_list, pred_depths_u_list)
+                    else:
+                        tb_visualization(writer, global_step, args, current_loss_depth, current_lr, var_sum, var_cnt,\
+                                     num_images, depth_gt, image, args.max_tree_depth, pred_depths_r_list, \
+                                     pred_depths_rc_list, num_semantic_classes, \
+                                     instances, segmentation_map, labels, pred_depths_c_list, \
+                                     uncertainty_maps_list, pred_depths_u_list)
 
             ############
             # Evaluate #

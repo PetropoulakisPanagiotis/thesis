@@ -1,5 +1,5 @@
 --pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
---checkpoint_path /usr/stud/petp/code/thesis/tmp/per-instance-scale-scannet/nyu/model-10-best_silog_15.68455
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/per-instance-scale-scannet-unc-1/nyu/model-19500-best_unc_d3vo_1.69089
 
 --dataset scannet
 --data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
@@ -29,7 +29,7 @@
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2345
 
---exp_name per-instance-scale-scannet-unc
+--exp_name per-instance-scale-scannet-unc-debug
 
 --bins_type 1
 --bins_type_scale 1
@@ -39,6 +39,13 @@
 --update_block 3
 --virtual_depth_variation 0
 
+--bins_type 0
+--bins_type_scale 0
+
+--eigen_crop
+
+--update_block 3
+--virtual_depth_variation 0
 --loss_type 1
 
 --segmentation
@@ -49,9 +56,9 @@
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
---upsample_type 0
-
+--upsample_type 2
 --bins_scale 40
 
 --unc_head
+--d3vo_original
 

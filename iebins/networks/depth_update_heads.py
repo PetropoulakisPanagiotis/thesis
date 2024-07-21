@@ -89,7 +89,7 @@ Out: [num_valid_instances, num_semantic_classes]
 
 class ProbScaleInstancesHead(nn.Module):
     def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=13, num_bins=50, min_scale=0, max_scale=15,
-                 sid=False):
+                 sid=False, unc_head=False):
         super(ProbScaleInstancesHead, self).__init__()
         self.downsampling = downsampling
         self.num_bins = num_bins
@@ -98,12 +98,19 @@ class ProbScaleInstancesHead(nn.Module):
         self.min_scale = min_scale
         self.max_scale = max_scale
         self.sid = sid
+        self.unc_head = unc_head
 
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
         self.pool = nn.AdaptiveAvgPool2d(64)
 
         # One head per class #
         self.scale_nets = nn.ModuleList()
+        
+        if self.unc_head:
+            self.scale_unc_nets = nn.ModuleList()
+            for i in range(num_semantic_classes):
+                self.scale_unc_nets.append(UncertaintyScaleInstancesHead((64 * 64) + 4, 1))
+
         for i in range(num_semantic_classes):
             self.scale_nets.append(nn.Linear((64 * 64) + 4, self.num_bins))
 
@@ -124,6 +131,7 @@ class ProbScaleInstancesHead(nn.Module):
         out = torch.cat((out, boxes_valid_normalized_projected), dim=1)  # Concat boxes
 
         out_list_scale, out_list_unc, out_list_labels = [], [], []
+        out_list_unc_head = []
         for i in range(self.num_semantic_classes):
 
             probs = torch.softmax(self.scale_nets[i](out), axis=1)
@@ -138,11 +146,18 @@ class ProbScaleInstancesHead(nn.Module):
             out_list_unc.append(uncertainty)
             out_list_labels.append(depth_c)
 
+            if self.unc_head:
+                uncertainty_head = self.scale_unc_nets[i](out)
+                out_list_unc_head.append(uncertainty)
+        
         out_scale = torch.cat(out_list_scale, dim=1)
         out_unc = torch.cat(out_list_unc, dim=1)
         out_labels = torch.cat(out_list_labels, dim=1)
+        if self.unc_head:
+            out_unc_head = torch.cat(out_list_unc_head, dim=1)
+            return out_scale, out_unc, out_labels, out_unc_head
 
-        return out_scale, out_unc, out_labels
+        return out_scale, out_unc, out_labels, None
 
 
 """
@@ -152,11 +167,12 @@ Out: [num_valid_instances, num_semantic_classes]
 
 
 class RegressScaleInstancesHead(nn.Module):
-    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14):
+    def __init__(self, input_dim=32, downsampling=4, num_semantic_classes=14, unc_head=False):
         super(RegressScaleInstancesHead, self).__init__()
         self.downsampling = downsampling
         self.num_semantic_classes = num_semantic_classes
         self.input_dim = input_dim
+        self.unc_head = unc_head
 
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
         self.pool = nn.AdaptiveAvgPool2d(64)
@@ -165,6 +181,11 @@ class RegressScaleInstancesHead(nn.Module):
         self.scale_nets = nn.ModuleList()
         for i in range(num_semantic_classes):
             self.scale_nets.append(nn.Linear((64 * 64) + 4, 1))
+
+        if self.unc_head:
+            self.scale_unc_nets = nn.ModuleList()
+            for i in range(num_semantic_classes):
+                self.scale_unc_nets.append(UncertaintyScaleInstancesHead((64 * 64) + 4, 1))
 
     def forward(self, x, boxes, labels):
         """
@@ -178,12 +199,21 @@ class RegressScaleInstancesHead(nn.Module):
         out = torch.cat((out, boxes_valid_normalized_projected), dim=1)
 
         out_list = []
+        out_list_unc_head = []
         for i in range(self.num_semantic_classes):
             scale = F.relu(self.scale_nets[i](out)).clamp(min=1e-4)
             out_list.append(scale)
 
+            if self.unc_head:
+                unc_s = self.scale_unc_nets[i](out)
+                out_list_unc_head.append(unc_s)
+
         out = torch.cat(out_list, dim=1)
-        return out
+        if self.unc_head:
+            out_unc_head = torch.cat(out_list_unc_head, dim=1)
+            return out, out_unc_head
+        else:
+            return out, None
 
 
 """
@@ -283,3 +313,15 @@ class SepConvGRU(nn.Module):
         h = (1 - z) * h + z * q
 
         return h
+
+"""
+Instances UncertaintyScaleHead
+"""
+class UncertaintyScaleInstancesHead(nn.Module):
+    def __init__(self, input_dim=128, num_predictions=1):
+        super(UncertaintyScaleInstancesHead, self).__init__()
+        self.fc1 = nn.Linear(input_dim, num_predictions)
+
+    def forward(self, x):
+        x = F.relu(self.fc1(x)).clamp(min=1e-4)
+        return x

@@ -128,7 +128,7 @@ class NewCRFDepth(nn.Module):
                                                           num_instances=self.num_instances, padding_instances=self.padding_instances, \
                                                           roi_align=roi_align, roi_align_size=roi_align_size, bins_scale=bins_scale, \
                                                           virtual_depth_variation=self.virtual_depth_variation, upsample_type=self.upsample_type, \
-                                                          bins_type=self.bins_type, bins_type_scale=self.bins_type_scale)
+                                                          bins_type=self.bins_type, bins_type_scale=self.bins_type_scale, unc_head=self.unc_head)
             print("[VARIATION PerInstanceScale]\n")
 
         else:
@@ -174,8 +174,10 @@ class NewCRFDepth(nn.Module):
                 num_predictions_unc = self.num_semantic_classes
             else:  # Global scale
                 num_predictions_unc = 1
-
-            self.unc_head_s = UncertaintyScaleHead(input_dim=crf_dims[0], num_predictions=num_predictions_unc)
+            
+            # For instances, use RoI masking #
+            if not self.instances_active:
+                self.unc_head_s = UncertaintyScaleHead(input_dim=crf_dims[0], num_predictions=num_predictions_unc)
             self.unc_head_c = UncertaintyHead(input_dim=crf_dims[0])
 
         # Initialize layers #
@@ -202,8 +204,14 @@ class NewCRFDepth(nn.Module):
             if self.unc_head:
                 for param in self.project.parameters():
                     param.requires_grad = False
-                for param in self.update.parameters():
-                    param.requires_grad = False
+
+                if not self.instances_active:
+                    for param in self.update.parameters():
+                        param.requires_grad = False
+                else:
+                    for name, param in self.update.named_parameters():
+                        if 'unc' not in name: 
+                            param.requires_grad = False
 
     def network_info_print(self):
         if self.loss_type == 0:
@@ -236,7 +244,12 @@ class NewCRFDepth(nn.Module):
         self.crf2.eval()
         self.crf1.eval()
         self.project.eval()
-        self.update.eval()
+        if not self.instances_active:
+            self.update.eval()
+        else:
+            for name, module in self.update.named_modules():
+                if not "unc" in name:
+                    module.eval()
 
     def init_weights(self, pretrained=None):
         """
@@ -274,12 +287,13 @@ class NewCRFDepth(nn.Module):
         e1 = nn.PixelShuffle(2)(e1)
         e0 = self.project(e1)  # To hidden_dim
 
+        b, c, h, w = e1.shape
         # Uncertainty predictions using additional heads
         if self.unc_head:
-            unc_s = self.unc_head_s(e0)
+            if not self.instances_active:
+                unc_s = self.unc_head_s(e0)
             unc_c = self.unc_head_c(e0)
-
-        b, c, h, w = e1.shape
+        
         depth = torch.zeros([b, 1, h, w]).to(e1.device)
 
         # Ealry feature map - backbone #
@@ -310,7 +324,8 @@ class NewCRFDepth(nn.Module):
 
         # Uncertainty from extra heads #
         if self.unc_head:
-            result["unc_s"] = [unc_s]
+            if not self.instances_active:
+                result["unc_s"] = [unc_s]
             result["unc_c"] = [upsample(unc_c, scale_factor=4, upsample_type=self.upsample_type, uncertainty=True)]
 
         return result
@@ -319,6 +334,7 @@ class NewCRFDepth(nn.Module):
 """
 Uncertainty heads 
 """
+
 """
 In: typically 128x120x160
 Out: 1xnum_scales

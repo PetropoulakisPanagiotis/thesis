@@ -34,9 +34,12 @@ for folder in os.listdir(parent_dir):
     if os.path.isdir(os.path.join(parent_dir, folder)):
         if 'scene' in folder:
             scene_name = folder
-
-            ate_error_df = pd.read_csv(os.path.join(parent_dir, folder, 'ate_error.csv'))
-            relative_error_df = pd.read_csv(os.path.join(parent_dir, folder, 'relative_error.csv'))
+           
+            try: 
+                ate_error_df = pd.read_csv(os.path.join(parent_dir, folder, 'ate_error.csv'))
+                relative_error_df = pd.read_csv(os.path.join(parent_dir, folder, 'relative_error.csv'))
+            except:
+                continue
 
             ate_error_std_df = pd.read_csv(os.path.join(parent_dir, folder, 'ate_error_std.csv'))
             relative_error_std_df = pd.read_csv(os.path.join(parent_dir, folder, 'relative_error_std.csv'))
@@ -49,16 +52,17 @@ for folder in os.listdir(parent_dir):
 
             relative_error_df.columns.values[0] = scene_name
             relative_error_df = relative_error_df.drop('scene', axis=1)
-
+            
             # Format #
             ate_error_df = ate_error_df.round(4)
             relative_error_df = relative_error_df.round(4)
-
+            
             # Fix combined ate df #
             data_ate_rmse = ate_error_df['abs_trans_rmse'].tolist()
             data_ate_rmse.insert(0, scene_name)
             ate_rmse_all_scenes_list.append(data_ate_rmse)
-
+            print(data_ate_rmse)
+            
             data_ate_mean = ate_error_df['abs_trans_mean'].tolist()
             data_ate_mean.insert(0, scene_name)
             ate_mean_all_scenes_list.append(data_ate_mean)
@@ -182,6 +186,7 @@ for folder in os.listdir(parent_dir):
             """
 
 columns = ['scene', 'global', 'virtual', 'virtual-gt', 'mono', 'mono-gt']
+columns = ['scene', 'per-instance', 'per-class']
 ate_rmse_all_scenes_df = pd.DataFrame(ate_rmse_all_scenes_list, columns=columns)
 ate_mean_all_scenes_df = pd.DataFrame(ate_mean_all_scenes_list, columns=columns)
 ate_max_all_scenes_df = pd.DataFrame(ate_max_all_scenes_list, columns=columns)
@@ -218,7 +223,7 @@ dfs_std = [
     relative_rot_rmse_std_all_scenes_df, relative_rot_mean_std_all_scenes_df, relative_rot_max_std_all_scenes_df
 ]
 
-path = './results/processed_results/combined/'
+path = './results/processed_results_new/combined/'
 if not os.path.exists(path):
     os.makedirs(path)
 
@@ -232,9 +237,12 @@ remove_gt = True
 # Find the row with the lowest value after column 4
 for df, file_name in zip(dfs, file_names):
 
-    if remove_gt:
-        df.drop('virtual-gt', axis=1, inplace=True)
-        df.drop('mono-gt', axis=1, inplace=True)
+    try: 
+        if remove_gt:
+            df.drop('virtual-gt', axis=1, inplace=True)
+            df.drop('mono-gt', axis=1, inplace=True)
+    except:
+        pass
 
     df_ = df.iloc[:, 1:]
     min_vals = df_.idxmin(axis=1)
@@ -266,9 +274,12 @@ remove_gt = True
 # Find the row with the lowest value after column 4
 for df, file_name in zip(dfs_std, file_names):
 
-    if remove_gt:
-        df.drop('virtual-gt', axis=1, inplace=True)
-        df.drop('mono-gt', axis=1, inplace=True)
+    try: 
+        if remove_gt:
+            df.drop('virtual-gt', axis=1, inplace=True)
+            df.drop('mono-gt', axis=1, inplace=True)
+    except:
+        pass
 
     df_ = df.iloc[:, 1:]
     min_vals = df_.idxmin(axis=1)
