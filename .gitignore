@@ -5,6 +5,8 @@ helpers/nyu_depth_v2_labeled.mat
 iebins/eval/
 rgbd_ptam/results/
 rgbd_ptam/results_old/
+rgbd_ptam/results_debug/
+
 *.swp
 *.png
 .ruff_cache/

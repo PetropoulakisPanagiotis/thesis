@@ -1,0 +1,38 @@
+--model_name iebins_nyu
+--encoder tiny07
+--dataset scannet
+--input_height 480
+--input_width 640
+
+--log_directory /usr/stud/petp/code/thesis/tmp/
+--data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scene0574_01_small.txt
+--min_depth_eval 1e-3
+--max_depth_eval 10
+
+--bins_type 0
+--bins_type_scale 1
+
+--eigen_crop
+
+--update_block 2
+--virtual_depth_variation 1
+
+--exp_name eval-debug
+
+--loss_type 1
+--segmentation
+--concat_masks
+--bin_num 40
+--min_depth 0
+--max_depth 1
+--max_tree_depth 1
+
+--bins_scale 100
+--unc_head
+--d3vo_original
+
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale-scannet-unc-2/nyu/model-15750-best_unc_d3vo_1.51916

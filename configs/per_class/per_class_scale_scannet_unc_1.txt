@@ -30,8 +30,6 @@
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2345
 
---eigen_crop
-
 --exp_name per-class-scale-scannet-unc-1
 
 --bins_type 0

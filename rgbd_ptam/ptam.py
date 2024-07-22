@@ -129,7 +129,7 @@ class RGBDPTAM(object):
         self.set_tracking(True)
 
         self.current = frame
-        if not args.no_viz:
+        if args.debug:
             print('Tracking:', frame.idx, ' <- ', self.reference.id, self.reference.idx)
 
         # set pose to frame from tracking
@@ -149,7 +149,7 @@ class RGBDPTAM(object):
 
         # Measurements -> frame
         # Local        -> local map
-        if not args.no_viz:
+        if args.debug:
             print('measurements:', len(measurements), '   ', len(local_mappoints))
 
         # Update featrues                      #
@@ -203,7 +203,7 @@ class RGBDPTAM(object):
                 self.loop_closing.add_keyframe(keyframe)
 
             self.preceding = keyframe
-            if not args.no_viz:
+            if args.debug:
                 print('new keyframe', keyframe.idx)
         else:  # Remedy already used as keyframe
             if tracking_fail is not True:
@@ -220,7 +220,7 @@ class RGBDPTAM(object):
 
         # If we can project the 3D map points to the current frame #
         can_view = frame.can_view(local_mappoints)
-        if not args.no_viz:
+        if args.debug:
             print('filter points:', len(local_mappoints), can_view.sum(), len(self.preceding.mappoints()),
                   len(self.reference.mappoints()))
 
@@ -382,7 +382,7 @@ def main_loop(args):
 
         duration = time.time() - time_start
         durations.append(duration)
-        if not args.no_viz:
+        if args.debug:
             print('duration', duration)
             print()
 
@@ -494,16 +494,20 @@ def run_main_loop_with_logging(args, monitor_dict, total_runs=3):
             durations_list.append(durations_dict)
 
         relative_error_path = args.result_path + 'relative_error_' + str(i) + '.csv'
-        result_df = pd.DataFrame.from_dict(result_dict, orient='index')
+        result_relative_df = pd.DataFrame.from_dict(result_dict, orient='index')
 
         ate_error_path = args.result_path + 'ate_error_' + str(i) + '.csv'
         result_ate_df = pd.DataFrame.from_dict(result_ate_dict, orient='index')
 
-        result_df.to_csv(relative_error_path)
+        result_relative_df.to_csv(relative_error_path)
         result_ate_df.to_csv(ate_error_path)
 
-        relative_list.append(result_df)
+        relative_list.append(result_relative_df)
         ate_list.append(result_ate_df)
+
+        if args.debug:
+            print(result_ate_dict)
+            print(result_relative_df)
 
     relative_df = pd.concat(relative_list, axis=1, ignore_index=True)
     ate_df = pd.concat(ate_list, axis=1, ignore_index=True)
@@ -543,11 +547,10 @@ def run_main_loop_with_logging(args, monitor_dict, total_runs=3):
     relative_std_df.to_csv(relative_error_std_path)
     ate_std_df.to_csv(ate_error_std_path)
 
+    print("durations, ate_mean, relative_mean")
     print(durations_avg_df)
     print(ate_mean_df)
     print(relative_mean_df)
-    print(ate_std_df)
-    print(relative_std_df)
 
     monitor_dict['relative_df'] = pd.concat([relative_mean_df, monitor_dict['relative_df']], axis=0, ignore_index=True)
     monitor_dict['ate_df'] = pd.concat([ate_mean_df, monitor_dict['ate_df']], axis=0, ignore_index=True)
@@ -575,9 +578,10 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-viz', action='store_true', help='do not visualize')
-    parser.add_argument('--dataset', type=str, default='ICL', help='dataset (TUM/ICL-NUIM)')
+    parser.add_argument('--debug', action='store_true', help='debug slam')
+    parser.add_argument('--dataset', type=str, help='dataset (TUM/ICL-NUIM)', default='scannet')
     parser.add_argument('--path', type=str, help='dataset path',
-                        default='path/to/your/ICL-NUIM_RGBD/living_room_traj3_frei_png')
+                        default='usr/stud/petp/storage/user/petp/datasets/scannet/data_converted')
 
     parser.add_argument('--scale_aware', action='store_true', default=False, help='Scale-Aware slam loss enable')
     parser.add_argument('--network_depth', action='store_true', default=False,
@@ -588,7 +592,7 @@ if __name__ == '__main__':
                         help='use uncertainties during optimization')
     parser.add_argument('--optimization_type', type=str, default='global',
                         choices=['global', 'per_class', 'per_instance'], help='Scale-Aware variation')
-    parser.add_argument('--out_path', type=str, default='./results', help='Folder to save results')
+    parser.add_argument('--out_path', type=str, default='./results_debug', help='Folder to save results')
     parser.add_argument('--total', type=int, default=None, help='Total number of frame')
 
     parser.add_argument('--exp_name', type=str, default='exp_1', help='Experiment name')
@@ -601,7 +605,7 @@ if __name__ == '__main__':
     parser.add_argument('--weight_depth_consistency', type=float, default=0.5, help='Weight for depth consistency loss')
 
     parser.add_argument('--threshold_scale', type=float, default=5.991, help='Threshold for huber loss scale')
-    parser.add_argument('--weight_scale', type=float, default=2, help='Weight for scale loss')
+    parser.add_argument('--weight_scale', type=float, default=0.5, help='Weight for scale loss')
 
     parser.add_argument('--scene', type=str, default='scene0655_01')
 
@@ -616,6 +620,9 @@ if __name__ == '__main__':
               'scene0647_00',  'scene0684_00',  'scene0693_01', 'scene0064_00',  'scene0086_02',  'scene0153_00', \
               'scene0314_00',  'scene0527_00',  'scene0558_02',  'scene0574_01',  'scene0609_03',  'scene0664_02',  'scene0685_01',
         ]
+
+
+    scenes = ['scene0558_02']
 
     methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global']
     #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global', 'per-class']

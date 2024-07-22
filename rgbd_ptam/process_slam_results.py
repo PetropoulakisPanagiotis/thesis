@@ -18,6 +18,7 @@ relative_rot_rmse_all_scenes_list = []
 relative_rot_mean_all_scenes_list = []
 relative_rot_max_all_scenes_list = []
 
+"""
 ate_rmse_std_all_scenes_list = []
 ate_mean_std_all_scenes_list = []
 ate_max_std_all_scenes_list = []
@@ -29,6 +30,7 @@ relative_trans_max_std_all_scenes_list = []
 relative_rot_rmse_std_all_scenes_list = []
 relative_rot_mean_std_all_scenes_list = []
 relative_rot_max_std_all_scenes_list = []
+"""
 
 for folder in os.listdir(parent_dir):
     if os.path.isdir(os.path.join(parent_dir, folder)):
@@ -46,6 +48,14 @@ for folder in os.listdir(parent_dir):
             if 'abs_trans_rmse' not in ate_error_df.columns:
                 continue
 
+            if True:
+                parent_dir_old = "./results_old"
+                ate_error_old_df = pd.read_csv(os.path.join(parent_dir_old, folder, 'ate_error.csv'))
+                relative_error_old_df = pd.read_csv(os.path.join(parent_dir_old, folder, 'relative_error.csv'))
+                
+                ate_error_df =  pd.concat([ate_error_old_df, ate_error_df])
+                relative_error_df = pd.concat([relative_error_old_df, relative_error_df]) 
+
             # Mean #
             ate_error_df.columns.values[0] = scene_name
             ate_error_df = ate_error_df.drop('scene', axis=1)
@@ -61,7 +71,6 @@ for folder in os.listdir(parent_dir):
             data_ate_rmse = ate_error_df['abs_trans_rmse'].tolist()
             data_ate_rmse.insert(0, scene_name)
             ate_rmse_all_scenes_list.append(data_ate_rmse)
-            print(data_ate_rmse)
             
             data_ate_mean = ate_error_df['abs_trans_mean'].tolist()
             data_ate_mean.insert(0, scene_name)
@@ -95,7 +104,9 @@ for folder in os.listdir(parent_dir):
             data_relative_max = relative_error_df['rot_max'].tolist()
             data_relative_max.insert(0, scene_name)
             relative_rot_max_all_scenes_list.append(data_relative_max)
+            
 
+            """
             # std #
             ate_error_std_df.columns.values[0] = scene_name
             ate_error_std_df = ate_error_std_df.drop('scene', axis=1)
@@ -145,6 +156,7 @@ for folder in os.listdir(parent_dir):
             data_relative_max_std.insert(0, scene_name)
             relative_rot_max_std_all_scenes_list.append(data_relative_max_std)
             """
+            """
             # Find the row with the lowest value after column 4
             ate_error_df_ = ate_error_df.iloc[:, 3:]
             min_vals_ate = ate_error_df_.idxmin()
@@ -185,8 +197,10 @@ for folder in os.listdir(parent_dir):
             plt.close()      
             """
 
-columns = ['scene', 'global', 'virtual', 'virtual-gt', 'mono', 'mono-gt']
-columns = ['scene', 'per-instance', 'per-class']
+#columns = ['scene', 'global', 'virtual', 'virtual-gt', 'mono', 'mono-gt']
+#columns = ['scene', 'per-instance', 'per-class']
+columns = ['scene', 'global', 'virtual', 'virtual-gt', 'mono', 'mono-gt', 'per-instance', 'per-class']
+#columns = ['scene', 'global', 'virtual', 'mono', 'per-instance', 'per-class']
 ate_rmse_all_scenes_df = pd.DataFrame(ate_rmse_all_scenes_list, columns=columns)
 ate_mean_all_scenes_df = pd.DataFrame(ate_mean_all_scenes_list, columns=columns)
 ate_max_all_scenes_df = pd.DataFrame(ate_max_all_scenes_list, columns=columns)
@@ -203,24 +217,6 @@ dfs = [
     ate_rmse_all_scenes_df, ate_mean_all_scenes_df, ate_max_all_scenes_df, relative_trans_rmse_all_scenes_df,
     relative_trans_mean_all_scenes_df, relative_trans_max_all_scenes_df, relative_rot_rmse_all_scenes_df,
     relative_rot_mean_all_scenes_df, relative_rot_max_all_scenes_df
-]
-
-ate_rmse_std_all_scenes_df = pd.DataFrame(ate_rmse_std_all_scenes_list, columns=columns)
-ate_mean_std_all_scenes_df = pd.DataFrame(ate_mean_std_all_scenes_list, columns=columns)
-ate_max_std_all_scenes_df = pd.DataFrame(ate_max_std_all_scenes_list, columns=columns)
-
-relative_trans_rmse_std_all_scenes_df = pd.DataFrame(relative_trans_rmse_std_all_scenes_list, columns=columns)
-relative_trans_mean_std_all_scenes_df = pd.DataFrame(relative_trans_mean_std_all_scenes_list, columns=columns)
-relative_trans_max_std_all_scenes_df = pd.DataFrame(relative_trans_max_std_all_scenes_list, columns=columns)
-
-relative_rot_rmse_std_all_scenes_df = pd.DataFrame(relative_trans_rmse_std_all_scenes_list, columns=columns)
-relative_rot_mean_std_all_scenes_df = pd.DataFrame(relative_rot_mean_std_all_scenes_list, columns=columns)
-relative_rot_max_std_all_scenes_df = pd.DataFrame(relative_rot_max_std_all_scenes_list, columns=columns)
-
-dfs_std = [
-    ate_rmse_std_all_scenes_df, ate_mean_std_all_scenes_df, ate_max_std_all_scenes_df,
-    relative_trans_rmse_std_all_scenes_df, relative_trans_mean_std_all_scenes_df, relative_trans_max_std_all_scenes_df,
-    relative_rot_rmse_std_all_scenes_df, relative_rot_mean_std_all_scenes_df, relative_rot_max_std_all_scenes_df
 ]
 
 path = './results/processed_results_new/combined/'
@@ -263,6 +259,24 @@ for df, file_name in zip(dfs, file_names):
     fig.savefig(path + file_name, dpi=500, bbox_inches='tight', pad_inches=0)
     plt.close()
 
+"""
+ate_rmse_std_all_scenes_df = pd.DataFrame(ate_rmse_std_all_scenes_list, columns=columns)
+ate_mean_std_all_scenes_df = pd.DataFrame(ate_mean_std_all_scenes_list, columns=columns)
+ate_max_std_all_scenes_df = pd.DataFrame(ate_max_std_all_scenes_list, columns=columns)
+
+relative_trans_rmse_std_all_scenes_df = pd.DataFrame(relative_trans_rmse_std_all_scenes_list, columns=columns)
+relative_trans_mean_std_all_scenes_df = pd.DataFrame(relative_trans_mean_std_all_scenes_list, columns=columns)
+relative_trans_max_std_all_scenes_df = pd.DataFrame(relative_trans_max_std_all_scenes_list, columns=columns)
+
+relative_rot_rmse_std_all_scenes_df = pd.DataFrame(relative_trans_rmse_std_all_scenes_list, columns=columns)
+relative_rot_mean_std_all_scenes_df = pd.DataFrame(relative_rot_mean_std_all_scenes_list, columns=columns)
+relative_rot_max_std_all_scenes_df = pd.DataFrame(relative_rot_max_std_all_scenes_list, columns=columns)
+
+dfs_std = [
+    ate_rmse_std_all_scenes_df, ate_mean_std_all_scenes_df, ate_max_std_all_scenes_df,
+    relative_trans_rmse_std_all_scenes_df, relative_trans_mean_std_all_scenes_df, relative_trans_max_std_all_scenes_df,
+    relative_rot_rmse_std_all_scenes_df, relative_rot_mean_std_all_scenes_df, relative_rot_max_std_all_scenes_df
+]
 file_names = [
     'ate_rsme_std.png', 'ate_mean_std.png', 'ate_max_std.png', 'relative_trans_rsme_std.png',
     'relative_trans_mean_std.png', 'relative_trans_max_std.png', 'relative_rot_rsme_std.png',
@@ -299,3 +313,4 @@ for df, file_name in zip(dfs_std, file_names):
     fig.tight_layout(pad=0)
     fig.savefig(path + file_name, dpi=500, bbox_inches='tight', pad_inches=0)
     plt.close()
+"""
