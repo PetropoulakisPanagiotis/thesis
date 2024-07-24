@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import os
 import time
+import g2o
 
 from collections import defaultdict, namedtuple
 
@@ -63,6 +64,55 @@ class ScaleReader(object):
     @property
     def shape(self):
         return self[0].shape
+
+class GtPoseReader(object):
+    def __init__(self, ids, timestamps=None):
+        self.ids = ids
+        self.timestamps = timestamps
+        self.cache = dict()
+
+        self.preload()
+
+    def preload(self):
+        for idx, id in enumerate(self.ids):
+            with open(id, 'r') as json_file:
+                data = json.load(json_file)
+                x, y, z = data['x'], data['y'], data['z']
+                qx, qy, qz, qw = data['quat_x'], data['quat_y'], data['quat_z'], data['quat_w']
+            
+                gt_pose = g2o.Isometry3d(g2o.Quaternion([qx, qy, qz, qw]), [x, y, z])
+      
+                self.cache[idx] = gt_pose
+
+    def read(self, path):
+        with open(path, 'r') as json_file:
+            data = json.load(json_file)
+            x, y, z = data['x'], data['y'], data['z']
+            qx, qy, qz = data['quat_x'], data['quat_y'], data['quat_z']
+        
+            gt_pose = g2o.Isometry3d(g2o.Quaternion(qx, qy, qz), [x, y, z])
+  
+        return gt_pose
+
+    def __getitem__(self, idx):
+        gt_pose = self.cache[idx]
+        #gt_pose = self.read(self.ids[idx])
+        return gt_pose
+
+    def __len__(self):
+        return len(self.ids)
+
+    def __iter__(self):
+        for i, timestamp in enumerate(self.timestamps):
+            yield timestamp, self[i]
+
+    @property
+    def dtype(self):
+        return g2o.Isometry3d
+
+    @property
+    def shape(self):
+        return (1, 6)
 
 
 class UncertaintyReader(object):
@@ -307,7 +357,7 @@ class ScanNetDataset(object):
                                                     241.9392752941744, 1000)
 
     def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True, optimization_type='global',
-                 max_var=50.0, min_var=1e-4, network_depth=True, total=None, local=False):
+                 max_var=50.0, min_var=1e-4, network_depth=True, total=None, local=False, debug=True):
         self.scale_aware = scale_aware
         path = os.path.expanduser(path)
         self.max_var = max_var
@@ -386,6 +436,13 @@ class ScanNetDataset(object):
                     ]
             else:
                 depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
+
+        if debug:
+            gt_ids = [path + '/scannet/data_converted' + '/' + split + '/extrinsics/' + scene + "/" + str(item) + '.json' for item in ids]
+            self.gt_poses = GtPoseReader(gt_ids, rgb_timestamps) 
+            
+            seg_masks_ids = [path + '/scannet/data_converted' + '/' + split + '/semantic_refined_20/' + scene + "/" + str(item) + '.png' for item in ids]
+            self.sem_masks = ImageReader(seg_masks_ids, rgb_timestamps) 
 
         if total is not None:
             rgb_ids = rgb_ids[:total]

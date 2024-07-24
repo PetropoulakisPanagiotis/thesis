@@ -255,6 +255,25 @@ class RGBDFrame(Frame, ScaleAwareFrame):
             measurements.append(meas)
         return measurements
 
+    def match_mappoints_and_get_ids(self, mappoints, source):
+        points = []
+        descriptors = []
+        for mappoint in mappoints:
+            points.append(mappoint.position)
+            descriptors.append(mappoint.descriptor)
+        matched_measurements = self.find_matches(source, points, descriptors)
+
+        measurements = []
+        ids = []
+        # For a current measurement we attach a mappoint             #
+        # We will update later the descriptor once the current frame #
+        # can see this mappoint point                                #
+        for i, meas in matched_measurements:
+            meas.mappoint = mappoints[i]
+            measurements.append(meas)
+            ids.append(i)
+        return measurements, ids
+
     def cloudify(self):
         # Create new mappoints if not matched #
         # Return mappoints and measurements   #

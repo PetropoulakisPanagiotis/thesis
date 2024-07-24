@@ -30,13 +30,15 @@ class ImageFeature(object):
 
         self._lock = Lock()
 
-    def extract(self):
+    def extract(self, draw=False):
         self.keypoints = self.detector.detect(self.image)
         self.keypoints, self.descriptors = self.extractor.compute(self.image, self.keypoints)
-        #self.draw_keypoints()
+        if draw:
+            self.draw_keypoints()
+
         self.unmatched = np.ones(len(self.keypoints), dtype=bool)
 
-    def draw_keypoints(self, name='keypoints', delay=1):
+    def draw_keypoints(self, name='keypoints', delay=0):
         if self.image.ndim == 2:
             image = np.repeat(self.image[..., np.newaxis], 3, axis=2)
         else:
@@ -44,6 +46,22 @@ class ImageFeature(object):
         img = cv2.drawKeypoints(image, self.keypoints, None, flags=0)
         cv2.imshow(name, img)
         cv2.waitKey(delay)
+
+    def filter_features_to_class(self, mask, class_id, draw=False):   
+        filtered_keypoints = []
+        filtered_descriptors = []     
+        for keypoint, descriptor in zip(self.keypoints, self.descriptors):
+            xy = tuple(int(item) for item in keypoint.pt)
+            if mask[xy[1], xy[0]] == class_id: 
+                filtered_keypoints.append(keypoint)
+                filtered_descriptors.append(descriptor)
+    
+        self.keypoints = filtered_keypoints
+        self.descriptors = np.asarray(filtered_descriptors)
+        self.unmatched = np.ones(len(self.keypoints), dtype=bool)
+
+        if draw:
+            self.draw_keypoints()    
 
     def find_matches(self, predictions, descriptors):
         matches = dict()
