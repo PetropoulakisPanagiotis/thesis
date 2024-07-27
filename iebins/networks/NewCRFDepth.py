@@ -225,7 +225,7 @@ class NewCRFDepth(nn.Module):
             if self.bin_num != 16:
                 raise ValueError("IEBINS can only be used with 16 bins")
 
-        if self.upsample_type == 1:
+        if self.upsample_type == 0:
             print("Uncertainty upsampling type: vanilla")
         else:
             print("Uncertainty upsampling type: Rosinol et. al. 2023")

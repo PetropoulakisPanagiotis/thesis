@@ -365,8 +365,8 @@ class ScanNetDataset(object):
 
         with open(path + "/" + split + '/rgb_intrinsics/' + scene + ".json", 'r') as json_file:
             data = json.load(json_file)
-            ScanNetDataset.cam = namedtuple('camera', 'fx fy cx cy scale scale_unc')(data['fx'], data['fy'], data['cx'],
-                                                                                     data['cy'], 1000.0, 10000.0)
+            ScanNetDataset.cam = namedtuple('camera', 'fx fy cx cy scale')(data['fx'], data['fy'], data['cx'],
+                                                                                     data['cy'], 1000.0)
 
         ids = [(file.split('.')[0]) for file in os.listdir(path + "/" + split + "/rgb/" + scene)]
         ids = sorted(ids, key=lambda x: str(x))

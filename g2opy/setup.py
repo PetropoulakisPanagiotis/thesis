@@ -22,7 +22,7 @@ class CopyLibFile(install):
         print(len(lib_file))
         #assert len(lib_file) == 1     
 
-        print('copying {} -> {}'.format(lib_file[0], install_dir[0]))
+        print('copying {} -> {}'.format(lib_file[0], install_dir))
         shutil.copy(lib_file[0], install_dir)
 
 

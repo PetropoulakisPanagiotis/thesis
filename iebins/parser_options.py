@@ -88,9 +88,6 @@ train_parser.add_argument(
     '0 for bins scale/canonical, 1 bins canonical and regression scale, 2 regression canonical and bins scale,  3 regression scale/canonical',
     default='0')
 
-# Canonical Regularization #
-train_parser.add_argument('--canonical_regularization', type=float, help='regularization term for canonical', default=0.0)
-
 # -> Uncertainty #
 train_parser.add_argument('--unc_head', dest='unc_head',
                           help='predict uncertainty for scale and canonical using additional heads',

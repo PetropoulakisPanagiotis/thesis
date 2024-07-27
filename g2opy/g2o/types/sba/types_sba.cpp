@@ -610,14 +610,15 @@ namespace g2o {
     BaseMultiEdge<1, double>()
   {
     information().setIdentity();
+    _error[0] = 10;
     resize(3);
   }
 
   void EdgeDepthConsistencyScale::linearizeOplus()
   {
     _jacobianOplus[0].resize(1,6); // translation + rotation
-    _jacobianOplus[1].resize(1,1); // scale 
-    _jacobianOplus[2].resize(1,3); // 3D point 
+    _jacobianOplus[1].resize(1,3); // 3D point
+    _jacobianOplus[2].resize(1,1); // scale 
 
     VertexCustomCam *cam_v = static_cast<VertexCustomCam *>(_vertices[0]);
     const CustomCam &cam = cam_v->estimate();
@@ -670,23 +671,19 @@ namespace g2o {
 
     // Landmark 
     dp = cam.w2n.col(0);    
-    _jacobianOplus[2](0,0) = (1.0/s) * dp.dot(mask); // x 
+    _jacobianOplus[1](0,0) = (1.0/s) * dp.dot(mask); // x 
     dp = cam.w2n.col(1);     
-    _jacobianOplus[2](0,1) = (1.0/s) * dp.dot(mask); // y
+    _jacobianOplus[1](0,1) = (1.0/s) * dp.dot(mask); // y
     dp = cam.w2n.col(2);
-    _jacobianOplus[2](0,2) = (1.0/s) * dp.dot(mask); // z
+    _jacobianOplus[1](0,2) = (1.0/s) * dp.dot(mask); // z
   
     // Scale
-    _jacobianOplus[1](0,0) = (-1.0/(s*s)) * (pc.dot(mask));
-  
+    _jacobianOplus[2](0,0) = (-1.0/(s*s)) * (pc.dot(mask));
   }
 
   bool EdgeDepthConsistencyScale::read(std::istream& is)
   {
-    double meas;
-    is >> meas;
-
-    setMeasurement(meas);
+    is >> _measurement;
     
     // information matrix is the identity for features, could be changed to allow arbitrary covariances
     information().setIdentity();

@@ -253,7 +253,7 @@ class G2O_TYPES_SBA_API VertexCustomXYZ : public BaseVertex<3, Vector3D>
     virtual bool write(std::ostream& os) const;
 
     virtual void setToOriginImpl() {
-      _estimate = 0.;
+      _estimate = 5.;
     }
 
     virtual void oplusImpl(const double* update)
@@ -276,7 +276,7 @@ class G2O_TYPES_SBA_API VertexCustomXYZ : public BaseVertex<3, Vector3D>
 
     void computeError()
     {
-      VertexCustomCam *cam_v = static_cast<VertexCustomCam*>(_vertices[0]);
+      const VertexCustomCam *cam_v = static_cast<const VertexCustomCam*>(_vertices[0]);
       
       const VertexCustomXYZ *point_v = static_cast<const VertexCustomXYZ*>(_vertices[1]);
       const VertexScale *s_v = static_cast<const VertexScale*>(_vertices[2]);

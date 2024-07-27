@@ -72,6 +72,8 @@ class IEBINS(nn.Module):
         result["pred_depths_c_list"] = pred_depths_c_list
         result["uncertainty_maps_list"] = uncertainty_maps_list
 
+        result["pred_depths_rc_list"] = [torch.zeros_like(pred_depths_r_list[-1])]
+        
         return result
 
 

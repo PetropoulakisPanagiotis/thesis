@@ -85,7 +85,7 @@ class DatasetPreprocess(Dataset):
             depth_gt = depth_gt / 1000.0
 
             # General augmentations #
-            #image, depth_gt = self.train_preprocess(image, depth_gt, self.args)
+            image, depth_gt = self.train_preprocess(image, depth_gt, self.args)
 
             sample = {'image': image, 'depth': depth_gt, 'has_valid_depth': True}
         else:

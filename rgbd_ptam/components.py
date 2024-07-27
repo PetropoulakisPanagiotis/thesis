@@ -54,7 +54,6 @@ class ScaleAwareFrame(object):
             self.height, self.width = 0, 0
 
         self.canonical_uncertainty = canonical_uncertainty  # 'image'
-
         self.scales = scales  # list
         self.scales_uncertainty = scales_uncertainty  # list
         self.pixel_to_scale_map = pixel_to_scale_map  # 'image'
@@ -190,7 +189,6 @@ class RGBDFrame(Frame, ScaleAwareFrame):
             self.scale_aware_frame = ScaleAwareFrame(idx, canonical / cam.scale, canonical_uncertainty, scales,
                                                      scales_uncertainty, pixel_to_scale_map, scales_valid)
         self.depth = depth
-
     def virtual_stereo(self, px):
         x, y = int(px[0]), int(px[1])
         if not (0 <= x <= self.cam.width - 1 and 0 <= y <= self.cam.height - 1):
@@ -235,7 +233,6 @@ class RGBDFrame(Frame, ScaleAwareFrame):
                                           covariance_canonical_measurement, scale_id_measurement)
             measurements.append((i, measurement))
             self.rgb.set_matched(j)
-
         return measurements
 
     def match_mappoints(self, mappoints, source):
@@ -322,7 +319,6 @@ class RGBDFrame(Frame, ScaleAwareFrame):
                                       scale_id_measurement)
 
             measurement.mappoint = mappoint
-
             mappoints.append(mappoint)
             measurements.append(measurement)
 
@@ -366,11 +362,10 @@ class RGBDFrame(Frame, ScaleAwareFrame):
 
     def to_keyframe(self):
         if self.scale_aware_frame is not None:
-            return KeyFrame(self.idx, self.pose, self.feature, self.depth, self.cam, self.timestamp,
-                            self.pose_covariance, self.scale_aware_frame.canonical,
-                            self.scale_aware_frame.canonical_uncertainty, self.scale_aware_frame.scales,
-                            self.scale_aware_frame.scales_uncertainty, self.scale_aware_frame.pixel_to_scale_map,
-                            self.scale_aware_frame.scales_valid)
+            keyframe = KeyFrame(self.idx, self.pose, self.feature, self.depth, self.cam, self.timestamp,
+                            self.pose_covariance)
+            keyframe.scale_aware_frame = self.scale_aware_frame
+            return keyframe
         else:
             return KeyFrame(self.idx, self.pose, self.feature, self.depth, self.cam, self.timestamp,
                             self.pose_covariance)
