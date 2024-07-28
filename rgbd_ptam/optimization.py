@@ -6,7 +6,7 @@ from components import Camera
 
 
 class BundleAdjustmentScaleAware(g2o.SparseOptimizer):
-    def __init__(self, args, max_frames=500, max_instances=100):
+    def __init__(self, args, max_frames=1000, max_instances=100):
         super().__init__()
         self.args = args
 
@@ -400,15 +400,8 @@ class LocalBAScaleAware(object):
 
             if isinstance(edge, g2o.EdgeDepthConsistencyScale):
                 if edge.chi2() > self.args.threshold_depth_consistency:
-                    #print(edge.chi2())
                     bad_measurements.add(self.measurements[edge.id() - 1])
 
-            #if isinstance(edge, g2o.EdgeScaleNetworkConsistency):
-            #    if edge.chi2() > self.args.threshold_scale:
-            #        pass
-                    #print("ddssd\n")
-                    #bad_measurements.add(self.measurements[edge.id() - 1])
-    
         bad_measurements = list(bad_measurements)
         return bad_measurements
 

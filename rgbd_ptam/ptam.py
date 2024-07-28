@@ -599,14 +599,14 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='exp_1', help='Experiment name')
 
     parser.add_argument('--threshold_camera', type=float, default=5.991, help='Threshold for huber loss camera')
-    parser.add_argument('--weight_camera', type=float, default=2, help='Weight for camera loss') # 1
+    parser.add_argument('--weight_camera', type=float, default=1, help='Weight for camera loss') # 1
 
-    parser.add_argument('--threshold_depth_consistency', type=float, default=3.991,
+    parser.add_argument('--threshold_depth_consistency', type=float, default=0.05,
                         help='Threshold for huber loss depth consistency')
     parser.add_argument('--weight_depth_consistency', type=float, default=1, help='Weight for depth consistency loss') # 0.5
 
-    parser.add_argument('--threshold_scale', type=float, default=5.991, help='Threshold for huber loss scale')
-    parser.add_argument('--weight_scale', type=float, default=2, help='Weight for scale loss') # 0.5
+    parser.add_argument('--threshold_scale', type=float, default=0.05, help='Threshold for huber loss scale')
+    parser.add_argument('--weight_scale', type=float, default=0.5, help='Weight for scale loss') # 0.5
 
     parser.add_argument('--scene', type=str, default='scene0655_01')
 
@@ -623,7 +623,7 @@ if __name__ == '__main__':
         ]
 
 
-    scenes = ['scene0574_01']
+    scenes = ['scene0685_01']
 
     methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global']
     #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global', 'per-class']

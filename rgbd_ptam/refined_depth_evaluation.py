@@ -6,6 +6,7 @@ from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 import os
 import json
+import pandas as pd
 
 def compute_errors(gt, pred, var=None):
     thresh = np.maximum((gt / pred), (pred / gt))
@@ -45,8 +46,6 @@ class MyDataset(Dataset):
 
         self.optimized_scale_folder = os.path.join(self.refined_data_path, 'optimized_scale/')
         self.optimized_scale_map_folder = os.path.join(self.refined_data_path, 'optimized_scale/')
-        #self.optimized_depth_folder = os.path.join(self.refined_data_path, 'optimized_scale/')
-
 
         self.scale_map_folder = os.path.join(self.original_data_path, 'scale_map/')
         self.original_scale_folder = os.path.join(self.original_data_path, 'scale/')
@@ -57,11 +56,9 @@ class MyDataset(Dataset):
 
         self.optimized_scale = sorted([f for f in os.listdir(self.optimized_scale_folder) if f.endswith('.json')])
         self.optimized_scale_map = sorted([f for f in os.listdir(self.optimized_scale_map_folder) if f.endswith('scale_map.png')])
-        #self.optimized_depth = sorted([f for f in os.listdir(self.optimized_depth_folder) if f.endswith('depth_map.png')])
 
         self.size_dataset = len(self.optimized_scale)
-        assert self.size_dataset == len(self.optimized_scale_map)#  and self.size_dataset == len(self.optimized_depth)
-
+        assert self.size_dataset == len(self.optimized_scale_map)
 
         self.canonical = sorted([f for f in os.listdir(self.canonical_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale])
         self.depth = sorted([f for f in os.listdir(self.depth_folder) if f.endswith('.png') and f.split('.')[0] + '.json' in self.optimized_scale])
@@ -101,11 +98,6 @@ class MyDataset(Dataset):
         optimized_scale_map = cv2.imread(optimized_scale_map_file, - 1)
         optimized_scale_map = torch.Tensor(optimized_scale_map).type(torch.int64)
 
-        # Optimized depth of mappoints #
-        #optimized_depth_file = os.path.join(self.optimized_depth_folder, self.optimized_depth[index])
-        #optimized_depth = cv2.imread(optimized_depth_file, -1) / 1000 
-        #optimized_depth = torch.Tensor(optimized_depth).type(torch.float32)
-
         # Read canonical and depth #
         canonical_file = os.path.join(self.canonical_folder, self.canonical[index])
         canonical = cv2.imread(canonical_file, -1) / 1000 
@@ -130,7 +122,6 @@ class MyDataset(Dataset):
             depth = depth * optimized_scale_map
             true_depth = true_depth * optimized_scale_map
 
-        #data = {"true_depth": true_depth, "depth": depth, "depth_refined": depth_refined, "optimized_depth": optimized_depth}
         data = {"true_depth": true_depth, "depth": depth, "depth_refined": depth_refined}
         return data
 
@@ -142,59 +133,88 @@ if __name__ == '__main__':
     min_depth = 0.1
     max_depth = 10
 
-    # Define the data loader
-    dataset = MyDataset(true_depth_path='/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/depth/scene0655_01', original_data_path='/home/petropoulakis/Desktop/thesis/code/datasets/scannet/data_converted/valid/network_predictions/scene0655_01/segmentation', \
-                        refined_data_path='/home/petropoulakis/Desktop/thesis/code/thesis/rgbd_ptam/results/segmentation')
-    data_loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
 
-    errors_network = np.zeros(9)
-    errors_refined = np.zeros(9)
-    errors_optimized = np.zeros(9)
+    true_depth_dir = '/usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/depth/'
+    refined_depth_dir = '/usr/stud/petp/code/thesis/rgbd_ptam/results_debug/'
+    original_network_depth_dir = '/usr/stud/petp/storage/user/petp/datasets/predictions/'
+    scenes = ['scene0685_01']
+    variations = ['per_class', 'per_instance']
+    variations = ['per_class']
+    runs = 3
 
-    # Iterate over the data in a loop
-    for i, batch in tqdm(enumerate(data_loader), total=len(dataset)):
-        # Do something with the batch (e.g., pass it to a model)
-        true_depth = batch["true_depth"].cpu().numpy()
-        depth = batch["depth"].cpu().numpy()
-        #optimized_depth = batch["optimized_depth"].cpu().numpy()
-        depth_refined = batch["depth_refined"].cpu().numpy()
+    save_dir = './results_refined/'
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    
+    columns = ['scene', 'per_class', 'per_instace']
+    columns = ['scene', 'per_class']
+    df_results = pd.DataFrame(columns=columns)
+    for scene in tqdm(scenes, total=len(scenes), desc='scenes'):
+        true_depth_path = true_depth_dir + scene
 
-        true_depth = true_depth.flatten()
-        true_depth[np.isinf(true_depth)] = min_depth
-        true_depth[np.isnan(true_depth)] = max_depth
+        main_metric_per_variation = []
+        for variation in tqdm(variations, total=len(variations), desc='variations'):
+            original_data_path = original_network_depth_dir + scene + '/' + variation
 
-        depth = depth.flatten()
-        depth[np.isinf(depth)] = min_depth
-        depth[np.isnan(depth)] = max_depth
-        depth[depth < min_depth] = min_depth
-        depth[depth > max_depth] = max_depth
+            total_errors_network = []
+            total_errors_refined = [] 
+            for run in tqdm(range(runs), total=runs, desc='runs'):
+                refined_data_path = refined_depth_dir + scene + '/' + variation + '/' + variation + '_' + str(run)
 
-        #optimized_depth = optimized_depth.flatten()
-        #optimized_depth[np.isinf(optimized_depth)] = min_depth
-        #optimized_depth[np.isnan(optimized_depth)] = max_depth
-        #optimized_depth[optimized_depth < min_depth] = min_depth
-        #optimized_depth[optimized_depth > max_depth] = max_depth
+                # Define the data loader
+                dataset = MyDataset(true_depth_path=true_depth_path, original_data_path=original_data_path, refined_data_path=refined_data_path)
+                data_loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
 
-        depth_refined = depth_refined.flatten()
-        depth_refined[depth_refined < min_depth] = min_depth
-        depth_refined[depth_refined > max_depth] = max_depth
-        depth_refined[np.isinf(depth_refined)] = min_depth
-        depth_refined[np.isnan(depth_refined)] = max_depth
+                errors_network = np.zeros(9)
+                errors_refined = np.zeros(9)
+                # Iterate over the data in a loop
+                for i, batch in tqdm(enumerate(data_loader), total=len(dataset), desc='frames'):
+                    # Do something with the batch (e.g., pass it to a model)
+                    true_depth = batch["true_depth"].cpu().numpy()
+                    depth = batch["depth"].cpu().numpy()
+                    depth_refined = batch["depth_refined"].cpu().numpy()
 
-        valid_depth = np.logical_and(true_depth >= min_depth, true_depth <= max_depth)
+                    true_depth = true_depth.flatten()
+                    true_depth[np.isinf(true_depth)] = min_depth
+                    true_depth[np.isnan(true_depth)] = max_depth
 
-        errors_network = errors_network + np.asarray(compute_errors(true_depth[valid_depth], depth[valid_depth]))
-        errors_refined = errors_refined + np.asarray(compute_errors(true_depth[valid_depth], depth_refined[valid_depth]))
-        #errors_optimized = errors_optimized + np.asarray(compute_errors(true_depth[valid_depth], optimized_depth[valid_depth]))
+                    depth = depth.flatten()
+                    depth[np.isinf(depth)] = min_depth
+                    depth[np.isnan(depth)] = max_depth
+                    depth[depth < min_depth] = min_depth
+                    depth[depth > max_depth] = max_depth
 
-    errors_network /= len(dataset)
-    errors_refined /= len(dataset)
-    #errors_optimized /= len(dataset)
+                    depth_refined = depth_refined.flatten()
+                    depth_refined[depth_refined < min_depth] = min_depth
+                    depth_refined[depth_refined > max_depth] = max_depth
+                    depth_refined[np.isinf(depth_refined)] = min_depth
+                    depth_refined[np.isnan(depth_refined)] = max_depth
 
-    print('Computing errors for {} eval samples'.format(len(dataset)))
-    print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format('silog', 'abs_rel', 'log10', 'rms',
-                                                                                 'sq_rel', 'log_rms', 'd1', 'd2',
-                                                                                 'd3'))
-    print(errors_network)
-    print(errors_refined)
-    #print(errors_optimized)
+                    valid_depth = np.logical_and(true_depth >= min_depth, true_depth <= max_depth)
+
+                    errors_network = errors_network + np.asarray(compute_errors(true_depth[valid_depth], depth[valid_depth]))
+                    errors_refined = errors_refined + np.asarray(compute_errors(true_depth[valid_depth], depth_refined[valid_depth]))
+                
+                errors_network /= len(dataset)
+                errors_refined /= len(dataset)
+
+                total_errors_network.append(errors_network)
+                total_errors_refined.append(errors_refined)
+
+            total_errors_network = np.sum(np.asarray(total_errors_network), axis=0) / runs
+            total_errors_refined = np.sum(np.asarray(total_errors_refined), axis=0) / runs
+
+            main_metric_per_variation.append(total_errors_network[1] - total_errors_refined[1]) # negative means the refined are worst
+ 
+            if True:
+                print('Computing errors for {} eval samples'.format(len(dataset)))
+                print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format('silog', 'abs_rel', 'log10', 'rms',
+                                                                                             'sq_rel', 'log_rms', 'd1', 'd2',
+                                                                                             'd3'))
+                print(total_errors_network)
+                print(total_errors_refined)
+
+        main_metric_per_variation.insert(0, scene)
+        df_results = pd.concat([df_results, pd.DataFrame([main_metric_per_variation], columns=columns)], ignore_index=True)
+
+    df_results.to_csv(save_dir + 'refined_results.csv', index=False)

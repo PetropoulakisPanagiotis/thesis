@@ -32,12 +32,12 @@ def read_args(parser):
     parser.add_argument('--total', type=int, default=None, help='Total number of frame')
     parser.add_argument('--exp_name', type=str, default='exp_1', help='Experiment name')
     parser.add_argument('--threshold_camera', type=float, default=5.991, help='Threshold for huber loss camera')
-    parser.add_argument('--weight_camera', type=float, default=1, help='Weight for camera loss') # 1
+    parser.add_argument('--weight_camera', type=float, default=0.1, help='Weight for camera loss') # 1
     parser.add_argument('--threshold_depth_consistency', type=float, default=0.02,
                         help='Threshold for huber loss depth consistency')
     parser.add_argument('--weight_depth_consistency', type=float, default=1, help='Weight for depth consistency loss') # 0.5
     parser.add_argument('--threshold_scale', type=float, default=0.02, help='Threshold for huber loss scale')
-    parser.add_argument('--weight_scale', type=float, default=1, help='Weight for scale loss') # 0.5
+    parser.add_argument('--weight_scale', type=float, default=0, help='Weight for scale loss') # 0.5
     parser.add_argument('--scene', type=str, default='scene0655_01')
     parser.add_argument('--split', type=str, default='valid')
     parser.add_argument('--test_case', type=int, default=1, help='Test case')
@@ -175,16 +175,16 @@ if __name__ == "__main__":
         mappoints_1, measurements_1 = frame_1.cloudify() 
         measurements_1 = add_noise_points(measurements_1, x=0.02, y=0.02, z=0.02) 
 
-        #frame_1.scale_aware_frame.scales[0] = 50
+        frame_1.scale_aware_frame.scales[0] = 3 # 4.7979
 
         frame_1.update_pose(g2o.Isometry3d()) 
-        test_2(args, frame_1, measurements_1, class_id=0, max_iterations=50, gt_pose=noise_pose)
+        test_2(args, frame_1, measurements_1, class_id=0, max_iterations=500, gt_pose=noise_pose)
     else:        
         exit()
 
-    
 
-    """    pose_c1_c2 = pose_w_c1.inverse() * pose_w_c2
+    """    
+    pose_c1_c2 = pose_w_c1.inverse() * pose_w_c2
     # c1 -> w * w -> c2 == c1 -> c2 #
     pose_c2_c1 = pose_c1_c2.inverse()
     pose_c2_c1_noise = add_noise(pose_c2_c1)
@@ -196,7 +196,7 @@ if __name__ == "__main__":
         frame_2 = frame_2.to_keyframe()
 
 
-    #frame_2.update_pose(pose_c2_c1) # To find good correspondances 
+    #`frame_2.update_pose(pose_c2_c1) # To find good correspondances 
     matched_measurements_2, matched_ids = frame_2.match_mappoints_and_get_ids(mappoints_1, Measurement.Source.TRACKING)
     matched_measurements_1 = np.asarray(measurements_1)[matched_ids]
     assert len(matched_measurements_1) == len(matched_measurements_2) 

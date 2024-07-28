@@ -29,6 +29,7 @@ def get_bad_measurements(optimizer, args):
                 bad_measurements.add(edge.id())
 
         if isinstance(edge, g2o.EdgeDepthConsistencyScale):
+            print(edge.chi2())
             if edge.chi2() > args.threshold_depth_consistency:
                 bad_measurements.add(edge.id())
 

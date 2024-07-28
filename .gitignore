@@ -6,6 +6,7 @@ iebins/eval/
 rgbd_ptam/results/
 rgbd_ptam/results_old/
 rgbd_ptam/results_debug/
+rgbd_ptam/results*/
 
 *.swp
 *.png
