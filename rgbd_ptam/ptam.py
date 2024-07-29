@@ -599,13 +599,13 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='exp_1', help='Experiment name')
 
     parser.add_argument('--threshold_camera', type=float, default=5.991, help='Threshold for huber loss camera')
-    parser.add_argument('--weight_camera', type=float, default=1, help='Weight for camera loss') # 1
+    parser.add_argument('--weight_camera', type=float, default=2, help='Weight for camera loss') # 2
 
-    parser.add_argument('--threshold_depth_consistency', type=float, default=0.05,
+    parser.add_argument('--threshold_depth_consistency', type=float, default=0.1,
                         help='Threshold for huber loss depth consistency')
-    parser.add_argument('--weight_depth_consistency', type=float, default=1, help='Weight for depth consistency loss') # 0.5
+    parser.add_argument('--weight_depth_consistency', type=float, default=0.05, help='Weight for depth consistency loss') # 0.5
 
-    parser.add_argument('--threshold_scale', type=float, default=0.05, help='Threshold for huber loss scale')
+    parser.add_argument('--threshold_scale', type=float, default=0.01, help='Threshold for huber loss scale')
     parser.add_argument('--weight_scale', type=float, default=0.5, help='Weight for scale loss') # 0.5
 
     parser.add_argument('--scene', type=str, default='scene0655_01')
@@ -623,11 +623,12 @@ if __name__ == '__main__':
         ]
 
 
-    scenes = ['scene0685_01']
+    #scenes = ['scene0685_01']
 
-    methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global']
+    #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global']
     #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global', 'per-class']
-    methods_names = ['per-class', 'per-instance']
+    methods_names = ['mono', 'virtual', 'global', 'per-class', 'per-instance']
+    #methods_names = ['per-class', 'per-instance']
 
     initial_path = args.out_path
     for scene in scenes:
@@ -639,6 +640,7 @@ if __name__ == '__main__':
 
         monitor_dict = {'relative_df': pd.DataFrame(), 'ate_df': pd.DataFrame(), 'relative_std_df': pd.DataFrame(), \
                         'ate_std_df': pd.DataFrame(), 'durations_df': pd.DataFrame(columns=['mean', 'std', 'max', 'min'])}
+        
         """
         # Monocular SLAM with gt depth #
         args.scale_aware = False
@@ -647,6 +649,7 @@ if __name__ == '__main__':
 
         print('[running monocular SLAM with gt depth]')
         run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
+        """
 
         # Monocular SLAM #
         args.scale_aware = False
@@ -656,12 +659,14 @@ if __name__ == '__main__':
         print('[running monocular SLAM]')
         run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
 
+        """
         # Virtual SLAM with gt depth #
         args.scale_aware = False
         args.network_depth = False
         args.optimization_base_type = 'virtual'
         print('[running virtual SLAM with gt depth]')
         run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
+        """
 
         # Virtual SLAM #
         args.scale_aware = False
@@ -675,15 +680,15 @@ if __name__ == '__main__':
         args.scale_aware = True
         args.network_depth = True
         args.optimization_type = 'global'
-        args.use_uncertainties = True
+        #args.use_uncertainties = True
 
         print('[running global scale SLAM]')
         run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
 
-        """
         # Per-Class SLAM #
         args.scale_aware = True
         args.network_depth = True
+        #args.use_uncertainties = True
         args.optimization_type = 'per_class'
 
         print('[running per-class SLAM]')
@@ -692,6 +697,7 @@ if __name__ == '__main__':
         # Per-Instance SLAM #
         args.scale_aware = True
         args.network_depth = True
+        #args.use_uncertainties = True
         args.optimization_type = 'per_instance'
 
         print('[running per-instance SLAM]')

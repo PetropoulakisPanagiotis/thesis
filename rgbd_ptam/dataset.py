@@ -129,7 +129,7 @@ class UncertaintyReader(object):
     def preload(self):
         for idx, id in enumerate(self.ids):
             canonical_uncertainty = np.load(id)
-            if 'per_class' or 'per_instance' in self.optimization_type:
+            if 'per_class' in self.optimization_type or 'per_instance' in self.optimization_type:
                 canonical_uncertainty = canonical_uncertainty.squeeze(0).squeeze(0)
 
             self.cache[idx] = np.clip(canonical_uncertainty, self.min_var, self.max_var)
@@ -137,7 +137,7 @@ class UncertaintyReader(object):
     def read(self, path):
         canonical_uncertainty = np.load(path)
         canonical_uncertainty = np.clip(canonical_uncertainty, self.min_var, self.max_var)
-        if 'per_class' or 'per_instance' in self.optimization_type:
+        if 'per_class' in self.optimization_type or 'per_instance' in self.optimization_type:
             canonical_uncertainty = canonical_uncertainty.squeeze(0).squeeze(0)
 
         return canonical_uncertainty

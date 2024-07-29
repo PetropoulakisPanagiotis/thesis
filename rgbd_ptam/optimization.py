@@ -333,7 +333,7 @@ class LocalBAScaleAware(object):
                 information = np.identity(1)
                 if self.args.use_uncertainties:
                     information *= 1. / m.covariance_canonical_measurement
-
+                
                 # Edge Id: scale_offset + 2*ii + 1
                 self.optimizer.add_depth_scale_consistency_edge(edge_id, pt.id, kf.id,
                                                                 self.scales_start[-1] + m.scale_id_measurement,
