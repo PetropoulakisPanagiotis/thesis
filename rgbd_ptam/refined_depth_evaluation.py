@@ -36,6 +36,39 @@ def compute_errors(gt, pred, var=None):
 
     return [silog, abs_rel, log10, rms, sq_rel, log_rms, d1, d2, d3]
 
+def find_set_of_common_files(path, ext_str):
+    local_path = path
+    global_set = set()
+    per_class_set = set()
+    per_instance_set = set()
+    if 'global' in path:
+        global_set = set([f for f in os.listdir(path) if f.endswith(ext_str)])
+
+        local_path = local_path.replace('global', 'per_class')
+        per_class_set = set(os.listdir(local_path))
+
+        local_path = local_path.replace('per_class', 'per_instance')
+        per_instance_set = set(os.listdir(local_path))
+    elif 'per_class' in path:
+        per_class_set = set([f for f in os.listdir(path) if f.endswith(ext_str)])
+
+        local_path = local_path.replace('per_class', 'global')
+        global_set = set(os.listdir(local_path))
+
+        local_path = local_path.replace('global', 'per_instance')
+        per_instance_set = set(os.listdir(local_path))
+    else:
+        per_instance_set = set([f for f in os.listdir(path) if f.endswith(ext_str)])
+
+        local_path = local_path.replace('per_instance', 'global')
+        global_set = set(os.listdir(local_path))
+
+        local_path = local_path.replace('global', 'per_class')
+        per_class_set = set(os.listdir(local_path))
+
+    common_set = global_set & per_class_set & per_instance_set
+    return common_set
+
 # Define the dataset class
 class MyDataset(Dataset):
     def __init__(self, true_depth_path, original_data_path, refined_data_path):
@@ -54,8 +87,8 @@ class MyDataset(Dataset):
 
         self.true_depth_folder = true_depth_path
 
-        self.optimized_scale = sorted([f for f in os.listdir(self.optimized_scale_folder) if f.endswith('.json')])
-        self.optimized_scale_map = sorted([f for f in os.listdir(self.optimized_scale_map_folder) if f.endswith('scale_map.png')])
+        self.optimized_scale = sorted(find_set_of_common_files(self.optimized_scale_folder, '.json'))
+        self.optimized_scale_map = sorted(find_set_of_common_files(self.optimized_scale_folder, 'scale_map.png'))
 
         self.size_dataset = len(self.optimized_scale)
         assert self.size_dataset == len(self.optimized_scale_map)
@@ -135,19 +168,21 @@ if __name__ == '__main__':
 
 
     true_depth_dir = '/usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/depth/'
-    refined_depth_dir = '/usr/stud/petp/code/thesis/rgbd_ptam/results_debug/'
+    refined_depth_dir = '/usr/stud/petp/code/thesis/rgbd_ptam/results_all/'
     original_network_depth_dir = '/usr/stud/petp/storage/user/petp/datasets/predictions/'
-    scenes = ['scene0685_01']
-    variations = ['per_class', 'per_instance']
-    variations = ['per_class']
+    scenes = ['scene0025_01',  'scene0100_00', 'scene0300_01',  'scene0553_00',  'scene0568_02',  'scene0598_02',  \
+              'scene0647_00',  'scene0684_00',  'scene0693_01', 'scene0064_00',  'scene0086_02',  'scene0153_00', \
+              'scene0314_00',  'scene0527_00',  'scene0558_02',  'scene0574_01',  'scene0609_03',  'scene0664_02',  'scene0685_01',
+        ]
+
+    variations = ['per_class', 'per_instance', 'global']
     runs = 3
 
-    save_dir = './results_refined/'
+    save_dir = './results_refined_all/'
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    
-    columns = ['scene', 'per_class', 'per_instace']
-    columns = ['scene', 'per_class']
+    columns = ['scene', 'per_class', 'per_instace', 'global']
+
     df_results = pd.DataFrame(columns=columns)
     for scene in tqdm(scenes, total=len(scenes), desc='scenes'):
         true_depth_path = true_depth_dir + scene

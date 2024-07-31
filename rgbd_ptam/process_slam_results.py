@@ -4,7 +4,7 @@ import matplotlib.font_manager as fm
 import os
 import numpy as np
 
-parent_dir = './results'
+parent_dir = './results_all'
 
 ate_rmse_all_scenes_list = []
 ate_mean_all_scenes_list = []
@@ -48,7 +48,7 @@ for folder in os.listdir(parent_dir):
             if 'abs_trans_rmse' not in ate_error_df.columns:
                 continue
 
-            if True:
+            if False:
                 parent_dir_old = "./results_old"
                 ate_error_old_df = pd.read_csv(os.path.join(parent_dir_old, folder, 'ate_error.csv'))
                 relative_error_old_df = pd.read_csv(os.path.join(parent_dir_old, folder, 'relative_error.csv'))
@@ -199,7 +199,9 @@ for folder in os.listdir(parent_dir):
 
 #columns = ['scene', 'global', 'virtual', 'virtual-gt', 'mono', 'mono-gt']
 #columns = ['scene', 'per-instance', 'per-class']
-columns = ['scene', 'global', 'virtual', 'virtual-gt', 'mono', 'mono-gt', 'per-instance', 'per-class']
+#columns = ['scene', 'global', 'virtual', 'virtual-gt', 'mono', 'mono-gt', 'per-instance', 'per-class']
+#columns = ['scene', 'global', 'virtual', 'mono', 'per-instance', 'per-class']
+columns = ['scene', 'per-instance', 'per-class', 'global', 'virtual', 'mono']
 #columns = ['scene', 'global', 'virtual', 'mono', 'per-instance', 'per-class']
 ate_rmse_all_scenes_df = pd.DataFrame(ate_rmse_all_scenes_list, columns=columns)
 ate_mean_all_scenes_df = pd.DataFrame(ate_mean_all_scenes_list, columns=columns)
@@ -219,7 +221,7 @@ dfs = [
     relative_rot_mean_all_scenes_df, relative_rot_max_all_scenes_df
 ]
 
-path = './results/processed_results_new/combined/'
+path = './results_all/processed_results/combined/'
 if not os.path.exists(path):
     os.makedirs(path)
 
@@ -235,21 +237,30 @@ for df, file_name in zip(dfs, file_names):
 
     try: 
         if remove_gt:
-            df.drop('virtual-gt', axis=1, inplace=True)
-            df.drop('mono-gt', axis=1, inplace=True)
+            #df.drop('virtual-gt', axis=1, inplace=True)
+            #df.drop('virtual', axis=1, inplace=True)
+            #df.drop('mono-gt', axis=1, inplace=True)
+            #df.drop('mono', axis=1, inplace=True)
+            pass
     except:
         pass
+    
+    avg_row = df.iloc[:, 1:].mean()
 
+    # Create a new row with 'avg' in the first column and the averages in the subsequent columns
+    new_row = ['mean'] + avg_row.tolist()
+
+    # Append the new row to the DataFrame
+    df.loc[len(df)] = new_row
+    df = df.round(4)
+    
     df_ = df.iloc[:, 1:]
     min_vals = df_.idxmin(axis=1)
     min_vals_ids = [df.columns.get_loc(min_val) for min_val in min_vals]  # Per row find the min col
-
     fig, ax = plt.subplots()
-
     ax.axis('tight')
     ax.axis('off')
     table = ax.table(cellText=df.values, colLabels=df.columns, loc='center')
-
     for (row, col), cell in table.get_celld().items():
         if row != 0:
             if min_vals_ids[row - 1] == col:
