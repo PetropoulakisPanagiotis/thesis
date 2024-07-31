@@ -1,10 +1,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![python](https://img.shields.io/badge/python-2.7-blue.svg)](https://www.python.org/downloads/release/python-270/)
 
-#### <p align="center">Scale-Aware Landmark-based SLAM in Canonical Space</p>
+## <p align="center">Scale-Aware Landmark-based SLAM in Canonical Space</p>
 
 <p align="center">
-<img src="scale-brain.png" width="400px" height="290px"> 
+<img src="scale-brain.png" width="300px" height="300px"> 
 </p>
 <br /> <br />
 
