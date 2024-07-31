@@ -58,6 +58,7 @@ To prepare the datasets ScanNet and NYUv2 we have used and extended the reposito
 * NYUv2
 
 ```
+wget http://horatio.cs.nyu.edu/mit/silberman/nyu_depth_v2/nyu_depth_v2_labeled.mat
 python3 helpers/extract_official_train_test_set_from_mat.py nyu_depth_v2_labeled.mat splits.mat ../../../datasets/nyu_depth_v2/official_splits/
 ```
 
@@ -66,6 +67,7 @@ First, install the original data using the script:
 ```
 python3 download.py -o /usr/stud/petp/storage/user/petp/datasets/scannet/
 Then prepare the dataset to our format with 13 classes:
+```
 
 ```
 cd nicr_sa_prepare_dataset
