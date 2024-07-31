@@ -10,7 +10,7 @@
 
 ## Installation
 #### Depth Pipeline
-
+```
 conda create --name scale-env python=3.8
 conda activate scale-env
 conda install cudatoolkit=11.3
