@@ -53,6 +53,26 @@ cd ..
 python setup.py install
 ```
 ## Datasets preparation 
+To prepare the datasets ScanNet and NYUv2 we have used and extended the repository [nicr-scene-analysis-datasets](https://github.com/TUI-NICR/nicr-scene-analysis-datasets) to our needs.
+
+* NYUv2
+
+```
+python3 helpers/extract_official_train_test_set_from_mat.py nyu_depth_v2_labeled.mat splits.mat ../../../datasets/nyu_depth_v2/official_splits/
+```
+
+* Scannet
+First, install the original data using the script:
+```
+python3 download.py -o /usr/stud/petp/storage/user/petp/datasets/scannet/
+Then prepare the dataset to our format with 13 classes:
+
+```
+cd nicr_sa_prepare_dataset
+python -m pip install .[withpreparation,with3d] --user && pip install --upgrade numpy && pip install markupsafe==2.0.1 && pip install werkzeug==2.0.3
+nicr_sa_prepare_dataset scannet /usr/stud/petp/storage/user/petp/datasets/scannet/data /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted
+```
+
 
 ## Checkpoints 
 
