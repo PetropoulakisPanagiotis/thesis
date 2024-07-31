@@ -25,6 +25,43 @@ mim install mmcv==2.0.0
 ```
 
 #### Scale-Aware Pipeline
+Advice: use our instructions to install third-party packages for your convenience. 
+
+1) Step: install [pangolin](https://github.com/uoip/pangolin)
+ 
+```
+cd scale-aware-slam 
+conda install -c conda-forge libstdcxx-ng=12
+cd pangolin
+mkdir build
+cd build
+cmake -DPYBIND11_PYTHON_VERSION=3.8 ..
+make -j8
+cd ..
+python setup.py install
+```
+2) Step: install [g2opy](https://github.com/uoip/g2opy)
+```
+cd scale-aware-slam 
+pip install pybind11 setuptools==58.2.0
+cd g2opy
+mkdir build
+cd build
+cmake -DPYBIND11_PYTHON_VERSION=3.8 ..
+make -j8
+cd ..
+python setup.py install
+```
+## Datasets preparation 
+
+## Checkpoints 
+
+## Run
+
+Depth 
+slam
+evaluation
+depth refinement 
 
 -------
 #### Citation
