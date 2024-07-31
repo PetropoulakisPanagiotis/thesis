@@ -24,7 +24,7 @@ mim install mmcv==2.0.0
 
 #### Scale-Aware Pipeline
 
-
+-------
 #### Citation
 If you find my thesis useful in your research, please consider citing:
 
