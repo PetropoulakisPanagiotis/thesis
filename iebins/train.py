@@ -16,9 +16,9 @@ import numpy as np
 from dataloaders.dataloader import DataLoaderCustom
 from networks.NewCRFDepth import NewCRFDepth
 from parser_options import train_parser
-from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_d3vo
+from custom_logging import debug_result, debug_visualize_gt_instances, tb_visualization, tb_visualization_unc
 from online_eval import online_eval
-from utils import silog_loss, l1_loss, d3vo_loss, \
+from utils import silog_loss, l1_loss, unc_loss, \
                     eval_metrics, block_print, enable_print, load_checkpoint_skip_update_project, load_checkpoint, \
                     set_hparams_dict, sigma_metric_from_canonical_and_scale
 
@@ -63,7 +63,7 @@ def main_worker(gpu, ngpus_per_node, args):
                         segmentation_active=args.segmentation,  concat_masks=args.concat_masks, instances_active=args.instances, \
                         roi_align=args.roi_align, roi_align_size=args.roi_align_size, \
                         bins_scale=args.bins_scale, unc_head=args.unc_head, virtual_depth_variation=args.virtual_depth_variation, \
-                        upsample_type=args.upsample_type, bins_type=args.bins_type, bins_type_scale=args.bins_type_scale)
+                        upsample_type=args.upsample_type, bins_type=args.bins_type, bins_type_scale=args.bins_type_scale, unc_loss_type=args.unc_loss_type)
     model.train()
     # Set some layers to eval to train the uncertainty decoder #
     if args.unc_head:  
@@ -133,7 +133,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # Losses #
     silog_criterion = silog_loss(variance_focus=args.variance_focus)
     l1_criterion = l1_loss()
-    d3vo_criterion = d3vo_loss(original=args.d3vo_original) # For uncertainty
+    unc_criterion = unc_loss(unc_loss_type=args.unc_loss_type) # For uncertainty
 
     start_time = time.time()
     steps_per_epoch = len(dataloader.data)
@@ -232,7 +232,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 else:
                     pred_d = pred_depths_r_list[-1]
 
-                loss = d3vo_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))
+                loss = unc_criterion.forward(pred_d, depth_gt, sigma_metric, mask.to(torch.bool))
 
             # Network is trained to optimize depth #
             else:
@@ -269,7 +269,7 @@ def main_worker(gpu, ngpus_per_node, args):
             if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                         and args.rank % ngpus_per_node == 0):
                 if args.unc_head:
-                    print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, d3vo_loss: {:.12f}'.format(epoch, \
+                    print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, unc_loss: {:.12f}'.format(epoch, \
                            step, steps_per_epoch, global_step, current_lr, loss))
                 else:
                     print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}'.format(epoch, \
@@ -306,7 +306,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                             and args.rank % ngpus_per_node == 0):
                     if args.unc_head:
-                        tb_visualization_d3vo(writer, loss, sigma_metric, global_step, args, current_lr, var_sum, var_cnt,\
+                        tb_visualization_unc(writer, loss, sigma_metric, global_step, args, current_lr, var_sum, var_cnt,\
                                      num_images, depth_gt, image, args.max_tree_depth, pred_depths_r_list, \
                                      pred_depths_rc_list, num_semantic_classes, \
                                      instances, segmentation_map, labels, pred_depths_c_list, \
@@ -326,22 +326,22 @@ def main_worker(gpu, ngpus_per_node, args):
                 model.eval()
 
                 eval_measures, unc_error = online_eval(args, model, dataloader_eval, gpu, epoch, ngpus_per_node, group,
-                                                       original_d3vo=args.d3vo_original)
+                                                       unc_loss_type=args.unc_loss_type)
                 if eval_measures is not None:
                     # Uncertainty metrics #
                     if args.unc_head:
                         if best_unc > unc_error:
 
                             old_best_step = best_eval_steps[9]
-                            model_path = '/model-{}-best_{}_{:.5f}'.format(old_best_step, "unc_d3vo", unc_error)
+                            model_path = '/model-{}-best_{}_{:.5f}'.format(old_best_step, "unc", unc_error)
                             if os.path.exists(model_path):
                                 command = 'rm {}'.format(model_path)
                                 os.system(command)
 
                             best_unc = unc_error
-                            model_save_name = '/model-{}-best_{}_{:.5f}'.format(global_step, "unc_d3vo", best_unc)
+                            model_save_name = '/model-{}-best_{}_{:.5f}'.format(global_step, "unc", best_unc)
 
-                            print('New best for {}. Saving model: {}'.format("unc_d3vo", model_save_name))
+                            print('New best for {}. Saving model: {}'.format("unc", model_save_name))
                             checkpoint = {
                                 'global_step': global_step,
                                 'model': model.state_dict(),

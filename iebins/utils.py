@@ -153,7 +153,7 @@ def set_hparams_dict(args, num_semantic_classes, num_instances):
         "bins_type": args.bins_type,
         "bins_type_scale": args.bins_type_scale,
         "unc_head": args.unc_head,
-        "d3vo_original": args.d3vo_original,
+        "unc_loss_type": args.unc_loss_type,
         "virtual_depth_variation": args.virtual_depth_variation,
         "upsample_type": args.upsample_type,
     }
@@ -223,27 +223,33 @@ def compute_errors(gt, pred, var=None):
 
     return [silog, abs_rel, log10, rms, sq_rel, log_rms, d1, d2, d3]
 
-def compute_error_uncertainty(depth_est, depth_gt, unc, beta=0.5, original_d3vo=False):
-    if original_d3vo:
+def compute_error_uncertainty(depth_est, depth_gt, unc, unc_loss_type=0):
+    if unc_loss_type == 0 or unc_loss_type == 1: # D3VO or UncLe-SLAM
         unc_error = np.mean((((np.abs(depth_est - depth_gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))))
-    else:
-        unc_error = np.mean((((np.abs(depth_est - depth_gt) / unc) + np.log(unc)) + (math.log(2 * math.pi))) * (unc**beta))
+    elif unc_loss_type == 2: # NDDepth
+        uncer_gt = np.exp(-5 * np.abs(depth_est - depth_gt) / (depth_gt + depth_est + 1e-7))
+        unc_error = np.mean(np.abs(unc - uncer_gt))
+    else: 
+        print('Uncertainty not implementation for variation: ' + str(self.unc_loss_type))
+        exit() 
     return unc_error
 
 
-class d3vo_loss(nn.Module):
-    def __init__(self, beta=0.5, original=False):
-        super(d3vo_loss, self).__init__()
-        self.beta = beta
-        self.original = original
+class unc_loss(nn.Module):
+    def __init__(self, unc_loss_type=0):
+        super(unc_loss, self).__init__()
+        self.unc_loss_type = unc_loss_type
 
     def forward(self, depth_est, depth_gt, unc, mask):
-        if self.original:
+        if self.unc_loss_type == 0 or self.unc_loss_type == 1: # D3VO or UncLe-SLAM
             return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) +
                                (math.log(2 * math.pi))))
-        else: # Seitzer et. al. 2022
-            return torch.mean((((torch.abs(depth_est[mask] - depth_gt[mask]) / unc[mask]) + torch.log(unc[mask])) +
-                               (math.log(2 * math.pi))) * (unc[mask].detach()**self.beta))
+        elif self.unc_loss_type == 2: # NDDepth 
+            uncer_gt = torch.exp(-5 * torch.abs(depth_est[mask].detach() - depth_gt[mask]) / (depth_gt[mask] + depth_est[mask].detach() + 1e-7))
+            return torch.mean(torch.abs(unc[mask] - uncer_gt))
+        else: 
+            print('Uncertainty not implementation for variation: ' + str(self.unc_loss_type))
+            exit()
 
 
 class silog_loss(nn.Module):
@@ -266,7 +272,7 @@ class l1_loss(nn.Module):
 
 # Variance decomposition: get variance of metric depth from canonical and scale #
 def sigma_metric_from_canonical_and_scale(depth_c, unc_c, scale, unc_scale, args):
-    sigma_metric = F.relu(depth_c**2 * unc_scale + scale**2 * unc_c).clamp(min=1e-4)
+    sigma_metric = F.relu(depth_c**2 * unc_scale + scale**2 * unc_c + unc_c*unc_scale).clamp(min=1e-4)
     return sigma_metric
 
 

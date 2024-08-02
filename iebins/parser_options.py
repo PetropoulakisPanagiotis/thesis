@@ -92,8 +92,8 @@ train_parser.add_argument(
 train_parser.add_argument('--unc_head', dest='unc_head',
                           help='predict uncertainty for scale and canonical using additional heads',
                           action='store_true')
-train_parser.add_argument('--d3vo_original', dest='d3vo_original', help='use original d3vo loss with no beta',
-                          action='store_true')
+train_parser.add_argument('--unc_loss_type', dest='unc_loss_type', type=int, help='0: d3vo, 1: UncLe-SLAM, 2: NDDepth',
+                          default=0)
 train_parser.add_argument(
     '--upsample_type', type=int,
     help='0 for torch, 1 for custom bilinear interpolation, 2 custom and weight**2 for uncertainty', default='1')
@@ -166,8 +166,9 @@ eval_parser.add_argument(
 eval_parser.add_argument('--eval_unc', dest='eval_unc', help='evaluate uncertainty', action='store_true')
 eval_parser.add_argument('--unc_head', dest='unc_head',
                          help='predict uncertainty for scale and canonical using additional heads', action='store_true')
-eval_parser.add_argument('--d3vo_original', dest='d3vo_original', help='use original d3vo loss with no beta',
-                         action='store_true')
+
+eval_parser.add_argument('--unc_loss_type', dest='unc_loss_type', type=int, help='0: d3vo, 1: UncLe-SLAM, 2: NDDepth',
+                          default=0)
 eval_parser.add_argument(
     '--upsample_type', type=int,
     help='0 for torch, 1 for custom bilinear interpolation, 2 custom and weight**2 for uncertainty', default='1')
@@ -244,8 +245,8 @@ test_parser.add_argument('--predict_unc', dest='predict_unc', help='predict unce
                          action='store_true')
 test_parser.add_argument('--unc_head', dest='unc_head',
                          help='predict uncertainty for scale and canonical using additional heads', action='store_true')
-test_parser.add_argument('--d3vo_original', dest='d3vo_original', help='use original d3vo loss with no beta',
-                         action='store_true')
+test_parser.add_argument('--unc_loss_type', dest='unc_loss_type', type=int, help='0: d3vo, 1: UncLe-SLAM, 2: NDDepth',
+                          default=0)
 test_parser.add_argument(
     '--upsample_type', type=int,
     help='0 for torch, 1 for custom bilinear interpolation, 2 custom and weight**2 for uncertainty', default='1')

@@ -18,7 +18,7 @@ class NewCRFDepth(nn.Module):
                     num_semantic_classes=14, num_instances=63, padding_instances=0, \
                     segmentation_active=False, concat_masks=False, instances_active=False, roi_align=False, roi_align_size=32, \
                     unc_head=False, virtual_depth_variation=0, upsample_type=0, bins_type=1, \
-                    bin_num=16, bins_scale=50, bins_type_scale=1, **kwargs):
+                    bin_num=16, bins_scale=50, bins_type_scale=1, unc_loss_type=0, **kwargs):
         super().__init__()
 
         self.freeze_backbone = True
@@ -26,6 +26,14 @@ class NewCRFDepth(nn.Module):
 
         # IEBINS, global, per class or per instance scale #
         self.update_block = update_block
+
+        ########################################################
+        # Uncertainty                                          #
+        # 0: d3vo --> relu                                     #
+        # 1: UncLe-SLAM: uncer = b_min + log(1 + exp(net_pred) #
+        # 2: NDDepth: sigmoid                                  #
+        ########################################################
+        self.unc_loss_type = unc_loss_type
 
         ##############################
         # Bins                       #
@@ -177,8 +185,8 @@ class NewCRFDepth(nn.Module):
             
             # For instances, use RoI masking #
             if not self.instances_active:
-                self.unc_head_s = UncertaintyScaleHead(input_dim=crf_dims[0], num_predictions=num_predictions_unc)
-            self.unc_head_c = UncertaintyHead(input_dim=crf_dims[0])
+                self.unc_head_s = UncertaintyScaleHead(input_dim=crf_dims[0], num_predictions=num_predictions_unc, unc_loss_type=unc_loss_type)
+            self.unc_head_c = UncertaintyHead(input_dim=crf_dims[0], unc_loss_type=unc_loss_type)
 
         # Initialize layers #
         self.init_weights(pretrained=pretrained)
@@ -224,6 +232,22 @@ class NewCRFDepth(nn.Module):
                 raise ValueError("IEBINS can only be used with silog loss")
             if self.bin_num != 16:
                 raise ValueError("IEBINS can only be used with 16 bins")
+
+                    ########################################################
+        # Uncertainty                                          #
+        # 0, 1: d3vo, d3vo-beta --> relu                       #
+        # 2: UncLe-SLAM: uncer = b_min + log(1 + exp(net_pred) #
+        # 3: NDDepth: sigmoid                                  #
+        ########################################################
+        if self.unc_loss_type == 0:
+            print("Uncertainty type: d3vo")
+        elif self.unc_loss_type == 1:
+            print("Uncertainty type: UncLe-SLAM")
+        elif self.unc_loss_type == 2:
+            print("Uncertainty type: NDDepth")
+        else:
+            print('Uncertainty not implementation for variation: ' + str(self.unc_loss_type))
+            exit() 
 
         if self.upsample_type == 0:
             print("Uncertainty upsampling type: vanilla")
@@ -342,8 +366,9 @@ Out: 1xnum_scales
 
 
 class UncertaintyScaleHead(nn.Module):
-    def __init__(self, input_dim=128, num_predictions=1):
+    def __init__(self, input_dim=128, num_predictions=1, unc_loss_type=0):
         super(UncertaintyScaleHead, self).__init__()
+        self.unc_loss_type = unc_loss_type
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
         self.pool = nn.AdaptiveAvgPool2d(64)
         self.fc1 = nn.Linear(64 * 64, num_predictions)
@@ -351,7 +376,16 @@ class UncertaintyScaleHead(nn.Module):
     def forward(self, x):
         x = F.relu(self.pool(self.conv1(x)))
         x = torch.flatten(x, 1)
-        x = F.relu(self.fc1(x)).clamp(min=1e-4)
+
+        if self.unc_loss_type == 0:
+            x = F.relu(self.fc1(x)).clamp(min=1e-4)
+        elif self.unc_loss_type == 1:
+            x =  1e-4 +  torch.log(1 + torch.exp(self.fc1(x)))
+        elif self.unc_loss_type == 2:
+            x = F.sigmoid(self.fc1(x))
+        else:
+            print('Uncertainty not implementation for variation: ' + str(self.unc_loss_type))
+            exit() 
         return x
 
 
@@ -361,10 +395,19 @@ Out: hxw
 
 
 class UncertaintyHead(nn.Module):
-    def __init__(self, input_dim=128):
+    def __init__(self, input_dim=128, unc_loss_type=0):
         super(UncertaintyHead, self).__init__()
+        self.unc_loss_type = unc_loss_type
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
 
     def forward(self, x):
-        x = F.relu(self.conv1(x)).clamp(min=1e-4)
+        if self.unc_loss_type == 0:
+            x = F.relu(self.conv1(x)).clamp(min=1e-4)
+        elif self.unc_loss_type == 1:
+            x =  1e-4 + torch.log(1 + torch.exp(self.conv1(x)))
+        elif self.unc_loss_type == 2:
+            x = F.sigmoid(self.conv1(x))
+        else:
+            print('Uncertainty not implementation for variation: ' + str(self.unc_loss_type))
+            exit() 
         return x

@@ -15,7 +15,7 @@ from tqdm import tqdm
 from dataloaders.dataloader import DataLoaderCustom
 from networks.NewCRFDepth import NewCRFDepth
 from parser_options import eval_parser
-from custom_logging import tb_visualization, tb_visualization_d3vo
+from custom_logging import tb_visualization, tb_visualization_unc
 from utils import compute_errors, sigma_metric_from_canonical_and_scale
 from aucs import compute_aucs, SCC
 
@@ -102,7 +102,7 @@ def eval_func(model, dataloader_eval):
 
             # Tensorboard #
             if args.eval_unc:
-                tb_visualization_d3vo(writer, None, sigma_m, global_step=step, args=args, current_lr=None, \
+                tb_visualization_unc(writer, None, sigma_m, global_step=step, args=args, current_lr=None, \
                              var_sum=None, var_cnt=None, num_images=1, depth_gt=gt_depth, image=image, max_tree_depth=args.max_tree_depth, \
                              pred_depths_r_list=pred_depths_r_list, pred_depths_rc_list=result["pred_depths_rc_list"], \
                              num_semantic_classes=num_semantic_classes, instances=instances, segmentation_map=segmentation_map, \

@@ -146,14 +146,14 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
                                  colormap(uncertainty_maps_list[ii][i, :, :, :].clamp(min=1e-3).data), global_step)
 
 
-def tb_visualization_d3vo(writer, current_loss_d3vo, sigma_metric, global_step, args, current_lr, var_sum, var_cnt, num_images, \
+def tb_visualization_unc(writer, current_loss_unc, sigma_metric, global_step, args, current_lr, var_sum, var_cnt, num_images, \
                      depth_gt, image, max_tree_depth, pred_depths_r_list, pred_depths_rc_list, \
                      num_semantic_classes, instances, segmentation_map, \
                      labels, pred_depths_c_list, uncertainty_maps_list, \
                      pred_depths_u_list):
 
-    if current_loss_d3vo is not None:
-        writer.add_scalar('d3vo_loss', current_loss_d3vo, global_step)
+    if current_loss_unc is not None:
+        writer.add_scalar('unc_loss', current_loss_unc, global_step)
 
     if current_lr is not None:
         writer.add_scalar('learning_rate', current_lr, global_step)
@@ -163,7 +163,7 @@ def tb_visualization_d3vo(writer, current_loss_d3vo, sigma_metric, global_step, 
 
     for i in range(num_images):
         writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
-        writer.add_image('d3vo_unc_est/image/{}'.format(i),
+        writer.add_image('unc_unc_est/image/{}'.format(i),
                          colormap(sigma_metric[i, :, :, :].clamp(min=1e-3).data, name='viridis'), global_step)
     
     if args.instances:
