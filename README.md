@@ -19,7 +19,7 @@ conda install cudatoolkit=11.3
 conda install -c nvidia cuda-nvml-dev
 conda install cuda -c nvidia/label/cuda-11.3.0
 conda install pytorch==1.10.0 torchvision==0.11.0 torchaudio==0.10.0  -c pytorch
-pip install matplotlib  tqdm tensorboardX open3d matplotlib tqdm timm tensorboard tensorflow[and-cuda]
+pip install matplotlib tqdm tensorboardX open3d matplotlib tqdm timm tensorboard pandas scipy tensorflow[and-cuda]
 pip install -U openmim
 mim install mmcv==2.0.0
 ```

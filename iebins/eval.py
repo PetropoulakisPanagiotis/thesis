@@ -262,7 +262,7 @@ def main_worker(args):
         for eval_file in tqdm(eval_files, desc='eval file: ' + eval_files[index_eval_file].split('/')[-1]):
             args.filenames_file_eval = eval_file
             dataloader_eval = DataLoaderCustom(args, 'eval')
-            scene = 'all' if 'scene' not in eval_file else eval_file.split('/')[-1].replace('.txt', '')
+            scene = eval_file.split('/')[-1].replace('.txt', '')
             
             eval_measures, e_metric_var, aucs,  scc = eval_func(model, dataloader_eval)
             
@@ -279,7 +279,7 @@ def main_worker(args):
             index_eval_file += 1
 
     print("Saving results...")
-    df_results.to_csv(args.log_directory + '/results.csv')
+    df_results.to_csv(args.log_directory + '/results.csv', index=False)
 
 def main():
     torch.set_num_threads(16)

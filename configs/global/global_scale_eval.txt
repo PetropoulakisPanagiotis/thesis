@@ -1,19 +1,29 @@
 --model_name iebins_nyu
 --encoder tiny07
---dataset nyu
+--dataset scannet
 --input_height 480
 --input_width 640
 
---data_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
+--data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
 
---data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
---gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
---filenames_file_eval /usr/stud/petp/code/thesis/data_splits/nyudepthv2_debug_test.txt
+--log_directory /usr/stud/petp/code/thesis/tmp/
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0025_01.txt
+                      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0064_00.txt 
+
 --min_depth_eval 1e-3
 --max_depth_eval 10
+
+--exp_name global-scale-unc-eval
+--bins_type 0
+--bins_type_scale 1
+
 --eigen_crop
 
+--exp_name global-scale-unc
 --update_block 1
+--virtual_depth_variation 0
 
 --loss_type 1
 
@@ -21,13 +31,11 @@
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
---virtual_depth_variation 0
---bin_num 40
---min_depth 0
---max_depth 1
---max_tree_depth 1
 
---eval_unc
 --bins_scale 40
 
---checkpoint_path /usr/stud/petp/code/thesis/tmp/global-scale/nyu/model-30-best_silog_8.43905
+--unc_head
+--unc_loss_type 2
+
+--eval_unc
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/global-scale-unc/nyu/model-10-best_unc_0.57347
