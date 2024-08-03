@@ -275,6 +275,14 @@ def sigma_metric_from_canonical_and_scale(depth_c, unc_c, scale, unc_scale, args
     sigma_metric = F.relu(depth_c**2 * unc_scale + scale**2 * unc_c + unc_c*unc_scale).clamp(min=1e-4)
     return sigma_metric
 
+def sigma_metric_from_canonical_and_scale_nddepth(depth_c, unc_c, scale, unc_scale, args, max_scale=10):
+    """
+    sigma_metric = [e-5, 1] --> e-5 high uncertainty vs 1 -> low uncertainty
+    """
+    lowest_unc = 1 + max_scale**2 + 1   
+ 
+    sigma_metric = ((depth_c**2 * unc_scale + scale**2 * unc_c + unc_c*unc_scale) / lowest_unc).clamp(min=np.exp(-5), max=1.0)
+    return sigma_metric
 
 def colormap(inputs, name='jet', normalize=True, torch_transpose=True):
     if isinstance(inputs, torch.Tensor):

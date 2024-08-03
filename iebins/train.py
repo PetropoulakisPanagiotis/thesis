@@ -20,7 +20,7 @@ from custom_logging import debug_result, debug_visualize_gt_instances, tb_visual
 from online_eval import online_eval
 from utils import silog_loss, l1_loss, unc_loss, \
                     eval_metrics, block_print, enable_print, load_checkpoint_skip_update_project, load_checkpoint, \
-                    set_hparams_dict, sigma_metric_from_canonical_and_scale
+                    set_hparams_dict, sigma_metric_from_canonical_and_scale, sigma_metric_from_canonical_and_scale_nddepth
 
 
 # Parse config file #
@@ -135,6 +135,8 @@ def main_worker(gpu, ngpus_per_node, args):
     l1_criterion = l1_loss()
     unc_criterion = unc_loss(unc_loss_type=args.unc_loss_type) # For uncertainty
 
+    sigma_metric_from_canonical_and_scale_func = sigma_metric_from_canonical_and_scale if args.unc_loss_type != 2 else sigma_metric_from_canonical_and_scale_nddepth
+
     start_time = time.time()
     steps_per_epoch = len(dataloader.data)
     num_total_steps = args.num_epochs * steps_per_epoch
@@ -216,7 +218,7 @@ def main_worker(gpu, ngpus_per_node, args):
             
             # Network is trained to optimize canonical and scale uncertainties #
             if args.unc_head:
-                sigma_metric = sigma_metric_from_canonical_and_scale(pred_depths_rc_list[-1], unc_c,
+                sigma_metric = sigma_metric_from_canonical_and_scale_func(pred_depths_rc_list[-1], unc_c,
                                                                      pred_scale_list[-1].unsqueeze(-1).unsqueeze(-1),
                                                                      unc_s.unsqueeze(-1).unsqueeze(-1), args)
                 if args.instances:
@@ -306,6 +308,11 @@ def main_worker(gpu, ngpus_per_node, args):
                 if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                             and args.rank % ngpus_per_node == 0):
                     if args.unc_head:
+                        if args.unc_loss_type == 2:
+                            # NDDepth [e-5, 1] with e-5 high uncert
+                            # reverse it for viz
+                            offset =  1 + np.exp(-5)
+                            sigma_metric = offset - sigma_metric
                         tb_visualization_unc(writer, loss, sigma_metric, global_step, args, current_lr, var_sum, var_cnt,\
                                      num_images, depth_gt, image, args.max_tree_depth, pred_depths_r_list, \
                                      pred_depths_rc_list, num_semantic_classes, \

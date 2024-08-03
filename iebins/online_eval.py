@@ -6,8 +6,7 @@ import torch
 import torch.distributed as dist
 
 from networks.NewCRFDepth import NewCRFDepth
-from utils import compute_errors, compute_error_uncertainty, sigma_metric_from_canonical_and_scale
-
+from utils import compute_errors, compute_error_uncertainty, sigma_metric_from_canonical_and_scale, sigma_metric_from_canonical_and_scale_nddepth
 
 def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, unc_loss_type=0):
     with torch.no_grad():
@@ -15,6 +14,8 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, unc_loss
         measures_size = 10
         eval_measures = torch.zeros(measures_size).cuda(device=gpu)
         eval_unc = torch.zeros(1).cuda(device=gpu)
+    
+        sigma_metric_from_canonical_and_scale_func = sigma_metric_from_canonical_and_scale if args.unc_loss_type != 2 else sigma_metric_from_canonical_and_scale_nddepth
 
         for _, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
             image = torch.autograd.Variable(eval_sample_batched['image'].cuda(gpu, non_blocking=True))
@@ -59,7 +60,7 @@ def online_eval(args, model, dataloader_eval, gpu, epoch, ngpus, group, unc_loss
 
             # Uncertainty evaluation via extra heads #
             if args.unc_head:
-                sigma_metric = sigma_metric_from_canonical_and_scale(
+                sigma_metric = sigma_metric_from_canonical_and_scale_func(
                     result["pred_depths_rc_list"][-1], result["unc_c"][-1],
                     result["pred_scale_list"][-1].unsqueeze(-1).unsqueeze(-1),
                     result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 from .swin_transformer import SwinTransformer
 from .newcrf_layers import NewCRF
@@ -382,7 +383,7 @@ class UncertaintyScaleHead(nn.Module):
         elif self.unc_loss_type == 1:
             x =  1e-4 +  torch.log(1 + torch.exp(self.fc1(x)))
         elif self.unc_loss_type == 2:
-            x = F.sigmoid(self.fc1(x))
+            x = F.sigmoid(self.fc1(x)).clamp(min=np.exp(-5))
         else:
             print('Uncertainty not implementation for variation: ' + str(self.unc_loss_type))
             exit() 
@@ -406,7 +407,7 @@ class UncertaintyHead(nn.Module):
         elif self.unc_loss_type == 1:
             x =  1e-4 + torch.log(1 + torch.exp(self.conv1(x)))
         elif self.unc_loss_type == 2:
-            x = F.sigmoid(self.conv1(x))
+            x = F.sigmoid(self.conv1(x)).clamp(min=np.exp(-5))
         else:
             print('Uncertainty not implementation for variation: ' + str(self.unc_loss_type))
             exit() 

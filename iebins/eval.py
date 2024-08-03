@@ -16,7 +16,7 @@ from dataloaders.dataloader import DataLoaderCustom
 from networks.NewCRFDepth import NewCRFDepth
 from parser_options import eval_parser
 from custom_logging import tb_visualization, tb_visualization_unc
-from utils import compute_errors, sigma_metric_from_canonical_and_scale
+from utils import compute_errors, sigma_metric_from_canonical_and_scale, sigma_metric_from_canonical_and_scale_nddepth
 from aucs import compute_aucs, SCC
 
 # Parse config file #
@@ -37,6 +37,8 @@ def eval_func(model, dataloader_eval):
 
     num_semantic_classes = dataloader_eval.num_semantic_classes
 
+    sigma_metric_from_canonical_and_scale_func = sigma_metric_from_canonical_and_scale if args.unc_loss_type != 2 else sigma_metric_from_canonical_and_scale_nddepth
+    
     writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
 
     excecution_times = []
@@ -82,13 +84,13 @@ def eval_func(model, dataloader_eval):
             # Uncertainty #
             if args.eval_unc:
                 if args.unc_head:
-                    sigma_m = sigma_metric_from_canonical_and_scale(
+                    sigma_m = sigma_metric_from_canonical_and_scale_func(
                         result['pred_depths_rc_list'][-1], result["unc_c"][-1],
                         result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
                         result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
                 # Uncertainty of bins is std --> convert to variance #
                 else:
-                    sigma_m = sigma_metric_from_canonical_and_scale(
+                    sigma_m = sigma_metric_from_canonical_and_scale_func(
                         result['pred_depths_rc_list'][-1], result['uncertainty_maps_list'][-1]**2,
                         result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
                         (result["uncertainty_maps_scale_list"][-1]**2), args)

@@ -118,6 +118,12 @@ def predict(model, dataloader_eval) -> None:
                     "Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n"
                 )
 
+            # NDDepth reverse it 
+            if args.unc_loss_type == 2:
+                offset = 1 + np.exp(-5)
+                canonical_unc =  offset - canonical_unc
+                scale_unc = offset - scale_unc
+
             scale_unc = scale_unc.view(num_instances).cpu().numpy().tolist()
             scale_data['scale_uncertainty'] = scale_unc
 
@@ -163,6 +169,13 @@ def predict(model, dataloader_eval) -> None:
                 raise ValueError(
                     "Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n"
                 )
+
+            # NDDepth reverse it 
+            if args.unc_loss_type == 2:
+                offset = 1 + np.exp(-5)
+                canonical_unc =  offset - canonical_unc
+                scale_unc = offset - scale_unc
+
             scale_unc = scale_unc.view(num_semantic_classes).cpu().numpy().tolist()
             scale_data['scale_uncertainty'] = scale_unc
 
@@ -198,6 +211,13 @@ def predict(model, dataloader_eval) -> None:
                 raise ValueError(
                     "Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n"
                 )
+
+            # NDDepth reverse it 
+            if args.unc_loss_type == 2:
+                offset = 1 + np.exp(-5)
+                canonical_unc =  offset - canonical_unc
+                scale_unc = offset - scale_unc
+
             scale_unc = scale_unc.squeeze(0).cpu().numpy().tolist()
             scale_data["scale_uncertainty"] = scale_unc
 
