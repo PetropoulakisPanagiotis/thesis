@@ -339,10 +339,12 @@ def main_worker(gpu, ngpus_per_node, args):
                     if args.unc_head:
                         if best_unc > unc_error:
 
-                            old_best_step = best_eval_steps[9]
-                            model_path = '/model-{}-best_{}_{:.5f}'.format(old_best_step, "unc", unc_error)
-                            if os.path.exists(model_path):
-                                command = 'rm {}'.format(model_path)
+                            old_best = best_eval_steps[9]
+                            model_old_name = '/model-{}-best_{}_{:.5f}'.format(old_best, "unc", best_unc)
+    
+                            old_save_path = args.log_directory + '/' + args.model_name + model_old_name
+                            if os.path.exists(old_save_path):
+                                command = 'rm {}'.format(old_save_path)
                                 os.system(command)
 
                             best_unc = unc_error
