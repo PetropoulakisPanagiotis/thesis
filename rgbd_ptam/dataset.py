@@ -12,7 +12,7 @@ from multiprocessing import Process, Queue
 
 
 class ScaleReader(object):
-    def __init__(self, ids, timestamps=None, min_var=1e-4, max_var=50):
+    def __init__(self, ids, timestamps=None, min_var=1e-4, max_var=100):
         self.ids = ids
         self.timestamps = timestamps
         self.max_var = max_var
@@ -26,12 +26,37 @@ class ScaleReader(object):
             scale, scale_unc, scale_type = [], [], []
             with open(id, 'r') as json_file:
                 data = json.load(json_file)
-                scale = data['scale']  # This is a list
+                scale = np.asarray(data['scale'])
                 scale_unc = np.clip(np.asarray(data['scale_uncertainty'], dtype=np.float32), a_min=self.min_var,
-                                    a_max=self.max_var).tolist()
+                                    a_max=self.max_var)
                 scale_type = data['scale_type']
-                scale_valid = data['valid'] if not scale_type == 'single' else [1]
-                self.cache[idx] = (scale, scale_unc, scale_type, scale_valid)
+                scale_valid = np.asarray(data['valid']) if not scale_type == 'single' else np.asarray([1])
+                self.cache[idx] = [scale, scale_unc, scale_type, scale_valid]
+
+        max_unc = -np.inf
+        min_unc = np.inf
+        for i in range(len(self.cache)):
+            scale_unc = self.cache[i][1]
+            scale_valid = self.cache[i][-1]
+            boolean_mesk = np.asarray(scale_valid, dtype=bool)
+               
+            if np.all(boolean_mesk == False):
+                continue
+
+            local_max_unc = scale_unc[boolean_mesk].max()
+            local_min_unc = scale_unc[boolean_mesk].min()
+
+            if local_max_unc > max_unc:
+                max_unc = local_max_unc
+
+            if local_min_unc < min_unc:
+                min_unc = local_min_unc
+
+        for i in range(len(self.cache)):
+            self.cache[i][1] = np.clip(self.cache[i][1] / max_unc, 1, self.max_var)
+
+        #print("scale: ")
+        #print(max_unc, min_unc)
 
     def read(self, path):
         scale, scale_unc, scale_type = [], [], []
@@ -42,6 +67,8 @@ class ScaleReader(object):
                                 a_max=self.max_var).tolist()
             scale_type = data['scale_type']
             scale_valid = data['valid'] if not scale_type == 'single' else [1]
+
+
 
         return scale, scale_unc, scale_type, scale_valid
 
@@ -116,7 +143,7 @@ class GtPoseReader(object):
 
 
 class UncertaintyReader(object):
-    def __init__(self, ids, timestamps=None, min_var=1e-4, max_var=50, optimization_type='per_class'):
+    def __init__(self, ids, timestamps=None, min_var=1e-4, max_var=100, optimization_type='per_class'):
         self.ids = ids
         self.timestamps = timestamps
         self.max_var = max_var
@@ -131,14 +158,33 @@ class UncertaintyReader(object):
             canonical_uncertainty = np.load(id)
             if 'per_class' in self.optimization_type or 'per_instance' in self.optimization_type:
                 canonical_uncertainty = canonical_uncertainty.squeeze(0).squeeze(0)
-
             self.cache[idx] = np.clip(canonical_uncertainty, self.min_var, self.max_var)
+        
+        max_unc = -np.inf
+        min_unc = np.inf
+        for i in range(len(self.cache)):
+            canonical_uncertainty = self.cache[i]
+            local_max_unc = canonical_uncertainty.max()
+            local_min_unc = canonical_uncertainty.min()
+
+            if local_max_unc > max_unc:
+                max_unc = local_max_unc
+
+            if local_min_unc < min_unc:
+                min_unc = local_min_unc
+
+        for i in range(len(self.cache)):
+            self.cache[i] = np.clip(canonical_uncertainty / max_unc, 1, self.max_var)
+
+        #print("canonical unc: ")
+        #print(max_unc, min_unc)
 
     def read(self, path):
         canonical_uncertainty = np.load(path)
         canonical_uncertainty = np.clip(canonical_uncertainty, self.min_var, self.max_var)
         if 'per_class' in self.optimization_type or 'per_instance' in self.optimization_type:
             canonical_uncertainty = canonical_uncertainty.squeeze(0).squeeze(0)
+
 
         return canonical_uncertainty
 

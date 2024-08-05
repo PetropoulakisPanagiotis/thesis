@@ -306,9 +306,9 @@ class RGBDPTAM(object):
             total_mappoints = 0
             for keyframe in self.mapping.graph.keyframes():
                 scale_data = {
-                    'scale': keyframe.scale_aware_frame.scales,
+                    'scale': keyframe.scale_aware_frame.scales.tolist(),
                     'scale_type': args.optimization_type,
-                    'scale_uncertainty': keyframe.scale_aware_frame.scales_uncertainty
+                    'scale_uncertainty': keyframe.scale_aware_frame.scales_uncertainty.tolist()
                 }
                 path = args.scale_path + str(f'{int(keyframe.rgb.timestamp):05}') + '.json'
                 with open(path, 'w') as file:
@@ -627,7 +627,8 @@ if __name__ == '__main__':
 
     #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global']
     #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global', 'per-class']
-    methods_names = ['mono', 'virtual', 'global', 'per-class', 'per-instance']
+    #methods_names = ['mono', 'virtual', 'global', 'per-class', 'per-instance']
+    methods_names = ['global', 'per-class', 'per-instance']
     #methods_names = ['per-class', 'per-instance']
 
     initial_path = args.out_path
@@ -651,6 +652,7 @@ if __name__ == '__main__':
         run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
         """
 
+        """
         # Monocular SLAM #
         args.scale_aware = False
         args.network_depth = True
@@ -658,6 +660,7 @@ if __name__ == '__main__':
 
         print('[running monocular SLAM]')
         run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
+        """
 
         """
         # Virtual SLAM with gt depth #
@@ -668,6 +671,7 @@ if __name__ == '__main__':
         run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
         """
 
+        """
         # Virtual SLAM #
         args.scale_aware = False
         args.network_depth = True
@@ -675,12 +679,13 @@ if __name__ == '__main__':
 
         print('[running virtual SLAM]')
         run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
+        """
 
         # Global scale SLAM #
         args.scale_aware = True
         args.network_depth = True
         args.optimization_type = 'global'
-        #args.use_uncertainties = True
+        args.use_uncertainties = True
 
         print('[running global scale SLAM]')
         run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
@@ -688,7 +693,7 @@ if __name__ == '__main__':
         # Per-Class SLAM #
         args.scale_aware = True
         args.network_depth = True
-        #args.use_uncertainties = True
+        args.use_uncertainties = True
         args.optimization_type = 'per_class'
 
         print('[running per-class SLAM]')
@@ -697,7 +702,7 @@ if __name__ == '__main__':
         # Per-Instance SLAM #
         args.scale_aware = True
         args.network_depth = True
-        #args.use_uncertainties = True
+        args.use_uncertainties = True
         args.optimization_type = 'per_instance'
 
         print('[running per-instance SLAM]')
