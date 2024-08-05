@@ -2,28 +2,28 @@
 --pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
 --checkpoint_path /usr/stud/petp/code/saved_models/nyu_T.pth
 
---dataset scannet
---data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
---gt_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
---filenames_file /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train_every_100th.txt
+--dataset nyu
+--data_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
+--gt_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
+--filenames_file /usr/stud/petp/code/thesis/data_splits/nyudepthv2_train_files_with_gt.txt
 
 --do_online_eval
 --log_freq 100
---eval_freq 500
+--eval_freq 350
 --log_directory /usr/stud/petp/code/thesis/tmp/
---data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
---gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
---filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid_every_500th.txt
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
+--filenames_file_eval /usr/stud/petp/code/thesis/data_splits/nyudepthv2_test_files_with_gt.txt
 --min_depth_eval 1e-3
 --max_depth_eval 10
 
---exp_name per-class-scale-regression-scale-1
+--exp_name per-class-scale-bins
 
 --input_height 480
 --input_width 640
 
 --batch_size 8
---num_epochs 50
+--num_epochs 250
 --learning_rate 2e-4
 --weight_decay 1e-2
 --adam_eps 1e-3
@@ -38,7 +38,7 @@
 --eigen_crop
 
 --update_block 2
---virtual_depth_variation 1
+--virtual_depth_variation 0
 
 --loss_type 1
 --segmentation
