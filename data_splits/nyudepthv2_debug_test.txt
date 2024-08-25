@@ -1,0 +1,2 @@
+office/rgb_00004.jpg office/sync_depth_00004.png
+office/rgb_00026.jpg office/sync_depth_00026.png

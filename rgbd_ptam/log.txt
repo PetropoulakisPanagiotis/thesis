@@ -1,0 +1,1483 @@
+[scene name scene0025_01]
+[running monocular SLAM]
+
+
+[iteration 1]
+num frames 1780
+num keyframes 930
+average time 0.031
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1780
+num keyframes 931
+average time 0.028
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1780
+num keyframes 928
+average time 0.028
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.029217  0.022966  0.295344  0.012972
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1780.0        0.210058  ...         0.0091       0.664446
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  3168400.0    0.291546    0.232025  ...  6.285881      0.0  31.369227
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running virtual SLAM]
+
+
+[iteration 1]
+num frames 1780
+num keyframes 953
+average time 0.026
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1780
+num keyframes 958
+average time 0.026
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1780
+num keyframes 958
+average time 0.026
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.026374  0.017657  0.232041  0.011226
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1780.0        0.289932  ...       0.024791       0.786485
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  3168400.0    0.410311    0.327249  ...  9.158825      0.0  42.184673
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running global scale SLAM]
+
+
+[iteration 1]
+num frames 1780
+num keyframes 936
+average time 0.055
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1780
+num keyframes 937
+average time 0.054
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1780
+num keyframes 939
+average time 0.052
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.053615  0.053223  0.359643  0.022078
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1780.0        0.229301  ...       0.031063       0.540855
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  3168400.0    0.322405    0.269823  ...  4.619578      0.0  27.188462
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running per-class SLAM]
+
+
+[iteration 1]
+num frames 1780
+num keyframes 937
+average time 0.053
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1780
+num keyframes 941
+average time 0.055
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1780
+num keyframes 940
+average time 0.055
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.054015  0.056148  0.428068  0.021958
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1780.0        0.207934  ...        0.01386       0.681375
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  3168400.0    0.287061    0.222978  ...  5.727602      0.0  29.187725
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running per-instance SLAM]
+
+
+[iteration 1]
+num frames 1780
+num keyframes 949
+average time 0.117
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1780
+num keyframes 940
+average time 0.056
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1780
+num keyframes 940
+average time 0.055
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max      min
+0  0.075712  0.053909  0.397177  0.02563
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1780.0         0.23128  ...       0.014692       0.655803
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  3168400.0    0.317412    0.257796  ...  6.410905      0.0  32.160032
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[final results]
+[relative pose errors]
+         method      pairs  trans_rmse  ...  rot_min    rot_max         scene
+0  per-instance  3168400.0    0.317412  ...      0.0  32.160032  scene0025_01
+1     per-class  3168400.0    0.287061  ...      0.0  29.187725  scene0025_01
+2        global  3168400.0    0.322405  ...      0.0  27.188462  scene0025_01
+3       virtual  3168400.0    0.410311  ...      0.0  42.184673  scene0025_01
+4          mono  3168400.0    0.291546  ...      0.0  31.369227  scene0025_01
+
+[5 rows x 15 columns]
+[absolute trajectory errors]
+         method   pairs  ...  abs_trans_max         scene
+0  per-instance  1780.0  ...       0.655803  scene0025_01
+1     per-class  1780.0  ...       0.681375  scene0025_01
+2        global  1780.0  ...       0.540855  scene0025_01
+3       virtual  1780.0  ...       0.786485  scene0025_01
+4          mono  1780.0  ...       0.664446  scene0025_01
+
+[5 rows x 8 columns]
+[duration (sec)]
+         method      mean       std       max       min         scene
+0          mono  0.029217  0.022966  0.295344  0.012972  scene0025_01
+1       virtual  0.026374  0.017657  0.232041  0.011226  scene0025_01
+2        global  0.053615  0.053223  0.359643  0.022078  scene0025_01
+3     per-class  0.054015  0.056148  0.428068  0.021958  scene0025_01
+4  per-instance  0.075712  0.053909  0.397177  0.025630  scene0025_01
+[scene name scene0568_02]
+[running monocular SLAM]
+
+
+[iteration 1]
+num frames 1409
+num keyframes 219
+average time 0.048
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1409
+num keyframes 216
+average time 0.044
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1409
+num keyframes 217
+average time 0.042
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.044503  0.019797  0.253164  0.024114
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1409.0        0.551171  ...       0.092757       0.880081
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  1985281.0    0.815821    0.718413  ...  4.446963      0.0  23.063427
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running virtual SLAM]
+
+
+[iteration 1]
+num frames 1409
+num keyframes 224
+average time 0.041
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1409
+num keyframes 226
+average time 0.041
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1409
+num keyframes 228
+average time 0.041
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.041136  0.025274  0.258657  0.021455
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1409.0        0.477642  ...       0.073305        0.79606
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min   rot_max
+0  1985281.0    0.779903    0.683655  ...  4.908958      0.0  24.39104
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running global scale SLAM]
+
+
+[iteration 1]
+num frames 1409
+num keyframes 221
+average time 0.172
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1409
+num keyframes 224
+average time 0.062
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1409
+num keyframes 216
+average time 0.060
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.098042  0.159057  4.412752  0.042418
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1409.0        0.496952  ...       0.111139       0.947008
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  1985281.0    0.726625    0.637929  ...  4.724572      0.0  23.602069
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running per-class SLAM]
+
+
+[iteration 1]
+num frames 1409
+num keyframes 226
+average time 0.151
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1409
+num keyframes 224
+average time 0.071
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1409
+num keyframes 227
+average time 0.071
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.097468  0.064761  0.590005  0.044355
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1409.0        0.526588  ...       0.025409       0.966473
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  1985281.0    0.771619    0.683775  ...  4.151375      0.0  21.589168
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running per-instance SLAM]
+
+
+[iteration 1]
+num frames 1409
+num keyframes 222
+average time 0.139
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1409
+num keyframes 228
+average time 0.068
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1409
+num keyframes 227
+average time 0.067
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean      std       max      min
+0  0.091553  0.06169  0.558597  0.04372
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1409.0        0.563858  ...       0.102299       0.912263
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  1985281.0    0.843877    0.740188  ...  4.689117      0.0  24.421703
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[final results]
+[relative pose errors]
+         method      pairs  trans_rmse  ...  rot_min    rot_max         scene
+0  per-instance  1985281.0    0.843877  ...      0.0  24.421703  scene0568_02
+1     per-class  1985281.0    0.771619  ...      0.0  21.589168  scene0568_02
+2        global  1985281.0    0.726625  ...      0.0  23.602069  scene0568_02
+3       virtual  1985281.0    0.779903  ...      0.0  24.391040  scene0568_02
+4          mono  1985281.0    0.815821  ...      0.0  23.063427  scene0568_02
+
+[5 rows x 15 columns]
+[absolute trajectory errors]
+         method   pairs  ...  abs_trans_max         scene
+0  per-instance  1409.0  ...       0.912263  scene0568_02
+1     per-class  1409.0  ...       0.966473  scene0568_02
+2        global  1409.0  ...       0.947008  scene0568_02
+3       virtual  1409.0  ...       0.796060  scene0568_02
+4          mono  1409.0  ...       0.880081  scene0568_02
+
+[5 rows x 8 columns]
+[duration (sec)]
+         method      mean       std       max       min         scene
+0          mono  0.044503  0.019797  0.253164  0.024114  scene0568_02
+1       virtual  0.041136  0.025274  0.258657  0.021455  scene0568_02
+2        global  0.098042  0.159057  4.412752  0.042418  scene0568_02
+3     per-class  0.097468  0.064761  0.590005  0.044355  scene0568_02
+4  per-instance  0.091553  0.061690  0.558597  0.043720  scene0568_02
+[scene name scene0153_00]
+[running monocular SLAM]
+
+
+[iteration 1]
+num frames 571
+num keyframes 120
+average time 0.050
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+tracking failed!
+
+
+[iteration 3]
+num frames 571
+num keyframes 119
+average time 0.046
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.048021  0.025668  0.301246  0.021419
+   pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  570.0        0.186069  ...       0.055472       0.324939
+
+[1 rows x 6 columns]
+      pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  324900.0    0.278375    0.248673  ...  6.820099      0.0  30.344026
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running virtual SLAM]
+
+
+[iteration 1]
+num frames 571
+num keyframes 126
+average time 0.045
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 571
+num keyframes 127
+average time 0.046
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+tracking failed!
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.045314  0.031711  0.313372  0.018597
+   pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  570.0        0.141924  ...        0.02212       0.293156
+
+[1 rows x 6 columns]
+      pairs  trans_rmse  trans_mean  ...   rot_std  rot_min   rot_max
+0  324900.0    0.212581    0.190268  ...  3.537706      0.0  19.74758
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running global scale SLAM]
+
+
+[iteration 1]
+num frames 571
+num keyframes 122
+average time 0.150
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+tracking failed!
+
+
+[iteration 3]
+tracking failed!
+durations, ate_mean, relative_mean
+       mean       std       max      min
+0  0.149815  0.066575  0.501067  0.07705
+   pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  570.0        0.175354  ...         0.0336       0.354203
+
+[1 rows x 6 columns]
+      pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  324900.0    0.282139    0.251857  ...  6.362211      0.0  28.067744
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running per-class SLAM]
+
+
+[iteration 1]
+tracking failed!
+
+
+[iteration 2]
+tracking failed!
+
+
+[iteration 3]
+tracking failed!
+durations, ate_mean, relative_mean
+Empty DataFrame
+Columns: []
+Index: []
+Empty DataFrame
+Columns: []
+Index: [0]
+Empty DataFrame
+Columns: []
+Index: [0]
+-----------------------------------------
+
+[running per-instance SLAM]
+
+
+[iteration 1]
+tracking failed!
+
+
+[iteration 2]
+tracking failed!
+
+
+[iteration 3]
+num frames 571
+num keyframes 121
+average time 0.083
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.083163  0.088241  0.896459  0.034134
+   pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  570.0        0.206243  ...        0.06255       0.378976
+
+[1 rows x 6 columns]
+      pairs  trans_rmse  trans_mean  ...   rot_std  rot_min   rot_max
+0  324900.0    0.316155    0.277417  ...  7.940019      0.0  30.76797
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[final results]
+[scene name scene0527_00]
+[running monocular SLAM]
+
+
+[iteration 1]
+num frames 666
+num keyframes 375
+average time 0.037
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 666
+num keyframes 374
+average time 0.032
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 666
+num keyframes 375
+average time 0.034
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max      min
+0  0.034446  0.032473  0.662916  0.01427
+        pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  665.333333        0.117883  ...       0.027774         0.2195
+
+[1 rows x 6 columns]
+           pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  442668.666667    0.288621    0.242688  ...  6.125509      0.0  23.730662
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running virtual SLAM]
+
+
+[iteration 1]
+num frames 666
+num keyframes 379
+average time 0.032
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 666
+num keyframes 385
+average time 0.032
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 666
+num keyframes 379
+average time 0.034
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std      max       min
+0  0.032742  0.038211  0.90476  0.013768
+        pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  665.333333         0.12344  ...       0.038117       0.242236
+
+[1 rows x 6 columns]
+           pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  442668.666667    0.240669    0.207487  ...  4.704018      0.0  20.090588
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running global scale SLAM]
+
+
+[iteration 1]
+num frames 666
+num keyframes 379
+average time 0.132
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 666
+num keyframes 379
+average time 0.064
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 666
+num keyframes 376
+average time 0.052
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.082856  0.062751  0.930031  0.034075
+        pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  665.333333        0.116524  ...       0.013845       0.241672
+
+[1 rows x 6 columns]
+           pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  442668.666667    0.333222    0.276719  ...  8.381227      0.0  28.795404
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running per-class SLAM]
+
+
+[iteration 1]
+num frames 666
+num keyframes 378
+average time 0.132
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 666
+num keyframes 376
+average time 0.057
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 666
+num keyframes 376
+average time 0.058
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean     std       max       min
+0  0.082055  0.0648  0.934711  0.031198
+   pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  666.0        0.140441  ...       0.049527       0.227925
+
+[1 rows x 6 columns]
+      pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  443556.0     0.28166    0.239866  ...  7.315188      0.0  25.321037
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running per-instance SLAM]
+
+
+[iteration 1]
+num frames 666
+num keyframes 379
+average time 0.142
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 666
+num keyframes 376
+average time 0.060
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 666
+num keyframes 375
+average time 0.056
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.086052  0.062453  0.687236  0.028211
+        pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  665.666667        0.137691  ...       0.012764       0.244673
+
+[1 rows x 6 columns]
+           pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  443112.333333    0.372393    0.307639  ...  8.687811      0.0  29.112203
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[final results]
+[relative pose errors]
+         method          pairs  trans_rmse  ...  rot_min    rot_max         scene
+0  per-instance  443112.333333    0.372393  ...      0.0  29.112203  scene0527_00
+1     per-class  443556.000000    0.281660  ...      0.0  25.321037  scene0527_00
+2        global  442668.666667    0.333222  ...      0.0  28.795404  scene0527_00
+3       virtual  442668.666667    0.240669  ...      0.0  20.090588  scene0527_00
+4          mono  442668.666667    0.288621  ...      0.0  23.730662  scene0527_00
+
+[5 rows x 15 columns]
+[absolute trajectory errors]
+         method       pairs  ...  abs_trans_max         scene
+0  per-instance  665.666667  ...       0.244673  scene0527_00
+1     per-class  666.000000  ...       0.227925  scene0527_00
+2        global  665.333333  ...       0.241672  scene0527_00
+3       virtual  665.333333  ...       0.242236  scene0527_00
+4          mono  665.333333  ...       0.219500  scene0527_00
+
+[5 rows x 8 columns]
+[duration (sec)]
+         method      mean       std       max       min         scene
+0          mono  0.034446  0.032473  0.662916  0.014270  scene0527_00
+1       virtual  0.032742  0.038211  0.904760  0.013768  scene0527_00
+2        global  0.082856  0.062751  0.930031  0.034075  scene0527_00
+3     per-class  0.082055  0.064800  0.934711  0.031198  scene0527_00
+4  per-instance  0.086052  0.062453  0.687236  0.028211  scene0527_00
+[scene name scene0086_02]
+[running monocular SLAM]
+
+
+[iteration 1]
+num frames 1268
+num keyframes 178
+average time 0.042
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1268
+num keyframes 182
+average time 0.034
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1268
+num keyframes 177
+average time 0.035
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max      min
+0  0.037033  0.022327  0.572695  0.02229
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1268.0        0.220275  ...       0.027362       0.549392
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  1607824.0     0.35109    0.289326  ...  3.094338      0.0  18.492019
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running virtual SLAM]
+
+
+[iteration 1]
+num frames 1268
+num keyframes 184
+average time 0.034
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1268
+num keyframes 185
+average time 0.037
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1268
+num keyframes 182
+average time 0.034
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.035337  0.017973  0.200498  0.019004
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1268.0        0.243867  ...       0.036664       0.481851
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  1607824.0    0.380555    0.332632  ...  6.203246      0.0  28.228092
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running global scale SLAM]
+
+
+[iteration 1]
+num frames 1268
+num keyframes 183
+average time 0.143
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1268
+num keyframes 178
+average time 0.057
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1268
+num keyframes 182
+average time 0.053
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.084318  0.047263  0.686836  0.040482
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1268.0        0.172747  ...       0.009001       0.389149
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  1607824.0    0.268262    0.232771  ...  2.527828      0.0  14.851778
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running per-class SLAM]
+
+
+[iteration 1]
+num frames 1268
+num keyframes 182
+average time 0.185
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1268
+num keyframes 179
+average time 0.052
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1268
+num keyframes 181
+average time 0.052
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.096361  0.086707  1.721106  0.041706
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1268.0        0.166068  ...       0.007603       0.429623
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...  rot_std  rot_min   rot_max
+0  1607824.0    0.270584    0.225266  ...   2.7148      0.0  16.51736
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running per-instance SLAM]
+
+
+[iteration 1]
+num frames 1268
+num keyframes 182
+average time 0.190
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 1268
+num keyframes 182
+average time 0.068
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 1268
+num keyframes 183
+average time 0.055
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.104518  0.088292  0.910045  0.038136
+    pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  1268.0        0.233119  ...       0.022422       0.572985
+
+[1 rows x 6 columns]
+       pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  1607824.0    0.371605    0.305065  ...  3.584934      0.0  21.100802
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[final results]
+[relative pose errors]
+         method      pairs  trans_rmse  ...  rot_min    rot_max         scene
+0  per-instance  1607824.0    0.371605  ...      0.0  21.100802  scene0086_02
+1     per-class  1607824.0    0.270584  ...      0.0  16.517360  scene0086_02
+2        global  1607824.0    0.268262  ...      0.0  14.851778  scene0086_02
+3       virtual  1607824.0    0.380555  ...      0.0  28.228092  scene0086_02
+4          mono  1607824.0    0.351090  ...      0.0  18.492019  scene0086_02
+
+[5 rows x 15 columns]
+[absolute trajectory errors]
+         method   pairs  ...  abs_trans_max         scene
+0  per-instance  1268.0  ...       0.572985  scene0086_02
+1     per-class  1268.0  ...       0.429623  scene0086_02
+2        global  1268.0  ...       0.389149  scene0086_02
+3       virtual  1268.0  ...       0.481851  scene0086_02
+4          mono  1268.0  ...       0.549392  scene0086_02
+
+[5 rows x 8 columns]
+[duration (sec)]
+         method      mean       std       max       min         scene
+0          mono  0.037033  0.022327  0.572695  0.022290  scene0086_02
+1       virtual  0.035337  0.017973  0.200498  0.019004  scene0086_02
+2        global  0.084318  0.047263  0.686836  0.040482  scene0086_02
+3     per-class  0.096361  0.086707  1.721106  0.041706  scene0086_02
+4  per-instance  0.104518  0.088292  0.910045  0.038136  scene0086_02
+[scene name scene0684_00]
+[running monocular SLAM]
+
+
+[iteration 1]
+num frames 870
+num keyframes 212
+average time 0.040
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 870
+num keyframes 208
+average time 0.033
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 870
+num keyframes 209
+average time 0.034
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std      max       min
+0  0.035845  0.024644  0.56126  0.020601
+   pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  870.0        0.245351  ...       0.048823       0.362621
+
+[1 rows x 6 columns]
+      pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  756900.0    0.354217    0.291412  ...  8.802296      0.0  28.740104
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running virtual SLAM]
+
+
+[iteration 1]
+num frames 870
+num keyframes 218
+average time 0.033
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 870
+num keyframes 216
+average time 0.034
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 870
+num keyframes 221
+average time 0.035
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.033862  0.023918  0.553644  0.018169
+   pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  870.0        0.251557  ...       0.091377       0.345095
+
+[1 rows x 6 columns]
+      pairs  trans_rmse  trans_mean  ...    rot_std  rot_min    rot_max
+0  756900.0    0.378256    0.308415  ...  10.870297      0.0  33.075768
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running global scale SLAM]
+
+
+[iteration 1]
+num frames 870
+num keyframes 215
+average time 0.158
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 870
+num keyframes 217
+average time 0.052
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 870
+num keyframes 215
+average time 0.052
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max      min
+0  0.087207  0.059687  0.768236  0.03538
+   pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  870.0        0.231532  ...       0.016212       0.350896
+
+[1 rows x 6 columns]
+      pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  756900.0    0.335376    0.271372  ...  8.612117      0.0  26.532562
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running per-class SLAM]
+
+
+[iteration 1]
+num frames 870
+num keyframes 220
+average time 0.138
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 870
+num keyframes 214
+average time 0.055
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 870
+num keyframes 213
+average time 0.056
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.082716  0.057384  0.988363  0.036491
+   pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  870.0        0.215453  ...       0.026747       0.318897
+
+[1 rows x 6 columns]
+      pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  756900.0    0.321415    0.266154  ...  9.417293      0.0  29.463921
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[running per-instance SLAM]
+
+
+[iteration 1]
+num frames 870
+num keyframes 215
+average time 0.129
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 2]
+num frames 870
+num keyframes 214
+average time 0.053
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+
+
+[iteration 3]
+num frames 870
+num keyframes 214
+average time 0.052
+saving results...
+results saved...
+mapping stopped
+evaluating...
+evaluation done...
+durations, ate_mean, relative_mean
+       mean       std       max       min
+0  0.077998  0.050086  0.580821  0.034115
+   pairs  abs_trans_rmse  ...  abs_trans_min  abs_trans_max
+0  870.0         0.25464  ...       0.046378       0.350805
+
+[1 rows x 6 columns]
+      pairs  trans_rmse  trans_mean  ...   rot_std  rot_min    rot_max
+0  756900.0     0.36419    0.296683  ...  8.811064      0.0  29.465495
+
+[1 rows x 13 columns]
+-----------------------------------------
+
+[final results]
+[relative pose errors]
+         method     pairs  trans_rmse  ...  rot_min    rot_max         scene
+0  per-instance  756900.0    0.364190  ...      0.0  29.465495  scene0684_00
+1     per-class  756900.0    0.321415  ...      0.0  29.463921  scene0684_00
+2        global  756900.0    0.335376  ...      0.0  26.532562  scene0684_00
+3       virtual  756900.0    0.378256  ...      0.0  33.075768  scene0684_00
+4          mono  756900.0    0.354217  ...      0.0  28.740104  scene0684_00
+
+[5 rows x 15 columns]
+[absolute trajectory errors]
+         method  pairs  ...  abs_trans_max         scene
+0  per-instance  870.0  ...       0.350805  scene0684_00
+1     per-class  870.0  ...       0.318897  scene0684_00
+2        global  870.0  ...       0.350896  scene0684_00
+3       virtual  870.0  ...       0.345095  scene0684_00
+4          mono  870.0  ...       0.362621  scene0684_00
+
+[5 rows x 8 columns]
+[duration (sec)]
+         method      mean       std       max       min         scene
+0          mono  0.035845  0.024644  0.561260  0.020601  scene0684_00
+1       virtual  0.033862  0.023918  0.553644  0.018169  scene0684_00
+2        global  0.087207  0.059687  0.768236  0.035380  scene0684_00
+3     per-class  0.082716  0.057384  0.988363  0.036491  scene0684_00
+4  per-instance  0.077998  0.050086  0.580821  0.034115  scene0684_00

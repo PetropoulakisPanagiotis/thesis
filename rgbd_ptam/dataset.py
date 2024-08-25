@@ -156,8 +156,7 @@ class UncertaintyReader(object):
     def preload(self):
         for idx, id in enumerate(self.ids):
             canonical_uncertainty = np.load(id)
-            if 'per_class' in self.optimization_type or 'per_instance' in self.optimization_type:
-                canonical_uncertainty = canonical_uncertainty.squeeze(0).squeeze(0)
+            canonical_uncertainty = canonical_uncertainty.reshape((480, 640))
             self.cache[idx] = np.clip(canonical_uncertainty, self.min_var, self.max_var)
         
         max_unc = -np.inf
@@ -174,16 +173,15 @@ class UncertaintyReader(object):
                 min_unc = local_min_unc
 
         for i in range(len(self.cache)):
-            self.cache[i] = np.clip(canonical_uncertainty / max_unc, 1, self.max_var)
-
+            self.cache[i] = np.clip(self.cache[i] / max_unc, 1, self.max_var)
+        
         #print("canonical unc: ")
         #print(max_unc, min_unc)
 
     def read(self, path):
         canonical_uncertainty = np.load(path)
         canonical_uncertainty = np.clip(canonical_uncertainty, self.min_var, self.max_var)
-        if 'per_class' in self.optimization_type or 'per_instance' in self.optimization_type:
-            canonical_uncertainty = canonical_uncertainty.squeeze(0).squeeze(0)
+        canonical_uncertainty = canonical_uncertainty.reshape((480, 640))
 
 
         return canonical_uncertainty
@@ -400,10 +398,10 @@ class ScanNetDataset(object):
 
     # valid #
     cam = namedtuple('camera', 'fx fy cx cy scale')(577.5906635802469, 576.3481987847223, 319.15804639274694,
-                                                    241.9392752941744, 1000)
+                                                    241.9392752941744, 5000)
 
-    def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True, optimization_type='global',
-                 max_var=50.0, min_var=1e-4, network_depth=True, total=None, local=False, debug=True):
+    def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True, optimization_type='per_class',
+                 max_var=50.0, min_var=1e-4, network_depth=True, total=None, local=False, debug=False, pred_dir='/predictions_final/'):
         self.scale_aware = scale_aware
         path = os.path.expanduser(path)
         self.max_var = max_var
@@ -412,7 +410,7 @@ class ScanNetDataset(object):
         with open(path + "/" + split + '/rgb_intrinsics/' + scene + ".json", 'r') as json_file:
             data = json.load(json_file)
             ScanNetDataset.cam = namedtuple('camera', 'fx fy cx cy scale')(data['fx'], data['fy'], data['cx'],
-                                                                                     data['cy'], 1000.0)
+                                                                                     data['cy'], 5000.0)
 
         ids = [(file.split('.')[0]) for file in os.listdir(path + "/" + split + "/rgb/" + scene)]
         ids = sorted(ids, key=lambda x: str(x))
@@ -425,45 +423,45 @@ class ScanNetDataset(object):
         if self.scale_aware:
             if local:
                 depth_ids = [
-                    path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) +
+                    path + '/' + split + pred_dir + scene + '/' + optimization_type + "/depth/" + str(item) +
                     '.png' for item in ids
                 ]
                 canonical_ids = [
-                    path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/canonical/" + str(item) +
+                    path + '/' + split + pred_dir + scene + '/' + optimization_type + "/canonical/" + str(item) +
                     '.png' for item in ids
                 ]
                 canonical_unc_ids = [
-                    path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/canonical_unc/" +
+                    path + '/' + split + pred_dir + scene + '/' + optimization_type + "/canonical_unc/" +
                     str(item) + '.npy' for item in ids
                 ]
                 scales_ids = [
-                    path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/scale/" + str(item) +
+                    path + '/' + split + pred_dir + scene + '/' + optimization_type + "/scale/" + str(item) +
                     '.json' for item in ids
                 ]
                 pixel_to_scale_map_ids = [
-                    path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/scale_map/" + str(item) +
+                    path + '/' + split + pred_dir + scene + '/' + optimization_type + "/scale_map/" + str(item) +
                     '.png' for item in ids
                 ]
             else:
                 path = path.replace('/scannet/data_converted', '')
                 depth_ids = [
-                    path + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png'
+                    path + pred_dir + scene + '/' + optimization_type + "/depth/" + str(item) + '.png'
                     for item in ids
                 ]
                 canonical_ids = [
-                    path + '/predictions/' + scene + '/' + optimization_type + "/canonical/" + str(item) + '.png'
+                    path + pred_dir + scene + '/' + optimization_type + "/canonical/" + str(item) + '.png'
                     for item in ids
                 ]
                 canonical_unc_ids = [
-                    path + '/predictions/' + scene + '/' + optimization_type + "/canonical_unc/" + str(item) + '.npy'
+                    path + pred_dir + scene + '/' + optimization_type + "/canonical_unc/" + str(item) + '.npy'
                     for item in ids
                 ]
                 scales_ids = [
-                    path + '/predictions/' + scene + '/' + optimization_type + "/scale/" + str(item) + '.json'
+                    path + pred_dir + scene + '/' + optimization_type + "/scale/" + str(item) + '.json'
                     for item in ids
                 ]
                 pixel_to_scale_map_ids = [
-                    path + '/predictions/' + scene + '/' + optimization_type + "/scale_map/" + str(item) + '.png'
+                    path + pred_dir + scene + '/' + optimization_type + "/scale_map/" + str(item) + '.png'
                     for item in ids
                 ]
 
@@ -471,16 +469,18 @@ class ScanNetDataset(object):
             if network_depth:
                 if local:
                     depth_ids = [
-                        path + '/' + split + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) +
+                        path + '/' + split + pred_dir + scene + '/' + optimization_type + "/depth/" + str(item) +
                         '.png' for item in ids
                     ]
                 else:
                     path = path.replace('/scannet/data_converted', '')
                     depth_ids = [
-                        path + '/predictions/' + scene + '/' + optimization_type + "/depth/" + str(item) + '.png'
+                        path + pred_dir + scene + '/' + optimization_type + "/depth/" + str(item) + '.png'
                         for item in ids
                     ]
             else:
+                ScanNetDataset.cam = namedtuple('camera', 'fx fy cx cy scale')(data['fx'], data['fy'], data['cx'],
+                                                                                         data['cy'], 1000.0)
                 depth_ids = [path + '/' + split + '/depth/' + scene + "/" + str(item) + '.png' for item in ids]
 
         if debug:

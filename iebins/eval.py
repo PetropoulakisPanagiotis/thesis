@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import pandas as pd
+import cv2
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
@@ -28,7 +29,7 @@ else:
     args = eval_parser.parse_args()
 
 
-def eval_func(model, dataloader_eval):
+def eval_func(model, dataloader_eval, scene):
     eval_measures = torch.zeros(11).cuda()
 
     uncertainty_metrics = ["abs_rel", "rmse", "a1"]
@@ -39,13 +40,12 @@ def eval_func(model, dataloader_eval):
 
     sigma_metric_from_canonical_and_scale_func = sigma_metric_from_canonical_and_scale if args.unc_loss_type != 2 else sigma_metric_from_canonical_and_scale_nddepth
     
-    writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries', flush_secs=30)
+    writer = SummaryWriter(args.log_directory + '/' + args.model_name + '/summaries/' + scene, flush_secs=30)
 
     excecution_times = []
     for step, eval_sample_batched in enumerate(tqdm(dataloader_eval.data, desc='image num')):
         # Init #
         pred_depths_r_list, pred_depths_u_list =  [], []
-        
         segmentation_map, instances, labels = None, None, None
 
         image = torch.autograd.Variable(eval_sample_batched['image'].cuda())
@@ -89,10 +89,14 @@ def eval_func(model, dataloader_eval):
                     result["unc_s"][-1].unsqueeze(-1).unsqueeze(-1), args)
             # Uncertainty of bins is std --> convert to variance #
             else:
-                sigma_m = sigma_metric_from_canonical_and_scale_func(
-                    result['pred_depths_rc_list'][-1], result['uncertainty_maps_list'][-1]**2,
-                    result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
-                    (result["uncertainty_maps_scale_list"][-1]**2), args)
+                if 'iebins' in args.checkpoint_path:
+                    sigma_m = (result["uncertainty_maps_list"][-1]**2).clamp(min=1e-5)
+                else:
+                    sigma_m = sigma_metric_from_canonical_and_scale_func(
+                        result['pred_depths_rc_list'][-1], result['uncertainty_maps_list'][-1]**2,
+                        result['pred_scale_list'][-1].unsqueeze(-1).unsqueeze(-1),
+                        (result["uncertainty_maps_scale_list"][-1]**2), args)
+            
             # Mask #
             if args.instances:
                 sigma_m = torch.sum((sigma_m * instances), dim=1).unsqueeze(1)
@@ -101,32 +105,44 @@ def eval_func(model, dataloader_eval):
             else:
                 pass
 
-        # Tensorboard #
-        if args.unc_head and args.eval_unc:
-            if args.unc_loss_type == 2:
-                # NDDepth [e-5, 1] with e-5 high uncert
-                # reverse it for viz
-                offset =  1 + np.exp(-5)
-                sigma_m = offset - sigma_m
-            tb_visualization_unc(writer, None, sigma_m, global_step=step, args=args, current_lr=None, \
-                         var_sum=None, var_cnt=None, num_images=1, depth_gt=gt_depth, image=image, max_tree_depth=args.max_tree_depth, \
-                         pred_depths_r_list=pred_depths_r_list, pred_depths_rc_list=result["pred_depths_rc_list"], \
-                         num_semantic_classes=num_semantic_classes, instances=instances, segmentation_map=segmentation_map, \
-                         labels=labels, pred_depths_c_list=result["pred_depths_c_list"], uncertainty_maps_list=result["uncertainty_maps_list"], \
-                         pred_depths_u_list=pred_depths_u_list)
-        else:
-            tb_visualization(writer=writer, global_step=step, args=args, current_loss_depth=None, current_lr=None, \
-                         var_sum=None, var_cnt=None, num_images=1, depth_gt=gt_depth, image=image, max_tree_depth=args.max_tree_depth, \
-                         pred_depths_r_list=pred_depths_r_list, pred_depths_rc_list=result["pred_depths_rc_list"], \
-                         num_semantic_classes=num_semantic_classes, instances=instances, segmentation_map=segmentation_map, \
-                         labels=labels, pred_depths_c_list=result["pred_depths_c_list"], uncertainty_maps_list=result["uncertainty_maps_list"], \
-                         pred_depths_u_list=pred_depths_u_list)
+
+        if step and step % 25: #args.log_freq == 0:
+            # Tensorboard #
+            if args.unc_head or args.eval_unc:
+                if args.unc_head and args.unc_loss_type == 2:
+                    # NDDepth [e-5, 1] with e-5 high uncert
+                    # reverse it for viz
+                    offset = 1 + np.exp(-5)
+                    sigma_m = offset - sigma_m
+                
+                tb_visualization_unc(writer, None, sigma_m, global_step=step, args=args, current_lr=None, \
+                             var_sum=None, var_cnt=None, num_images=1, depth_gt=gt_depth, image=image, max_tree_depth=args.max_tree_depth, \
+                             pred_depths_r_list=pred_depths_r_list, pred_depths_rc_list=result["pred_depths_rc_list"], \
+                             num_semantic_classes=num_semantic_classes, instances=instances, segmentation_map=segmentation_map, \
+                             labels=labels, pred_depths_c_list=result["pred_depths_c_list"], uncertainty_maps_list=result["uncertainty_maps_list"], \
+                             pred_depths_u_list=pred_depths_u_list)
+            else:
+                tb_visualization(writer=writer, global_step=step, args=args, current_loss_depth=None, current_lr=None, \
+                             var_sum=None, var_cnt=None, num_images=1, depth_gt=gt_depth, image=image, max_tree_depth=args.max_tree_depth, \
+                             pred_depths_r_list=pred_depths_r_list, pred_depths_rc_list=result["pred_depths_rc_list"], \
+                             num_semantic_classes=num_semantic_classes, instances=instances, segmentation_map=segmentation_map, \
+                             labels=labels, pred_depths_c_list=result["pred_depths_c_list"], uncertainty_maps_list=result["uncertainty_maps_list"], \
+                             pred_depths_u_list=pred_depths_u_list)
 
         # To numpy #
         pred_depth = pred_depth.cpu().numpy().squeeze()
         gt_depth = gt_depth.cpu().numpy().squeeze()
         if args.eval_unc:
             sigma_m = sigma_m.cpu().numpy().squeeze()
+
+        """
+        img = pred_depth
+        depth_normalized = cv2.normalize(img, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+        depth_colormap = cv2.applyColorMap(np.uint8(255 * depth_normalized), cv2.COLORMAP_INFERNO)
+        cv2.imshow('Depth Colormap', depth_colormap)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        """
 
         pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
         pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
@@ -146,24 +162,24 @@ def eval_func(model, dataloader_eval):
             if np.all(gt_depth[valid_mask] == 0) or len(gt_depth[valid_mask]) == 1:
                 continue
 
-    # Uncertainty eval #
-    if args.eval_unc:
-        # Computer also error^2/var #
-        measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
-        eval_measures[10] += torch.tensor(measures[-1]).cuda()
+        # Uncertainty eval #
+        if args.eval_unc:
+            # Computer also error^2/var #
+            measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
+            eval_measures[10] += torch.tensor(measures[-1]).cuda()
 
-        # AUCS + spearman_coefficient # 
-        scores = compute_aucs(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
-        [aucs[m].append(scores[m]) for m in uncertainty_metrics]
+            # AUCS + spearman_coefficient # 
+            scores = compute_aucs(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
+            [aucs[m].append(scores[m]) for m in uncertainty_metrics]
 
-        scc_total += SCC(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
-    else:
-        measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
-
-    # Some basic depth metrics #
-    eval_measures[:9] += torch.tensor(measures[:9]).cuda() 
-    eval_measures[9] += 1 # Size of dataset 
-   
+            scc_total += SCC(gt_depth[valid_mask], pred_depth[valid_mask], sigma_m[valid_mask])
+        else:
+            measures = compute_errors(gt_depth[valid_mask], pred_depth[valid_mask])
+        
+        # Some basic depth metrics #
+        eval_measures[:9] += torch.tensor(measures[:9]).cuda() 
+        eval_measures[9] += 1 # Size of dataset 
+  
     # Depth related + optional e^2/variance #
     eval_measures_cpu = eval_measures.cpu()
     cnt = eval_measures_cpu[9].item()
@@ -183,7 +199,7 @@ def eval_func(model, dataloader_eval):
             aucs[m] = np.array(aucs[m]).mean(0)
         print("\n  " + ("{:>8} | " * 6).format("abs_rel", "", "rmse", "", "a1", ""))
         print("  " + ("{:>8} | " * 6).format("AUSE", "AURG", "AUSE", "AURG", "AUSE", "AURG"))
-        print(("&{:8.3f}  " * 6).format(*aucs["abs_rel"].tolist() + aucs["rmse"].tolist() + aucs["a1"].tolist()) +
+        print(("&{:8.5f}  " * 6).format(*aucs["abs_rel"].tolist() + aucs["rmse"].tolist() + aucs["a1"].tolist()) +
               "\\\\")
 
         scc_cpu = scc_total / cnt
@@ -264,7 +280,7 @@ def main_worker(args):
             dataloader_eval = DataLoaderCustom(args, 'eval')
             scene = eval_file.split('/')[-1].replace('.txt', '')
             
-            eval_measures, e_metric_var, aucs,  scc = eval_func(model, dataloader_eval)
+            eval_measures, e_metric_var, aucs,  scc = eval_func(model, dataloader_eval, scene)
             
             row = [scene, variation] + eval_measures
             if e_metric_var is not None:

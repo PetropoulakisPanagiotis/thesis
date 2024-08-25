@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
+from tqdm import tqdm
 
 import json
 import time
@@ -87,7 +88,7 @@ class RGBDPTAM(object):
         self.tracker = Tracking(params, args)
         self.motion_model = MotionModel(params)
 
-        self.loop_closing = None  #LoopClosing(self, params)
+        self.loop_closing = None#LoopClosing(self, params)
         self.loop_correction = None
 
         self.reference = None  # reference keyframe
@@ -591,7 +592,7 @@ if __name__ == '__main__':
                         help='Monocular or virtual stereo')
     parser.add_argument('--use_uncertainties', action='store_true', default=False,
                         help='use uncertainties during optimization')
-    parser.add_argument('--optimization_type', type=str, default='global',
+    parser.add_argument('--optimization_type', type=str, default='per_class',
                         choices=['global', 'per_class', 'per_instance'], help='Scale-Aware variation')
     parser.add_argument('--out_path', type=str, default='./results_debug', help='Folder to save results')
     parser.add_argument('--total', type=int, default=None, help='Total number of frame')
@@ -616,23 +617,39 @@ if __name__ == '__main__':
     total_runs = 3
     args.no_viz = True
 
-    #scenes = ['scene0655_01'] # Local
-    scenes = ['scene0025_01',  'scene0100_00', 'scene0300_01',  'scene0553_00',  'scene0568_02',  'scene0598_02',  \
-              'scene0647_00',  'scene0684_00',  'scene0693_01', 'scene0064_00',  'scene0086_02',  'scene0153_00', \
-              'scene0314_00',  'scene0527_00',  'scene0558_02',  'scene0574_01',  'scene0609_03',  'scene0664_02',  'scene0685_01',
-        ]
+    scenes = [
+'scene0664_02',
+'scene0314_00',
+'scene0064_00',
+'scene0086_02',
+'scene0598_02',
+'scene0574_01',
+'scene0338_02',
+'scene0685_01',
+'scene0300_01',
+'scene0527_00',
+'scene0684_00',
+'scene0019_00',
+'scene0193_01',
+'scene0131_02',
+'scene0025_01',
+'scene0221_01',
+'scene0164_01',
+'scene0316_00',
+'scene0693_01',
+'scene0100_02',
+'scene0609_03',
+'scene0553_00',
+'scene0342_00',
+'scene0081_00',
+'scene0278_01',
+    ]   
 
-
-    #scenes = ['scene0685_01']
-
-    #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global']
-    #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global', 'per-class']
-    #methods_names = ['mono', 'virtual', 'global', 'per-class', 'per-instance']
-    methods_names = ['global', 'per-class', 'per-instance']
-    #methods_names = ['per-class', 'per-instance']
+    #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global', 'per-class', 'per-instance']
+    methods_names = ['mono', 'virtual', 'global', 'per-class', 'per-instance']
 
     initial_path = args.out_path
-    for scene in scenes:
+    for scene in tqdm(scenes, total=len(scenes)):
         print(f'[scene name {scene}]')
         args.scene = scene
         args.out_path = initial_path + '/' + args.scene + '/'
@@ -642,71 +659,70 @@ if __name__ == '__main__':
         monitor_dict = {'relative_df': pd.DataFrame(), 'ate_df': pd.DataFrame(), 'relative_std_df': pd.DataFrame(), \
                         'ate_std_df': pd.DataFrame(), 'durations_df': pd.DataFrame(columns=['mean', 'std', 'max', 'min'])}
         
-        """
-        # Monocular SLAM with gt depth #
         args.scale_aware = False
+       
+        """ 
+        # Monocular SLAM with gt depth #
         args.network_depth = False
         args.optimization_base_type = 'mono'
-
         print('[running monocular SLAM with gt depth]')
         run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
-        """
-
-        """
+        """ 
+        
         # Monocular SLAM #
-        args.scale_aware = False
         args.network_depth = True
         args.optimization_base_type = 'mono'
-
         print('[running monocular SLAM]')
-        run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
-        """
 
-        """
+        try: 
+            run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
+        except:
+            pass
+        
+        """ 
         # Virtual SLAM with gt depth #
-        args.scale_aware = False
         args.network_depth = False
         args.optimization_base_type = 'virtual'
         print('[running virtual SLAM with gt depth]')
         run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
-        """
-
-        """
+        """ 
+        
         # Virtual SLAM #
-        args.scale_aware = False
         args.network_depth = True
         args.optimization_base_type = 'virtual'
-
         print('[running virtual SLAM]')
         run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
-        """
 
-        # Global scale SLAM #
-        args.scale_aware = True
-        args.network_depth = True
-        args.optimization_type = 'global'
+        ###############
+        # Scale-Aware #
+        ###############
         args.use_uncertainties = True
-
+        args.network_depth = True
+        args.scale_aware = True
+        
+        # Global scale SLAM #
+        args.optimization_type = 'global'
         print('[running global scale SLAM]')
-        run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
+        try: 
+            run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
+        except:
+            pass
 
         # Per-Class SLAM #
-        args.scale_aware = True
-        args.network_depth = True
-        args.use_uncertainties = True
         args.optimization_type = 'per_class'
-
         print('[running per-class SLAM]')
-        run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
+        try: 
+            run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
+        except:
+            pass
 
         # Per-Instance SLAM #
-        args.scale_aware = True
-        args.network_depth = True
-        args.use_uncertainties = True
         args.optimization_type = 'per_instance'
-
         print('[running per-instance SLAM]')
-        run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
+        try: 
+            run_main_loop_with_logging(args, monitor_dict, total_runs=total_runs)
+        except:
+            pass
 
         try:  # In case tracking fails in any of the scenes
             print('[final results]')

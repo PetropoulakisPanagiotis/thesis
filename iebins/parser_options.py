@@ -206,6 +206,7 @@ eval_parser.add_argument('--eigen_crop', help='if set, crops according to Eigen 
 
 # Eval hparams #
 eval_parser.add_argument('--loss_type', type=int, help='0 for silog, 1 for l1', default=0)
+eval_parser.add_argument('--log_freq', type=int, help='logging frequency in global steps', default=25)
 
 ###############
 # Test parser #
@@ -280,3 +281,4 @@ test_parser.add_argument('--max_depth_test', type=float, help='maximum depth for
 
 # Testing hparams #
 test_parser.add_argument('--loss_type', type=int, help='0 for silog, 1 for l1', default=0)
+

@@ -1,0 +1,31 @@
+--model_name iebins_nyu
+--encoder tiny07
+--dataset nyu
+--input_height 480
+--input_width 640
+
+--data_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/
+
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/test/
+--filenames_file_eval /usr/stud/petp/code/thesis/data_splits/nyudepthv2_test_files_with_gt.txt
+
+--log_directory /usr/stud/petp/code/thesis/tmp/
+--min_depth_eval 1e-3
+--max_depth_eval 10
+
+--input_height 480
+--input_width 640
+
+--upsample_type 0
+--eigen_crop
+--exp_name iebins_3
+--update_block 0
+--loss_type 0
+--bin_num 16
+--min_depth 0
+--max_depth 10
+--max_tree_depth 6
+
+--eval_unc
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/iebins_3/nyu/model-8000-best_abs_rel_0.13595

@@ -75,7 +75,7 @@ def predict(model, dataloader_eval) -> None:
         # Save depth metric #
         filename_base = file_id_str[step].split('/')[1]
         filename = filename_base + '.png'
-        normalization_const_depth = 1e3
+        normalization_const_depth = 5 * 1e3
 
         cv2.imwrite(args.save_dir + 'depth/' + filename, map_float_data_to_int(pred_depth, normalization_const_depth),
                     [cv2.IMWRITE_PNG_COMPRESSION, 9])

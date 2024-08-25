@@ -400,7 +400,6 @@ class UncertaintyHead(nn.Module):
         super(UncertaintyHead, self).__init__()
         self.unc_loss_type = unc_loss_type
         self.conv1 = nn.Conv2d(input_dim, 1, 3, padding=1)
-
     def forward(self, x):
         if self.unc_loss_type == 0:
             x = F.relu(self.conv1(x)).clamp(min=1e-4)

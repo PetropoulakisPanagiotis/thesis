@@ -40,7 +40,7 @@
 --eigen_crop
 
 --update_block 3
---virtual_depth_variation 1
+--virtual_depth_variation 0
 --loss_type 1
 
 --segmentation
@@ -52,4 +52,4 @@
 --max_depth 1
 --max_tree_depth 1
 --upsample_type 2
---bins_scale 40
+--bins_scale 80

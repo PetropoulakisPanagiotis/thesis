@@ -263,6 +263,15 @@ class PerClassScale(nn.Module):
         else:
             in_dim = 128
 
+        if self.virtual_depth_variation == 0:  # Propabilities both scale and canonical
+            print("PerClassScale: bins for both scale and shift")
+        elif self.virtual_depth_variation == 1:  # Probabilities canonical
+            print("PerClassScale: bins for canonical")
+        elif self.virtual_depth_variation == 2:  # Probabilities scale
+            print("PerClassScale: bins for scale")
+        else:  # Regression
+            print("PerClassScale: regression")
+     
         self.p_heads = nn.ModuleList()
         self.s_heads = nn.ModuleList()
         for i in range(num_semantic_classes):
@@ -375,7 +384,6 @@ class PerClassScale(nn.Module):
             else:
                 pred_scale.append(scale_current)
 
-
         # Save #
         depth_rc = torch.cat(depth_rc, dim=1)
         pred_depths_rc_list.append(depth_rc)
@@ -385,6 +393,7 @@ class PerClassScale(nn.Module):
         uncertainty_maps_list.append(uncertainty_map)
         
         pred_scale = torch.cat(pred_scale, dim=1)
+
         pred_scale_list.append(pred_scale)
         uncertainty_maps_scale_list.append(uncertainty_map_scale)
         pred_depths_scale_c_list.append(depth_scale_c)
@@ -566,7 +575,7 @@ class PerInstanceScale(nn.Module):
             # Fill uncertainty #
             uncertainty_maps_full[valid_boxes[:, 0]] = uncertainty_map
             uncertainty_map = uncertainty_maps_full.view(batch_size, max_instances_size, h, w)
-
+            
             # Fill labels #
             depth_c_full[valid_boxes[:, 0]] = depth_c
             depth_c = depth_c_full.view(batch_size, max_instances_size, h, w)
@@ -609,11 +618,11 @@ class PerInstanceScale(nn.Module):
            
             # Pick correct prediction according to the class of the instance # 
             instances_scale = mask_predictions_to_true_class(instances_scale, labels)
-            unc_scale = mask_predictions_to_true_class(unc_scale, labels)
+            unc_scale = mask_predictions_to_true_class(unc_scale, labels).unsqueeze(-1).unsqueeze(-1)
             scale_labels_bins = mask_predictions_to_true_class(scale_labels_bins, labels)
             if unc_s is not None:
                 unc_s = mask_predictions_to_true_class(unc_s, labels)
-
+            
             pred_scale_list.append(instances_scale)
             uncertainty_maps_scale_list.append(unc_scale)
             pred_depths_scale_c_list.append(scale_labels_bins)

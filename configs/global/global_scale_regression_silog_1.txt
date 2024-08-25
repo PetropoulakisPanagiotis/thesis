@@ -30,13 +30,13 @@
 --num_threads 1
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2345
+--exp_name global-scale-regression-silog-1
 
 --bins_type 0
 --bins_type_scale 0
 
 --eigen_crop
 
---exp_name global-scale-regression-silog-1
 --update_block 1
 --virtual_depth_variation 3
 --upsample_type 1

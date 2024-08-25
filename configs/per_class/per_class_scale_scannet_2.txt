@@ -1,6 +1,6 @@
 --retrain
 --pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
---checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale-regression-scale/nyu/model-12250-best_silog_13.91804
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale-2/nyu/model-6650-best_abs_rel_0.13205
 
 --dataset scannet
 --data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
@@ -9,7 +9,7 @@
 
 --do_online_eval
 --log_freq 100
---eval_freq 500
+--eval_freq 600
 --log_directory /usr/stud/petp/code/thesis/tmp/
 --data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
 --gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
@@ -21,7 +21,7 @@
 --input_width 640
 
 --batch_size 8
---num_epochs 50
+--num_epochs 70
 --learning_rate 7.5e-5
 --weight_decay 1e-2
 --adam_eps 1e-3
@@ -29,25 +29,22 @@
 --num_threads 1
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2345
-
---eigen_crop
-
 --exp_name per-class-scale-scannet-2
 
---bins_type 0
+--bins_type 1
 --bins_type_scale 1
 
 --eigen_crop
 
 --update_block 2
---virtual_depth_variation 1
-
---loss_type 1
 --segmentation
---concat_masks
+--virtual_depth_variation 0
+--upsample_type 0
+--loss_type 0
+
 --bin_num 40
 --min_depth 0
 --max_depth 1
 --max_tree_depth 1
 
---bins_scale 100
+--bins_scale 40

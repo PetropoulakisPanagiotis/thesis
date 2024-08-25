@@ -59,21 +59,24 @@ def tb_visualization(writer, global_step, args, current_loss_depth, current_lr, 
             if expensive_viz:
                 max_viz_instances = 5 # Visualize some instances predictions
                 valid_indexes = find_indexes_valid_instances(labels[i])
-                if len(valid_indexes) < max_viz_instances:
-                    max_viz_instances = len(valid_indexes)
+                try:
+                    if len(valid_indexes) < max_viz_instances:
+                        max_viz_instances = len(valid_indexes)
 
-                list_valid_instances = list(valid_indexes.detach().cpu().numpy())
-                selected_instances = random.sample(list_valid_instances, max_viz_instances)
+                    list_valid_instances = list(valid_indexes.detach().cpu().numpy())
+                    selected_instances = random.sample(list_valid_instances, max_viz_instances)
 
-                for idx, j in enumerate(selected_instances):
-                    # Metric #
-                    writer.add_image('depth_metric_est{}/image/{}/instance{}'.format(0, i, idx),
-                                     colormap(torch.log10((pred_depths_r_list[-1][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data),\
-                                     name='magma'), global_step)
-                    # Canonical #
-                    writer.add_image('depth_canonical_est{}/image/{}/instance{}'.format(0, i, idx),
-                                      colormap(torch.log10((pred_depths_rc_list[-1][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), \
-                                      name='magma'), global_step)
+                    for idx, j in enumerate(selected_instances):
+                        # Metric #
+                        writer.add_image('depth_metric_est{}/image/{}/instance{}'.format(0, i, idx),
+                                         colormap(torch.log10((pred_depths_r_list[-1][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data),\
+                                         name='magma'), global_step)
+                        # Canonical #
+                        writer.add_image('depth_canonical_est{}/image/{}/instance{}'.format(0, i, idx),
+                                          colormap(torch.log10((pred_depths_rc_list[-1][i, j, :, :] * instances[i, j, :, :]).clamp(min=1e-3).unsqueeze(0).data), \
+                                          name='magma'), global_step)
+                except:
+                    pass
 
     elif args.segmentation:
         for i in range(num_images):
@@ -164,7 +167,7 @@ def tb_visualization_unc(writer, current_loss_unc, sigma_metric, global_step, ar
     for i in range(num_images):
         writer.add_image('image/image/{}'.format(i), inv_normalize(image[i, :, :, :]).data, global_step)
         writer.add_image('unc_unc_est/image/{}'.format(i),
-                         colormap(sigma_metric[i, :, :, :].clamp(min=1e-3).data, name='viridis'), global_step)
+                         colormap(sigma_metric[i, :, :, :].clamp(min=1e-3).data), global_step)
     
     if args.instances:
         for i in range(num_images):

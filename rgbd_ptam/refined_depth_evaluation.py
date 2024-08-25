@@ -133,11 +133,11 @@ class MyDataset(Dataset):
 
         # Read canonical and depth #
         canonical_file = os.path.join(self.canonical_folder, self.canonical[index])
-        canonical = cv2.imread(canonical_file, -1) / 1000 
+        canonical = cv2.imread(canonical_file, -1) / 5000 
         canonical = torch.Tensor(canonical).type(torch.float32)
 
         depth_file = os.path.join(self.depth_folder, self.depth[index])
-        depth = cv2.imread(depth_file, -1) / 1000 
+        depth = cv2.imread(depth_file, -1) / 5000 
         depth = torch.Tensor(depth).type(torch.float32)
 
         true_depth_file = os.path.join(self.true_depth_folder, self.true_depth[index])
@@ -168,19 +168,46 @@ if __name__ == '__main__':
 
 
     true_depth_dir = '/usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/depth/'
-    refined_depth_dir = '/usr/stud/petp/code/thesis/rgbd_ptam/results_all/'
-    original_network_depth_dir = '/usr/stud/petp/storage/user/petp/datasets/predictions/'
-    scenes = ['scene0025_01',  'scene0100_00', 'scene0300_01',  'scene0553_00',  'scene0568_02',  'scene0598_02',  \
-              'scene0647_00',  'scene0684_00',  'scene0693_01', 'scene0064_00',  'scene0086_02',  'scene0153_00', \
-              'scene0314_00',  'scene0527_00',  'scene0558_02',  'scene0574_01',  'scene0609_03',  'scene0664_02',  'scene0685_01',
-        ]
+    refined_depth_dir = '/usr/stud/petp/code/thesis/rgbd_ptam/results_best_unc_74/'
+    original_network_depth_dir = '/usr/stud/petp/storage/user/petp/datasets/predictions_final/'
+    scenes = [
+        'scene0664_02',
+        'scene0314_00',
+        'scene0064_00',
+        'scene0086_02',
+        'scene0598_02',
+        'scene0574_01',
+        'scene0685_01',
+        'scene0300_01',
+        'scene0527_00',
+        'scene0684_00',
+        'scene0019_00',
+        'scene0193_01',
+        'scene0131_02',
+        'scene0025_01',
+        'scene0221_01',
+        'scene0164_01',
+        'scene0316_00',
+        'scene0693_01',
+        'scene0100_02',
+        'scene0609_03',
+        'scene0553_00',
+        'scene0342_00',
+        'scene0081_00',
+        'scene0278_01',
+    ]   
+        
+    scenes = ['scene0338_02']
+
+
 
     variations = ['per_class', 'per_instance', 'global']
     runs = 3
 
-    save_dir = './results_refined_all/'
+    save_dir = './results_best_depths_unc_74/'
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
+
     columns = ['scene', 'per_class', 'per_instace', 'global']
 
     df_results = pd.DataFrame(columns=columns)
@@ -239,7 +266,13 @@ if __name__ == '__main__':
             total_errors_network = np.sum(np.asarray(total_errors_network), axis=0) / runs
             total_errors_refined = np.sum(np.asarray(total_errors_refined), axis=0) / runs
 
-            main_metric_per_variation.append(total_errors_network[1] - total_errors_refined[1]) # negative means the refined are worst
+            if  total_errors_network[3] >= total_errors_refined[3]:
+                percentage_better = (total_errors_network[3] - total_errors_refined[3]) / total_errors_refined[3] * 100
+            else:               
+                percentage_better = (-total_errors_network[3] + total_errors_refined[3]) / total_errors_refined[3] * 100
+                percentage_better *= -1
+
+            main_metric_per_variation.append(percentage_better) # negative means the refined are worst
  
             if True:
                 print('Computing errors for {} eval samples'.format(len(dataset)))

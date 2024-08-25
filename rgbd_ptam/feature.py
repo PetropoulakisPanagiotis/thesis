@@ -47,6 +47,8 @@ class ImageFeature(object):
         cv2.imshow(name, img)
         cv2.waitKey(delay)
 
+        #cv2.imwrite("./image_debug.png", img)
+
     def filter_features_to_class(self, mask, class_id, draw=False):   
         filtered_keypoints = []
         filtered_descriptors = []     

@@ -1,0 +1,81 @@
+--model_name iebins_nyu
+--encoder tiny07
+--dataset scannet
+--input_height 480
+--input_width 640
+
+--data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+
+--log_directory /usr/stud/petp/code/thesis/tmp/
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0568_02.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0025_01.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0153_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0527_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0086_02.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0684_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0314_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0558_02.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0100_02.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0685_01.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0693_01.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0664_02.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0553_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0064_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0647_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0609_03.txt
+              /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0574_01.txt
+              /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0300_01.txt
+              /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0598_02.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0019_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0063_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0077_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0081_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0131_02.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0193_01.txt		      		      		      		      		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0164_01.txt 
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0221_01.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0277_01.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0278_01.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0316_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0338_02.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0342_00.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0356_02.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0377_02.txt
+		      /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/scenes_test/scene0382_01.txt
+
+--min_depth_eval 1e-3
+--max_depth_eval 10
+
+--eigen_crop
+
+
+--exp_name per-instance-scale-scannet-unc-d3vo-scenes
+
+--unc_head
+--unc_loss_type 0
+
+--segmentation
+--instances
+--roi_align
+
+--bins_type 1 
+--bins_type_scale 1
+
+--eigen_crop
+
+--update_block 3
+--virtual_depth_variation 0
+--upsample_type 0
+--loss_type 0
+
+--bin_num 40
+--min_depth 0
+--max_depth 1
+--max_tree_depth 1
+
+--bins_scale 40
+
+
+--eval_unc
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/per-instance-scale-unc-d3vo/nyu/model-83000-best_unc_1.65133

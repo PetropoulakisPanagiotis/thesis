@@ -1,0 +1,36 @@
+--model_name iebins_nyu
+--encoder tiny07
+--dataset scannet
+--input_height 480
+--input_width 640
+
+--data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/train/
+
+--log_directory /usr/stud/petp/code/thesis/tmp/
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid_every_500th.txt 
+
+--min_depth_eval 1e-3
+--max_depth_eval 10
+
+--eigen_crop
+
+
+--exp_name global-scale-eval-unc-bins
+--bins_type_scale 1
+--bins_type 1
+--update_block 1
+--virtual_depth_variation 0
+--upsample_type 0
+--loss_type 1
+
+--bin_num 40
+--min_depth 0
+--max_depth 1
+--max_tree_depth 1
+
+--bins_scale 40
+
+--eval_unc
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/global-scale-scannet-bins/nyu/model-137600-best_abs_rel_0.15630

@@ -3,8 +3,12 @@ import cv2
 
 class Params(object):
     def __init__(self):
-        self.feature_detector = cv2.GFTTDetector_create(maxCorners=600, minDistance=15.0, qualityLevel=0.001,
-                                                        useHarrisDetector=False)
+        #self.feature_detector = cv2.GFTTDetector_create(maxCorners=1200, minDistance=15.0, qualityLevel=0.001,
+        #                                                useHarrisDetector=False)
+
+        self.feature_detector = cv2.ORB_create(800)
+        #self.feature_detector = cv2.FastFeatureDetector_create()
+                
         self.descriptor_extractor = cv2.xfeatures2d.BriefDescriptorExtractor_create(bytes=32, use_orientation=False)
         self.descriptor_matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
 
