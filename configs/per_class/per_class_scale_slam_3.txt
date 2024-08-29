@@ -1,0 +1,50 @@
+--retrain
+--pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale-slam/nyu/model-14400-best_abs_rel_0.05134
+
+--dataset scannet
+--data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--gt_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--filenames_file /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid_slam.txt
+
+--do_online_eval
+--log_freq 100
+--eval_freq 600
+--log_directory /usr/stud/petp/code/thesis/tmp/
+--data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
+--filenames_file_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid_slam.txt
+--min_depth_eval 1e-3
+--max_depth_eval 10
+
+--input_height 480
+--input_width 640
+
+--batch_size 8
+--num_epochs 150
+--learning_rate 7.5e-5
+--weight_decay 1e-2
+--adam_eps 1e-3
+
+--num_threads 1
+--multiprocessing_distributed
+--dist_url tcp://127.0.0.1:2345
+--exp_name per-class-scale-slam-3
+--eigen_crop
+
+--bins_type 1
+--bins_type_scale 1
+
+
+--update_block 2
+--segmentation
+--virtual_depth_variation 0
+--upsample_type 0
+--loss_type 0
+
+--bin_num 40
+--min_depth 0
+--max_depth 1
+--max_tree_depth 1
+
+--bins_scale 40

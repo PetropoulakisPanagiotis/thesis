@@ -88,7 +88,7 @@ class RGBDPTAM(object):
         self.tracker = Tracking(params, args)
         self.motion_model = MotionModel(params)
 
-        self.loop_closing = None#LoopClosing(self, params)
+        self.loop_closing = LoopClosing(self, params)
         self.loop_correction = None
 
         self.reference = None  # reference keyframe
@@ -644,6 +644,14 @@ if __name__ == '__main__':
 'scene0081_00',
 'scene0278_01',
     ]   
+
+    scenes = [
+'scene0316_00',
+'scene0314_00',
+'scene0338_02',
+'scene0081_00',
+'scene0278_01',
+]
 
     #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global', 'per-class', 'per-instance']
     methods_names = ['mono', 'virtual', 'global', 'per-class', 'per-instance']

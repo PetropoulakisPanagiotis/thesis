@@ -43,7 +43,7 @@ python setup.py install
 2) Step: install [g2opy](https://github.com/uoip/g2opy)
 ```
 cd scale-aware-slam 
-pip install pybind11 setuptools==58.2.0 opencv-contrib-python PyOpenGL
+pip install pybind11 setuptools==58.2.0 opencv-contrib-python PyOpenGL Flask==2.1.3 werkzeug==2.0.3
 cd g2opy
 mkdir build
 cd build

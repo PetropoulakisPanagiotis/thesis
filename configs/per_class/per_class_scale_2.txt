@@ -1,6 +1,6 @@
 --retrain
 --pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
---checkpoint_path /usr/stud/petp/code/thesis/tmp/global-scale-log-bins-silog-1/nyu/model-10400-best_abs_rel_0.13533
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale-slam/nyu/model-5400-best_abs_rel_0.07295
 
 --dataset nyu
 --data_path /usr/stud/petp/storage/user/petp/datasets/nyu_depth_v2/official_splits/train/

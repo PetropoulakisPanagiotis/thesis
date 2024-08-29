@@ -127,7 +127,8 @@ def predict(model, dataloader_eval) -> None:
             scale_unc = scale_unc.view(num_instances).cpu().numpy().tolist()
             scale_data['scale_uncertainty'] = scale_unc
 
-            canonical_unc = canonical_unc.cpu().numpy().squeeze(0).squeeze(0)
+            canonical_unc = torch.reshape(canonical_unc, (480, 640))
+            canonical_unc = canonical_unc.cpu().numpy()
             np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:
                 json.dump(scale_data, file, indent=4)
@@ -162,13 +163,14 @@ def predict(model, dataloader_eval) -> None:
                 scale_unc = result["unc_s"][-1]
             elif args.virtual_depth_variation == 0:
                 canonical_unc = result["uncertainty_maps_list"][-1]**2  # to variance
-                canonical_unc = torch.sum((segmentation_map * canonical_unc), dim=1).to(torch.int16).squeeze(0)
+                canonical_unc = torch.sum((segmentation_map * canonical_unc), dim=1).to(torch.float32).squeeze(0)
 
                 scale_unc = result["uncertainty_maps_scale_list"][-1]**2  # to variance
             else:
                 raise ValueError(
                     "Can not estimate uncertainty. Either train a model with extra uncertainty heads or with bins for both scale/canonical\n"
                 )
+
 
             # NDDepth reverse it 
             if args.unc_loss_type == 2:
@@ -179,7 +181,8 @@ def predict(model, dataloader_eval) -> None:
             scale_unc = scale_unc.view(num_semantic_classes).cpu().numpy().tolist()
             scale_data['scale_uncertainty'] = scale_unc
 
-            canonical_unc = canonical_unc.cpu().numpy().squeeze(0).squeeze(0)
+            canonical_unc = torch.reshape(canonical_unc, (480, 640))
+            canonical_unc = canonical_unc.cpu().numpy()
             np.save(args.save_dir + 'canonical_unc/' + filename_base + ".npy", canonical_unc)
 
             with open(args.save_dir + 'scale/' + filename_base + ".json", 'w') as file:

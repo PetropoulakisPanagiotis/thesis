@@ -401,7 +401,7 @@ class ScanNetDataset(object):
                                                     241.9392752941744, 5000)
 
     def __init__(self, path, scene='scene0191_00', split='train', scale_aware=True, optimization_type='per_class',
-                 max_var=50.0, min_var=1e-4, network_depth=True, total=None, local=False, debug=False, pred_dir='/predictions_final/'):
+                 max_var=50.0, min_var=1e-4, network_depth=True, total=None, local=False, debug=False, pred_dir='/predictions_final_slam/'):
         self.scale_aware = scale_aware
         path = os.path.expanduser(path)
         self.max_var = max_var
