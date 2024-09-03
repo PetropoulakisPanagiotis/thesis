@@ -168,8 +168,8 @@ if __name__ == '__main__':
 
 
     true_depth_dir = '/usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/depth/'
-    refined_depth_dir = '/usr/stud/petp/code/thesis/rgbd_ptam/results_best_unc_74/'
-    original_network_depth_dir = '/usr/stud/petp/storage/user/petp/datasets/predictions_final/'
+    refined_depth_dir = '/usr/stud/petp/code/thesis/rgbd_ptam/results_slam/'
+    original_network_depth_dir = '/usr/stud/petp/storage/user/petp/datasets/predictions_final_slam/'
     scenes = [
         'scene0664_02',
         'scene0314_00',
@@ -197,18 +197,24 @@ if __name__ == '__main__':
         'scene0278_01',
     ]   
         
-    scenes = ['scene0338_02']
+    scenes = ['scene0338_02',
+        'scene0019_00',
+        'scene0316_00',
+        'scene0693_01',
+        'scene0609_03',
+        'scene0278_01',
+]
 
 
 
-    variations = ['per_class', 'per_instance', 'global']
+    variations = ['per_instance', 'per_class', 'global']
     runs = 3
 
-    save_dir = './results_best_depths_unc_74/'
+    save_dir = './results_best_refined_new/'
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    columns = ['scene', 'per_class', 'per_instace', 'global']
+    columns = ['scene', 'per_instace', 'per_class', 'global']
 
     df_results = pd.DataFrame(columns=columns)
     for scene in tqdm(scenes, total=len(scenes), desc='scenes'):
@@ -269,7 +275,7 @@ if __name__ == '__main__':
             if  total_errors_network[3] >= total_errors_refined[3]:
                 percentage_better = (total_errors_network[3] - total_errors_refined[3]) / total_errors_refined[3] * 100
             else:               
-                percentage_better = (-total_errors_network[3] + total_errors_refined[3]) / total_errors_refined[3] * 100
+                percentage_better = (total_errors_refined[3] - total_errors_network[3]) / total_errors_network[3] * 100
                 percentage_better *= -1
 
             main_metric_per_variation.append(percentage_better) # negative means the refined are worst

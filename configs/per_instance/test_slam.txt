@@ -31,6 +31,6 @@
 
 --bins_scale 40
 
---checkpoint_path /usr/stud/petp/code/thesis/tmp/per-instance-scale-slam-3/nyu/model-44100-best_rms_0.04731
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/per-instance-scale-slam-4/nyu/model-30000-best_abs_rel_0.04273
 
 --save_dir /usr/stud/petp/storage/user/petp/datasets/predictions_final_slam/

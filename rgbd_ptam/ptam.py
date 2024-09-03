@@ -88,7 +88,7 @@ class RGBDPTAM(object):
         self.tracker = Tracking(params, args)
         self.motion_model = MotionModel(params)
 
-        self.loop_closing = LoopClosing(self, params)
+        self.loop_closing = None#LoopClosing(self, params)
         self.loop_correction = None
 
         self.reference = None  # reference keyframe
@@ -600,14 +600,14 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='exp_1', help='Experiment name')
 
     parser.add_argument('--threshold_camera', type=float, default=5.991, help='Threshold for huber loss camera')
-    parser.add_argument('--weight_camera', type=float, default=2, help='Weight for camera loss') # 2
+    parser.add_argument('--weight_camera', type=float, default=2, help='Weight for camera loss')
 
     parser.add_argument('--threshold_depth_consistency', type=float, default=0.1,
                         help='Threshold for huber loss depth consistency')
-    parser.add_argument('--weight_depth_consistency', type=float, default=0.05, help='Weight for depth consistency loss') # 0.5
+    parser.add_argument('--weight_depth_consistency', type=float, default=0.05, help='Weight for depth consistency loss')
 
-    parser.add_argument('--threshold_scale', type=float, default=0.01, help='Threshold for huber loss scale')
-    parser.add_argument('--weight_scale', type=float, default=0.5, help='Weight for scale loss') # 0.5
+    parser.add_argument('--threshold_scale', type=float, default=0.1, help='Threshold for huber loss scale')
+    parser.add_argument('--weight_scale', type=float, default=0.5, help='Weight for scale loss')
 
     parser.add_argument('--scene', type=str, default='scene0655_01')
 
@@ -645,16 +645,13 @@ if __name__ == '__main__':
 'scene0278_01',
     ]   
 
-    scenes = [
-'scene0316_00',
-'scene0314_00',
-'scene0338_02',
-'scene0081_00',
-'scene0278_01',
-]
+#    scenes = [
+#'scene0338_02',
+#]
 
     #methods_names = ['mono-gt', 'mono', 'virtual-gt', 'virtual', 'global', 'per-class', 'per-instance']
     methods_names = ['mono', 'virtual', 'global', 'per-class', 'per-instance']
+    #methods_names = ['global', 'per-class', 'per-instance']
 
     initial_path = args.out_path
     for scene in tqdm(scenes, total=len(scenes)):

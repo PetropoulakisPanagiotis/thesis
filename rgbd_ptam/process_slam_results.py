@@ -4,7 +4,7 @@ import matplotlib.font_manager as fm
 import os
 import numpy as np
 
-parent_dir = './results_best_unc_74'
+parent_dir = './results_slam'
 
 ate_rmse_all_scenes_list = []
 ate_mean_all_scenes_list = []
@@ -258,7 +258,7 @@ dfs = [
     relative_rot_max_all_scenes_df,
 ]
 
-path = './processed_best_results_unc_74/combined/'
+path = './processed_slam/combined/'
 if not os.path.exists(path):
     os.makedirs(path)
 

@@ -1,6 +1,6 @@
 --retrain
 --pretrain /usr/stud/petp/code/models/swin_tiny_patch4_window7_224_22k.pth
---checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale-slam/nyu/model-14400-best_abs_rel_0.05134
+--checkpoint_path /usr/stud/petp/code/thesis/tmp/per-class-scale-scannet-2/nyu/model-74400-best_abs_rel_0.15468
 
 --dataset scannet
 --data_path /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
@@ -8,8 +8,8 @@
 --filenames_file /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid_slam.txt
 
 --do_online_eval
---log_freq 100
---eval_freq 800
+--log_freq 1000
+--eval_freq 5000
 --log_directory /usr/stud/petp/code/thesis/tmp/
 --data_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
 --gt_path_eval /usr/stud/petp/storage/user/petp/datasets/scannet/data_converted/valid/
@@ -29,7 +29,7 @@
 --num_threads 1
 --multiprocessing_distributed
 --dist_url tcp://127.0.0.1:2345
---exp_name per-class-scale-slam-3
+--exp_name per-class-scale-slam-4
 --eigen_crop
 
 --bins_type 1

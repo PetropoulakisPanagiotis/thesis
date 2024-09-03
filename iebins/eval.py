@@ -106,7 +106,7 @@ def eval_func(model, dataloader_eval, scene):
                 pass
 
 
-        if step and step % 25: #args.log_freq == 0:
+        if step and args.log_freq == 0 and False: 
             # Tensorboard #
             if args.unc_head or args.eval_unc:
                 if args.unc_head and args.unc_loss_type == 2:

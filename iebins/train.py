@@ -328,6 +328,7 @@ def main_worker(gpu, ngpus_per_node, args):
             ############
             # Evaluate #
             ############
+            args.eval_freq = 15000 
             if args.do_online_eval and global_step and global_step % args.eval_freq == 0 and not model_just_loaded:
                 time.sleep(0.1)
                 model.eval()

@@ -53,7 +53,7 @@ class ScaleReader(object):
                 min_unc = local_min_unc
 
         for i in range(len(self.cache)):
-            self.cache[i][1] = np.clip(self.cache[i][1] / max_unc, 1, self.max_var)
+            self.cache[i][1] = np.clip(self.cache[i][1] / max_unc, 0, 1)
 
         #print("scale: ")
         #print(max_unc, min_unc)
@@ -67,8 +67,6 @@ class ScaleReader(object):
                                 a_max=self.max_var).tolist()
             scale_type = data['scale_type']
             scale_valid = data['valid'] if not scale_type == 'single' else [1]
-
-
 
         return scale, scale_unc, scale_type, scale_valid
 
@@ -173,8 +171,7 @@ class UncertaintyReader(object):
                 min_unc = local_min_unc
 
         for i in range(len(self.cache)):
-            self.cache[i] = np.clip(self.cache[i] / max_unc, 1, self.max_var)
-        
+            self.cache[i] = np.clip(self.cache[i] / max_unc, 0, 1)
         #print("canonical unc: ")
         #print(max_unc, min_unc)
 
@@ -182,8 +179,6 @@ class UncertaintyReader(object):
         canonical_uncertainty = np.load(path)
         canonical_uncertainty = np.clip(canonical_uncertainty, self.min_var, self.max_var)
         canonical_uncertainty = canonical_uncertainty.reshape((480, 640))
-
-
         return canonical_uncertainty
 
     def __getitem__(self, idx):
