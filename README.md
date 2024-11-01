@@ -6,7 +6,6 @@
 <p align="center">
 <img src="assets/scale-aware-video.gif" width="450px" height="250px"> 
 </p>
-----
 
 ## Installation
 #### Depth Pipeline
