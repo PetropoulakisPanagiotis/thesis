@@ -91,7 +91,7 @@ If you find my thesis useful in your research, please consider citing:
     author      = {Petropoulakis Panagiotis, S. B. Laina, S. Schaefer, J. Jung, and S. Leutenegger},
     title       = {Scale-Aware Landmark-based SLAM in Canonical Space},
     type        = {mscthesis}
-    url         = {https://github.com/PetropoulakisPanagiotis/BSc_thesis},
+    url         = {https://github.com/PetropoulakisPanagiotis/thesis/},
     institution = {TUM School of Computation, Information and Technology},
     year        = {2024},
 }
