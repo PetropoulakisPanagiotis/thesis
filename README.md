@@ -4,7 +4,7 @@
 ## <p align="center">Scale-Aware Landmark-based SLAM in Canonical Space</p>
 
 <p align="center">
-<img src="scale-brain.png" width="550px" height="300px"> 
+<img src="assets/scale-aware-video.gif" width="550px" height="300px"> 
 </p>
 <br /> <br />
 
