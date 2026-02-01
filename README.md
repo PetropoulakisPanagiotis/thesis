@@ -3,7 +3,7 @@
 
 ## <p align="center">Scale-Aware Monocular Depth Prediction for SLAM in Canonical Space</p>
 
-The full thesis is available as a PDF. [Download or view it here.]([https://drive.google.com/file/d/12_ByScvsCKU3ozXadiCrp-S--ZDDuMbR/view?usp=sharing](https://drive.google.com/file/d/1ESIhVoeOX7Amdd3nnJYKGTuQzv5qASE-/view?usp=sharing)) The code will become public later. 
+The full thesis is available as a PDF. [Download or view it here.](https://drive.google.com/file/d/1ESIhVoeOX7Amdd3nnJYKGTuQzv5qASE-/view?usp=sharing) The code will become public later. 
 
 <p align="center">
 <img src="assets/scale-aware-video.gif" width="450px" height="250px"> 
